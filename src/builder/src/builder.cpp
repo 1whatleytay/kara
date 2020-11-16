@@ -11,22 +11,25 @@
 
 namespace fs = std::filesystem;
 
-Value *Result::get(IRBuilder<> &builder) const {
-    return kind == Kind::Reference ? builder.CreateLoad(value) : value;
-}
+BuilderResult::BuilderResult(Kind kind, Value *value, Typename type,
+    int32_t lifetimeDepth, std::shared_ptr<MultipleLifetime> lifetime)
+    : kind(kind), value(value), type(std::move(type)), lifetimeDepth(lifetimeDepth), lifetime(std::move(lifetime)) { }
 
 Builder::Builder(RootNode *root, const Options &options)
     : context(), module(fs::path(options.inputFile).filename().string(), context) {
     for (const auto &node : root->children) {
         switch (node->is<Kind>()) {
             case Kind::Function:
-                makeFunction(node->as<FunctionNode>());
+                functions[node->as<FunctionNode>()] =
+                    std::make_unique<BuilderFunction>(node->as<FunctionNode>(), *this);
                 break;
             default:
                 throw VerifyError(node.get(), "Unknown root node kind {}.", node->kind);
         }
     }
 
-    module.print(llvm::outs(), nullptr);
+    if (options.printIR)
+        module.print(llvm::outs(), nullptr);
+
     verifyModule(module, &llvm::errs(), nullptr);
 }

@@ -14,7 +14,7 @@ src/search.cpp
     src/reference.cpp
     src/expression.cpp
     src/statement.cpp
-    src/code.cpp
+    src/scope.cpp
 src/lifetime.cpp)
 
 target_include_directories(builder PUBLIC include)

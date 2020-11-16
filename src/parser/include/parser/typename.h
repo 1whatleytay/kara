@@ -19,8 +19,6 @@ struct StackTypename {
     bool operator!=(const StackTypename &other) const;
 };
 
-using Constrictions = std::unordered_map<const VariableNode *, std::set<const VariableNode *>>;
-
 struct FunctionTypename {
     enum class Kind {
         Regular,
@@ -31,7 +29,6 @@ struct FunctionTypename {
     Kind kind;
     std::shared_ptr<Typename> returnType;
     std::vector<Typename> parameters;
-    Constrictions constrictions;
 
     bool operator==(const FunctionTypename &other) const;
     bool operator!=(const FunctionTypename &other) const;
@@ -52,5 +49,9 @@ struct TypenameNode : public Node {
 
     explicit TypenameNode(Node *parent);
 };
+
+std::string toString(const StackTypename &type);
+std::string toString(const FunctionTypename &type);
+std::string toString(const ReferenceTypename &type);
 
 std::string toString(const Typename &type);

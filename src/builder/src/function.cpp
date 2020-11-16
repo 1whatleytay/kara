@@ -1,12 +1,12 @@
 #include <builder/builder.h>
 
-#include <parser/code.h>
+#include <parser/scope.h>
 #include <parser/assign.h>
 #include <parser/function.h>
 #include <parser/variable.h>
 #include <parser/statement.h>
 
-FunctionTypename Builder::makeFunctionTypenameBase(const FunctionNode *node) {
+FunctionTypename makeFunctionTypenameBase(const FunctionNode *node) {
     std::vector<Typename> parameters(node->parameterCount);
 
     for (size_t a = 0; a < node->parameterCount; a++)
@@ -19,58 +19,38 @@ FunctionTypename Builder::makeFunctionTypenameBase(const FunctionNode *node) {
     };
 }
 
-Callable Builder::makeFunction(const FunctionNode *node) {
-    auto cache = functions.find(node);
-    if (cache != functions.end())
-        return cache->second;
-
-    Type *returnType = makeTypename(node->returnType);
+BuilderFunction::BuilderFunction(const FunctionNode *node, Builder &builder)
+    : builder(builder), node(node), entry(builder.context), exit(builder.context) {
+    Type *returnType = builder.makeTypename(node->returnType);
     std::vector<Type *> parameterTypes(node->parameterCount);
 
     for (size_t a = 0; a < node->parameterCount; a++)
-        parameterTypes[a] = makeTypename(node->children[a]->as<VariableNode>()->type);
+        parameterTypes[a] = builder.makeTypename(node->children[a]->as<VariableNode>()->type);
 
-    FunctionType *type = FunctionType::get(returnType, parameterTypes, false);
+    FunctionType *valueType = FunctionType::get(returnType, parameterTypes, false);
 
-    // Please manage my memory for me...
-    Function *function = Function::Create(
-        type, GlobalVariable::ExternalLinkage, 0, node->name, &module);
-    Callable callable = { std::make_shared<FunctionTypename>(makeFunctionTypenameBase(node)), function };
+    type = makeFunctionTypenameBase(node);
+    function = Function::Create(
+        valueType, GlobalVariable::ExternalLinkage, 0, node->name, &builder.module);
 
-    functions[node] = callable;
+    entryBlock = BasicBlock::Create(builder.context, "entry", function);
+    exitBlock = BasicBlock::Create(builder.context, "exit", function);
 
-    Scope scope;
+    entry.SetInsertPoint(entryBlock);
+    exit.SetInsertPoint(exitBlock);
 
-    for (size_t a = 0; a < node->parameterCount; a++) {
-        makeParameterVariable(node->children[a]->as<VariableNode>(), function->getArg(a), scope);
-    }
+    if (node->returnType != TypenameNode::nothing)
+        returnValue = entry.CreateAlloca(returnType, nullptr, "result");
 
-    scope.entry = BasicBlock::Create(context, "entry", function);
-    scope.exit = BasicBlock::Create(context, "exit", function);
+    BuilderScope scope(node->children[node->parameterCount]->as<CodeNode>(), *this);
 
-    BasicBlock *original = BasicBlock::Create(context, "", function, scope.exit);
-    scope.current = original;
+    entry.CreateBr(scope.openingBlock);
 
-    if (node->returnType != TypenameNode::nothing) {
-        scope.returnType = node->returnType;
-        scope.returnValue = IRBuilder<>(scope.entry).CreateAlloca(returnType, nullptr, "result");
-    }
+    if (!scope.currentBlock->getTerminator())
+        scope.current.CreateBr(exitBlock);
 
-    makeCode(node->children[node->parameterCount]->as<CodeNode>(), scope);
-
-    IRBuilder<>(scope.entry).CreateBr(original);
-
-    if (!scope.current->getTerminator())
-        IRBuilder<>(scope.current).CreateBr(scope.exit);
-
-    {
-        IRBuilder<> exit(scope.exit);
-
-        if (node->returnType == TypenameNode::nothing)
-            exit.CreateRetVoid();
-        else
-            exit.CreateRet(exit.CreateLoad(scope.returnValue, "final"));
-    }
-
-    return callable;
+    if (node->returnType == TypenameNode::nothing)
+        exit.CreateRetVoid();
+    else
+        exit.CreateRet(exit.CreateLoad(returnValue, "final"));
 }

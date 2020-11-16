@@ -2,42 +2,46 @@
 
 #include <parser/variable.h>
 
-#include <builder/search.h>
+#include <fmt/format.h>
 
-Variable Builder::makeLocalVariable(const VariableNode *node, Scope &scope) {
-    IRBuilder<> builder(scope.entry);
+std::shared_ptr<MultipleLifetime> BuilderVariable::makeExpressionLifetime() const {
+    auto base = std::make_shared<MultipleLifetime>();
+    auto child = std::make_shared<MultipleLifetime>();
 
-    Value *value = builder.CreateAlloca(makeTypename(node->type), nullptr, node->name);
-    Variable result = { node, node->type, value, true };
-    variables[node] = result;
+    base->push_back(std::make_shared<ReferenceLifetime>(child));
+    child->push_back(std::make_shared<VariableLifetime>(node));
 
-    return result;
+    return base;
 }
 
-Variable Builder::makeParameterVariable(const VariableNode *node, Value *value, Scope &scope) {
-    Variable result = {
-        node,
-        node->type,
-        value,
-        false
-    };
-    variables[node] = result;
+BuilderVariable::BuilderVariable(const VariableNode *node, BuilderScope &scope)
+    : function(scope.function), node(node) {
+    value = function.entry.CreateAlloca(
+        function.builder.makeTypename(node->type), nullptr, node->name);
 
-    return result;
+    auto scopeLifetime = std::make_shared<MultipleLifetime>();
+    std::shared_ptr<Lifetime> defaultLifetime = makeDefaultLifetime(node->type, node);
+    if (defaultLifetime)
+        scopeLifetime->push_back(std::move(defaultLifetime));
+
+    scope.lifetimes[node] = std::move(scopeLifetime);
+
+    lifetimeLevel = scope.lifetimeLevel;
+
+    lifetime = makeExpressionLifetime();
 }
 
-Variable Builder::makeVariable(const VariableNode *node, const Scope &scope) {
-    auto cache = variables.find(node);
-    if (cache != variables.end())
-        return cache->second;
+BuilderVariable::BuilderVariable(const VariableNode *node, Value *input, BuilderScope &scope)
+    : function(scope.function), node(node) {
+    value = function.entry.CreateAlloca(
+        function.builder.makeTypename(node->type), nullptr, fmt::format("{}_value", node->name));
+    function.entry.CreateStore(input, value);
 
-    // Make variable shouldn't create the variable if it has not been generated already.
-//    bool isLocal = search::exclusive::parents(node, [](const Node *node) {
-//        return node->is(Kind::Function);
-//    });
-//
-//    if (isLocal)
-//        return makeLocalVariable(node, scope);
+    auto scopeLifetime = std::make_shared<MultipleLifetime>();
+    scopeLifetime->push_back(makeAnonymousLifetime(node->type, node));
+    scope.lifetimes[node] = std::move(scopeLifetime);
 
-    throw std::runtime_error("Cannot match variable.");
+    lifetimeLevel = -1;
+
+    lifetime = makeExpressionLifetime();
 }

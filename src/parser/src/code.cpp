@@ -1,4 +1,4 @@
-#include <parser/code.h>
+#include <parser/scope.h>
 
 #include <parser/block.h>
 #include <parser/debug.h>

@@ -43,20 +43,18 @@ TypenameNode::TypenameNode(Node *parent) : Node(parent, Kind::Typename) {
     }
 }
 
+std::string toString(const StackTypename &type) {
+    return type.value;
+}
+
+std::string toString(const ReferenceTypename &type) {
+    return fmt::format("&{}", toString(*type.value));
+}
+
+std::string toString(const FunctionTypename &type) {
+    return "<func>";
+}
+
 std::string toString(const Typename &type) {
-    struct {
-        std::string operator()(const StackTypename &type) {
-            return type.value;
-        }
-
-        std::string operator()(const ReferenceTypename &type) {
-            return fmt::format("&{}", toString(*type.value));
-        }
-
-        std::string operator()(const FunctionTypename &type) {
-            return "<func>";
-        }
-    } stringifier;
-
-    return std::visit(stringifier, type);
+    return std::visit([](auto &type) { return toString(type); }, type);
 }

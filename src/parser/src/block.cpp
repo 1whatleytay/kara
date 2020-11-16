@@ -1,6 +1,6 @@
 #include <parser/block.h>
 
-#include <parser/code.h>
+#include <parser/scope.h>
 
 BlockNode::BlockNode(Node *parent) : Node(parent, Kind::Block) {
     match("block", true);

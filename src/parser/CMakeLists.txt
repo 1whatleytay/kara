@@ -8,7 +8,7 @@ add_library(parser STATIC
     include/parser/expression.h
     include/parser/operator.h
     include/parser/statement.h
-    include/parser/code.h
+    include/parser/scope.h
     include/parser/reference.h
     include/parser/number.h
     include/parser/parentheses.h

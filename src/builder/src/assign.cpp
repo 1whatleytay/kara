@@ -6,21 +6,41 @@
 #include <parser/variable.h>
 #include <parser/reference.h>
 
-void Builder::makeAssign(const AssignNode *node, Scope &scope) {
-    Result destination = makeExpression(node->children.front()->as<ExpressionNode>()->result, scope);
-    Result source = makeExpression(node->children.back()->as<ExpressionNode>()->result, scope);
+void BuilderScope::makeAssign(const AssignNode *node) {
+    BuilderResult destination = makeExpression(node->children.front()->as<ExpressionNode>()->result);
+    BuilderResult source = makeExpression(node->children.back()->as<ExpressionNode>()->result);
 
     if (destination.type != source.type) {
         throw VerifyError(node, "Assignment of type {} to {} is not allowed.",
             toString(source.type), toString(destination.type));
     }
 
-    if (destination.kind != Result::Kind::Reference) {
+    if (destination.kind != BuilderResult::Kind::Reference) {
         throw VerifyError(node, "Left side of assign expression must be some variable or reference.");
     }
 
-    IRBuilder<> builder(scope.current);
+    assert(destination.lifetime && source.lifetime);
 
-    Value *variableValue = destination.value;
-    builder.CreateStore(source.get(builder), variableValue);
+    if (std::holds_alternative<ReferenceTypename>(destination.type)) {
+        int64_t sourceLifetimeLevel = ::lifetimeLevel(*source.lifetime, *this);
+        int64_t destinationLifetimeLevel = ::lifetimeLevel(*destination.lifetime, *this);
+
+        if (sourceLifetimeLevel > destinationLifetimeLevel) {
+            throw VerifyError(node, "Source in expression does not outlive the destination.");
+        }
+
+        std::vector<MultipleLifetime *> sourceLifetimes =
+            expand(*source.lifetime, source.lifetimeDepth + 1, true);
+        std::vector<MultipleLifetime *> destinationLifetimes =
+            expand(*destination.lifetime, destination.lifetimeDepth + 1, true);
+
+        for (auto dest : destinationLifetimes) {
+            dest->clear();
+            for (auto src : sourceLifetimes) {
+                dest->insert(dest->begin(), src->begin(), src->end());
+            }
+        }
+    }
+
+    current.CreateStore(get(source), destination.value);
 }

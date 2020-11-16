@@ -1,6 +1,6 @@
 #include <parser/function.h>
 
-#include <parser/code.h>
+#include <parser/scope.h>
 #include <parser/typename.h>
 #include <parser/variable.h>
 

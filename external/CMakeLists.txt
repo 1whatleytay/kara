@@ -1,3 +1,14 @@
+set(FMT_DOC OFF)
+set(FMT_INSTALL OFF)
+set(FMT_TEST OFF)
+
+set(CLI11_INSTALL OFF)
+set(CLI11_BUILD_TESTS OFF)
+set(CLI11_BUILD_EXAMPLES OFF)
+
+# CLI11 annoyingly adds CTest targets...
+set_property(GLOBAL PROPERTY CTEST_TARGETS_ADDED 1)
+
 add_subdirectory(fmt)
 add_subdirectory(CLI11)
 add_subdirectory(hermes)

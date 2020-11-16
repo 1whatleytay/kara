@@ -22,10 +22,8 @@ ExpressionCombinator::ExpressionCombinator(
 static ExpressionResult applyUnary(const ExpressionNoun &current, const std::vector<UnaryNode *> &unary) {
     ExpressionResult value = current;
 
-    for (ssize_t a = unary.size() - 1; a >= 0; a--) {
-        value = ExpressionOperation(
-            std::make_unique<ExpressionResult>(std::move(value)), unary[a]);
-    }
+    for (auto a = unary.rbegin(); a < unary.rend(); a++)
+        value = ExpressionOperation(std::make_unique<ExpressionResult>(std::move(value)), *a);
 
     return value;
 }

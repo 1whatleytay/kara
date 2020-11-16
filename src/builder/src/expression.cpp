@@ -8,45 +8,73 @@
 #include <parser/variable.h>
 #include <parser/reference.h>
 
-Result Builder::makeExpressionNounContent(const Node *node, const Scope &scope) {
+BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
     switch (node->is<Kind>()) {
         case Kind::Parentheses:
-            return makeExpression(node->children.front()->as<ExpressionNode>()->result, scope);
+            return makeExpression(node->children.front()->as<ExpressionNode>()->result);
 
         case Kind::Reference: {
-            const Node *value = find(node->as<ReferenceNode>());
+            const Node *e = Builder::find(node->as<ReferenceNode>());
 
-            if (value->is(Kind::Variable)) {
-                const auto *variableNode = value->as<VariableNode>();
-                Variable variable = makeVariable(variableNode, scope);
+            switch (e->is<Kind>()) {
+                case Kind::Variable: {
+                    auto varInfo = findVariable(e->as<VariableNode>());
 
-                return {
-                    variable.isMutable ? Result::Kind::Reference : Result::Kind::Raw,
-                    variable.value,
-                    variable.type
-                };
-            } else if (value->is(Kind::Function)) {
-                auto e = value->as<FunctionNode>();
-                Callable function = makeFunction(e);
+                    if (!varInfo)
+                        throw VerifyError(node, "Cannot find variable reference.");
 
-                return {
-                    Result::Kind::Raw,
-                    function.value,
-                    *function.type
-                };
-            } else {
-                assert(false);
+                    BuilderVariableInfo info = varInfo.value();
+
+                    return BuilderResult(
+                        BuilderResult::Kind::Reference,
+
+                        info.variable.value,
+                        info.variable.node->type,
+
+                        1, info.variable.lifetime // depth: 1, some alias lifetime
+                    );
+                }
+
+                case Kind::Function: {
+                    const auto *functionNode = e->as<FunctionNode>();
+
+                    BuilderFunction *callable;
+
+                    auto iterator = function.builder.functions.find(functionNode);
+                    if (iterator == function.builder.functions.end()) {
+                        auto builderFunction = std::make_unique<BuilderFunction>(functionNode, function.builder);
+                        callable = builderFunction.get();
+
+                        function.builder.functions[functionNode] = std::move(builderFunction);
+                    } else {
+                        callable = iterator->second.get();
+                    }
+
+                    return BuilderResult(
+                        BuilderResult::Kind::Raw,
+
+                        callable->function,
+                        callable->type,
+
+                        0, { }
+                    );
+                }
+
+                default:
+                    assert(false);
             }
         }
 
         case Kind::Number: {
-            Value *value = ConstantInt::get(Type::getInt32Ty(context), node->as<NumberNode>()->value);
+            Value *value = ConstantInt::get(Type::getInt32Ty(function.builder.context), node->as<NumberNode>()->value);
 
-            return {
-                Result::Kind::Raw,
+            return BuilderResult(
+                BuilderResult::Kind::Raw,
                 value,
-                TypenameNode::integer
-            };
+                TypenameNode::integer,
+
+                0, std::make_shared<MultipleLifetime>()
+            );
         }
 
         default:
@@ -54,9 +82,7 @@ Result Builder::makeExpressionNounContent(const Node *node, const Scope &scope) 
     }
 }
 
-Result Builder::makeExpressionNounModifier(const Node *node, const Result &result, const Scope &scope) {
-    IRBuilder<> builder(scope.current);
-
+BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const BuilderResult &result) {
     switch (node->is<Kind>()) {
         case Kind::Call: {
             if (!std::holds_alternative<FunctionTypename>(result.type))
@@ -64,7 +90,7 @@ Result Builder::makeExpressionNounModifier(const Node *node, const Result &resul
                     "Must call a function pointer object, instead called {}.",
                     toString(result.type));
 
-            if (result.kind != Result::Kind::Raw)
+            if (result.kind != BuilderResult::Kind::Raw)
                 throw VerifyError(node,
                     "Internal strangeness with function pointer object.");
 
@@ -79,21 +105,23 @@ Result Builder::makeExpressionNounModifier(const Node *node, const Result &resul
 
             for (size_t a = 0; a < node->children.size(); a++) {
                 auto *exp = node->children[a]->as<ExpressionNode>();
-                Result parameter = makeExpression(exp->result, scope);
+                BuilderResult parameter = makeExpression(exp->result);
 
                 if (type.parameters[a] != parameter.type)
                     throw VerifyError(exp,
                         "Expression is being passed to function that expects {} type but got {}.",
                         toString(type.parameters[a]), toString(parameter.type));
 
-                parameters[a] = parameter.get(builder);
+                parameters[a] = get(parameter);
             }
 
-            return {
-                Result::Kind::Raw,
-                builder.CreateCall(result.value, parameters),
-                *type.returnType
-            };
+            return BuilderResult(
+                BuilderResult::Kind::Raw,
+                current.CreateCall(reinterpret_cast<Function *>(result.value), parameters),
+                *type.returnType,
+
+                0, { } // TODO: Implement lifetimes for function returns
+            );
         }
 
         default:
@@ -101,49 +129,51 @@ Result Builder::makeExpressionNounModifier(const Node *node, const Result &resul
     }
 }
 
-Result Builder::makeExpressionNoun(const ExpressionNoun &noun, const Scope &scope) {
-    Result result = makeExpressionNounContent(noun.content, scope);
+BuilderResult BuilderScope::makeExpressionNoun(const ExpressionNoun &noun) {
+    BuilderResult result = makeExpressionNounContent(noun.content);
 
     for (const Node *modifier : noun.modifiers)
-        result = makeExpressionNounModifier(modifier, result, scope);
+        result = makeExpressionNounModifier(modifier, result);
 
     return result;
 }
 
-Result Builder::makeExpressionOperation(const ExpressionOperation &operation, const Scope &scope) {
-    Result value = makeExpression(*operation.a, scope);
-
-    IRBuilder<> builder(scope.current);
+BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &operation) {
+    BuilderResult value = makeExpression(*operation.a);
 
     switch (operation.op->op) {
         case UnaryNode::Operation::At:
-            if (value.kind != Result::Kind::Reference)
+            if (value.kind != BuilderResult::Kind::Reference)
                 throw VerifyError(operation.op, "Cannot get reference of temporary.");
 
-            return {
-                Result::Kind::Raw,
+            return BuilderResult(
+                BuilderResult::Kind::Raw,
                 value.value,
-                ReferenceTypename { std::make_shared<Typename>(value.type) }
-            };
+                ReferenceTypename { std::make_shared<Typename>(value.type) },
+
+                value.lifetimeDepth - 1, value.lifetime // TODO: definitely breaks
+            );
 
         case UnaryNode::Operation::Fetch:
             if (!std::holds_alternative<ReferenceTypename>(value.type))
                 throw VerifyError(operation.op, "Cannot dereference value of non reference.");
 
-            return {
-                Result::Kind::Reference,
-                value.get(builder),
-                *std::get<ReferenceTypename>(value.type).value
-            };
+            return BuilderResult(
+                BuilderResult::Kind::Reference,
+                get(value),
+                *std::get<ReferenceTypename>(value.type).value,
+
+                value.lifetimeDepth + 1, value.lifetime // TODO: definitely breaks
+            );
 
         default:
             assert(false);
     }
 }
 
-Result Builder::makeExpressionCombinator(const ExpressionCombinator &combinator, const Scope &scope) {
-    Result a = makeExpression(*combinator.a, scope);
-    Result b = makeExpression(*combinator.b, scope);
+BuilderResult BuilderScope::makeExpressionCombinator(const ExpressionCombinator &combinator) {
+    BuilderResult a = makeExpression(*combinator.a);
+    BuilderResult b = makeExpression(*combinator.b);
 
     // assuming just add stuff for now
     if (a.type != TypenameNode::integer || b.type != TypenameNode::integer) {
@@ -152,47 +182,54 @@ Result Builder::makeExpressionCombinator(const ExpressionCombinator &combinator,
             toString(a.type), toString(b.type));
     }
 
-    IRBuilder<> builder(scope.current);
-
     Value *value;
 
     switch (combinator.op->op) {
         case OperatorNode::Operation::Add:
-            value = builder.CreateAdd(a.get(builder), b.get(builder));
+            value = current.CreateAdd(get(a), get(b));
             break;
 
         case OperatorNode::Operation::Sub:
-            value = builder.CreateSub(a.get(builder), b.get(builder));
+            value = current.CreateSub(get(a), get(b));
             break;
 
         case OperatorNode::Operation::Mul:
-            value = builder.CreateMul(a.get(builder), b.get(builder));
+            value = current.CreateMul(get(a), get(b));
             break;
 
         case OperatorNode::Operation::Div:
-            value = builder.CreateSDiv(a.get(builder), b.get(builder));
+            value = current.CreateSDiv(get(a), get(b));
             break;
 
         default:
-            assert(false);
+            throw VerifyError(combinator.op, "Unimplemented combinator operator.");
     }
 
-    return {
-        Result::Kind::Raw,
+    return BuilderResult(
+        BuilderResult::Kind::Raw,
         value,
-        TypenameNode::integer
-    };
+        TypenameNode::integer,
+
+        0, std::make_shared<MultipleLifetime>()
+    );
 }
 
-Result Builder::makeExpression(const ExpressionResult &result, const Scope &scope) {
-    if (std::holds_alternative<ExpressionNoun>(result))
-        return makeExpressionNoun(std::get<ExpressionNoun>(result), scope);
+BuilderResult BuilderScope::makeExpression(const ExpressionResult &result) {
+    struct {
+        BuilderScope &scope;
 
-    if (std::holds_alternative<ExpressionOperation>(result))
-        return makeExpressionOperation(std::get<ExpressionOperation>(result), scope);
+        BuilderResult operator()(const ExpressionNoun &result) {
+            return scope.makeExpressionNoun(result);
+        }
 
-    if (std::holds_alternative<ExpressionCombinator>(result))
-        return makeExpressionCombinator(std::get<ExpressionCombinator>(result), scope);
+        BuilderResult operator()(const ExpressionOperation &result) {
+            return scope.makeExpressionOperation(result);
+        }
 
-    assert(false);
+        BuilderResult operator()(const ExpressionCombinator &result) {
+            return scope.makeExpressionCombinator(result);
+        }
+    } visitor { *this };
+
+    return std::visit(visitor, result);
 }
