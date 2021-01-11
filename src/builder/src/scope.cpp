@@ -50,7 +50,152 @@ Value *BuilderScope::get(const BuilderResult &result) {
     return result.kind == BuilderResult::Kind::Reference ? current.CreateLoad(result.value) : result.value;
 }
 
-void BuilderScope::build(const CodeNode *node) {
+std::vector<MultipleLifetime *> BuilderScope::expand(const std::vector<MultipleLifetime *> &lifetime, bool doCopy) {
+    std::vector<MultipleLifetime *> newLifetimes;
+
+    for (MultipleLifetime *b : lifetime) {
+        for (const auto &sub : *b) {
+            switch (sub->kind) {
+                case Lifetime::Kind::Reference:
+                    newLifetimes.push_back(dynamic_cast<ReferenceLifetime *>(sub.get())->children.get());
+                    break;
+
+                case Lifetime::Kind::Variable: {
+                    const VariableNode *node = dynamic_cast<VariableLifetime *>(sub.get())->node;
+                    // I hate so much of this system...
+                    MultipleLifetime *p;
+
+                    auto inScope = lifetimes.find(node);
+                    if (inScope == lifetimes.end()) {
+                        auto x = findVariable(node);
+
+                        assert(x.has_value());
+
+                        if (doCopy) {
+                            std::shared_ptr<MultipleLifetime> temp = copy(*x.value().lifetime);
+
+                            p = temp.get();
+                            lifetimes[node] = std::move(temp);
+                        } else {
+                            p = x.value().lifetime.get();
+                        }
+                    } else {
+                        p = inScope->second.get();
+                    }
+
+                    auto y = expand({ p }, doCopy);
+                    newLifetimes.insert(newLifetimes.end(), y.begin(), y.end());
+
+                    break;
+                }
+
+                default:
+                    assert(false);
+            }
+        }
+    }
+
+    return newLifetimes;
+}
+
+std::vector<MultipleLifetime *> BuilderScope::expand(
+    std::vector<MultipleLifetime *> result, int32_t depth, bool doCopy) {
+    assert(depth >= 0); // i made it an int so i can detect these problems
+
+    for (int32_t a = 0; a < depth; a++)
+        result = expand(result, doCopy);
+
+    return result;
+}
+
+void BuilderScope::join(LifetimeMatches &matches,
+    std::vector<MultipleLifetime *> lifetime, const MultipleLifetime &initial) {
+//    std::vector<MultipleLifetime *> temp = lifetime;
+
+    const MultipleLifetime *currentLifetime = &initial;
+
+    while (currentLifetime) {
+        assert(currentLifetime->size() == 1);
+
+        Lifetime *mainPlaceholder = currentLifetime->front().get();
+
+        assert(mainPlaceholder->placeholderVariable);
+
+        PlaceholderId id = {
+            mainPlaceholder->placeholderVariable,
+            mainPlaceholder->placeholderUnique
+        };
+        // Oh dear this name
+        MultipleLifetime currentLifetimeLifetime;
+
+        for (MultipleLifetime *x : lifetime) {
+            // I apologize for this shared_ptr.
+            auto temp = copy(*x);
+            currentLifetimeLifetime.insert(currentLifetimeLifetime.end(), temp->begin(), temp->end());
+        }
+
+        matches[id] = std::move(currentLifetimeLifetime);
+
+        lifetime = expand(lifetime, 1);
+
+        if (mainPlaceholder->kind == Lifetime::Kind::Reference) {
+            currentLifetime = dynamic_cast<ReferenceLifetime *>(mainPlaceholder)->children.get();
+        } else {
+            currentLifetime = nullptr;
+        };
+    }
+
+//    fmt::print("Input:\n");
+//    fmt::print("\tInitial: {}\n", toString(initial));
+//    std::vector<std::string> strings(temp.size());
+//    std::transform(temp.begin(), temp.end(), strings.begin(),
+//        [](MultipleLifetime *l) { return toString(*l); });
+//    fmt::print("\tExpression: [ {} ]\n", fmt::join(strings, ", "));
+//
+//    fmt::print("Output:\n");
+//    for (const auto &e : matches) {
+//        fmt::print("\t({}:{}) {}\n", e.first.first->name, e.first.second, toString(*e.second));
+//    }
+}
+
+void BuilderScope::build(const LifetimeMatches &matches,
+    const std::vector<MultipleLifetime *> &lifetime, const MultipleLifetime &final) {
+    for (const auto &e : matches) {
+        fmt::print("Match: ({}:{}) {}\n", e.first.first->name, e.first.second, toString(e.second));
+    }
+
+    std::vector<std::string> strings(lifetime.size());
+    std::transform(lifetime.begin(), lifetime.end(), strings.begin(),
+        [](MultipleLifetime *l) { return toString(*l); });
+    fmt::print(" From: [ {} ]\n", fmt::join(strings, ", "));
+
+    fmt::print("Final: {}\n", toString(final));
+
+    assert(false);
+}
+
+BuilderScope::BuilderScope(const CodeNode *node, BuilderFunction &function, BuilderScope *parent)
+    : parent(parent), function(function), current(function.builder.context) {
+    openingBlock = BasicBlock::Create(function.builder.context, "", function.function, function.exitBlock);
+    currentBlock = openingBlock;
+
+    current.SetInsertPoint(currentBlock);
+
+    if (parent) {
+        lifetimeLevel = parent->lifetimeLevel + 1;
+    } else {
+        const FunctionNode *astFunction = function.node;
+        const Function *llvmFunction = function.function;
+
+        // Create parameters within scope.
+        for (size_t a = 0; a < astFunction->parameterCount; a++) {
+            const auto *parameterNode = astFunction->children[a]->as<VariableNode>();
+
+            variables[parameterNode] = std::make_unique<BuilderVariable>(
+                parameterNode, llvmFunction->getArg(a), *this);
+        }
+    }
+
     for (const auto &child : node->children) {
         switch (child->is<Kind>()) {
             case Kind::Variable:
@@ -77,6 +222,16 @@ void BuilderScope::build(const CodeNode *node) {
 
                 sub.current.CreateBr(currentBlock);
 
+                // Merge lifetimes
+                for (auto &pair : sub.lifetimes) {
+                    // Don't merge any variables that do not exist beyond that scope.
+                    if (sub.variables.find(pair.first) != sub.variables.end())
+                        continue;
+
+                    // Going to try to reuse it actually... other scope is going to be destructed anyway.
+                    lifetimes[pair.first] = std::move(pair.second);
+                }
+
                 break;
             }
 
@@ -84,56 +239,9 @@ void BuilderScope::build(const CodeNode *node) {
                 makeExpression(child->as<ExpressionNode>()->result);
                 break;
 
-            case Kind::Debug: {
-                auto *e = child->as<DebugNode>();
-
-                LineDetails details(e->getState().text, e->index, false);
-
-                switch (e->type) {
-                    case DebugNode::Type::Expression: {
-                        BuilderResult result = makeExpression(e->children.front()->as<ExpressionNode>()->result);
-
-                        std::vector<MultipleLifetime *> debugLifetimes =
-                            expand(*result.lifetime, result.lifetimeDepth);
-                        std::vector<std::string> concat(debugLifetimes.size());
-
-                        std::transform(debugLifetimes.begin(), debugLifetimes.end(), concat.begin(),
-                            [](MultipleLifetime *x) { return toString(*x); });
-
-                        fmt::print("[DEBUG:{}] [ {} ] (depth: {})\n",
-                            details.lineNumber, fmt::join(concat, " "), result.lifetimeDepth);
-
-                        break;
-                    }
-
-                        // this switch is really hard to read
-                    case DebugNode::Type::Reference: {
-                        auto *reference = e->children.front()->as<ReferenceNode>();
-
-                        const auto *astVar = search::exclusive::scope(child.get(), [reference](const Node *node) {
-                            return node->is(Kind::Variable)
-                                && node->as<VariableNode>()->name == reference->name;
-                        })->as<VariableNode>();
-
-                        if (astVar) {
-                            auto varInfo = findVariable(astVar);
-
-                            if (varInfo) {
-                                fmt::print("[DEBUG:{}] {} (scope: {})\n", details.lineNumber,
-                                    toString(*varInfo.value().lifetime), varInfo.value().variable.lifetimeLevel);
-                            } else {
-                                fmt::print("[DEBUG:{}] No lifetime for {}\n", details.lineNumber, astVar->name);
-                            }
-                        } else {
-                            fmt::print("[DEBUG:{}] Cannot find {}\n", details.lineNumber, reference->name);
-                        }
-
-                        break;
-                    }
-                }
-
+            case Kind::Debug:
+                makeDebug(child->as<DebugNode>());
                 break;
-            }
 
             default:
                 assert(false);
@@ -141,92 +249,7 @@ void BuilderScope::build(const CodeNode *node) {
     }
 }
 
-std::vector<MultipleLifetime *> BuilderScope::expand(MultipleLifetime &lifetime, int32_t depth, bool doCopy) {
-    std::vector<MultipleLifetime *> result = { &lifetime };
-
-    assert(depth >= 0); // i made it an int so i can detect these problems
-
-    for (int32_t a = 0; a < depth; a++) {
-        std::vector<MultipleLifetime *> newLifetimes;
-
-        for (MultipleLifetime *b : result) {
-            for (const auto &sub : *b) {
-                switch (sub->kind) {
-                    case Lifetime::Kind::Reference:
-                        newLifetimes.push_back(dynamic_cast<ReferenceLifetime *>(sub.get())->children.get());
-                        break;
-
-                    case Lifetime::Kind::Variable: {
-                        const VariableNode *node = dynamic_cast<VariableLifetime *>(sub.get())->node;
-                        // I hate so much of this system...
-                        MultipleLifetime *p;
-
-                        auto inScope = lifetimes.find(node);
-                        if (inScope == lifetimes.end()) {
-                            auto x = findVariable(node);
-
-                            assert(x.has_value());
-
-                            if (doCopy) {
-                                std::shared_ptr<MultipleLifetime> temp = copy(*x.value().lifetime);
-
-                                p = temp.get();
-                                lifetimes[node] = std::move(temp);
-                            } else {
-                                p = x.value().lifetime.get();
-                            }
-                        } else {
-                            p = inScope->second.get();
-                        }
-
-                        auto y = expand(*p, 1);
-                        newLifetimes.insert(newLifetimes.end(), y.begin(), y.end());
-
-                        break;
-                    }
-
-                    default:
-                        assert(false);
-                }
-            }
-        }
-
-        result = std::move(newLifetimes);
-    }
-
-    return result;
-}
-
 BuilderScope::BuilderScope(const CodeNode *node, BuilderScope &parent)
-    :parent(&parent), function(parent.function), current(function.builder.context) {
-    lifetimeLevel = parent.lifetimeLevel + 1;
-
-    // same code as other constructor, optimize out?
-    openingBlock = BasicBlock::Create(function.builder.context, "", function.function, function.exitBlock);
-    currentBlock = openingBlock;
-
-    current.SetInsertPoint(currentBlock);
-
-    build(node);
-}
-
+    : BuilderScope(node, parent.function, &parent) { }
 BuilderScope::BuilderScope(const CodeNode *node, BuilderFunction &function)
-    : function(function), current(function.builder.context) {
-    openingBlock = BasicBlock::Create(function.builder.context, "", function.function, function.exitBlock);
-    currentBlock = openingBlock;
-
-    current.SetInsertPoint(currentBlock);
-
-    const FunctionNode *astFunction = function.node;
-    const Function *llvmFunction = function.function;
-
-    // Create parameters within scope.
-    for (size_t a = 0; a < astFunction->parameterCount; a++) {
-        const auto *parameterNode = astFunction->children[a]->as<VariableNode>();
-
-        variables[parameterNode] = std::make_unique<BuilderVariable>(
-            parameterNode, llvmFunction->getArg(a), *this);
-    }
-
-    build(node);
-}
+    : BuilderScope(node, function, nullptr) { }

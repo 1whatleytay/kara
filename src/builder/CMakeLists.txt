@@ -1,8 +1,8 @@
 add_library(builder STATIC
 	include/builder/builder.h
     include/builder/error.h
-include/builder/search.h
-include/builder/lifetime.h
+	include/builder/search.h
+	include/builder/lifetime.h
 	
 	src/builder.cpp
     src/error.cpp
@@ -10,12 +10,13 @@ include/builder/lifetime.h
     src/typename.cpp
     src/variable.cpp
     src/assign.cpp
-src/search.cpp
+	src/search.cpp
     src/reference.cpp
     src/expression.cpp
     src/statement.cpp
     src/scope.cpp
-src/lifetime.cpp)
+	src/debug.cpp
+	src/lifetime.cpp)
 
 target_include_directories(builder PUBLIC include)
 target_link_libraries(builder PUBLIC parser options llvm)

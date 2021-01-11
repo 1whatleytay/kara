@@ -1,5 +1,7 @@
 #include <builder/builder.h>
 
+#include <builder/lifetime.h>
+
 #include <parser/scope.h>
 #include <parser/assign.h>
 #include <parser/function.h>
@@ -43,6 +45,29 @@ BuilderFunction::BuilderFunction(const FunctionNode *node, Builder &builder)
         returnValue = entry.CreateAlloca(returnType, nullptr, "result");
 
     BuilderScope scope(node->children[node->parameterCount]->as<CodeNode>(), *this);
+
+    // Publish ending information about lifetimes.
+    for (size_t a = 0; a < node->parameterCount; a++) {
+        auto *varNode = node->children[a]->as<VariableNode>();
+
+        const Typename &varType = varNode->type;
+
+        if (!std::holds_alternative<ReferenceTypename>(varType))
+            continue;
+
+        std::shared_ptr<MultipleLifetime> initial = std::make_shared<MultipleLifetime>();
+        initial->push_back(makeAnonymousLifetime(varType, varNode));
+
+        std::shared_ptr<MultipleLifetime> final = scope.lifetimes[varNode];
+
+        // If the transform is redundant, drop it.
+        final = compare(*initial, *final) ? nullptr : std::move(final);
+
+        type.transforms[a] = LifetimeTransform {
+            std::move(initial),
+            std::move(final)
+        };
+    }
 
     entry.CreateBr(scope.openingBlock);
 

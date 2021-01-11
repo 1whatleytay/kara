@@ -24,7 +24,10 @@ struct Lifetime {
     [[nodiscard]] std::string placeholderString() const;
     [[nodiscard]] virtual std::string toString() const = 0;
     [[nodiscard]] virtual std::shared_ptr<Lifetime> copy() const = 0;
-    [[nodiscard]] virtual int64_t lifetimeLevel(const BuilderScope &scope) const = 0;
+    [[nodiscard]] virtual std::optional<int64_t> lifetimeLevel(const BuilderScope &scope) const = 0;
+
+    virtual bool operator==(const Lifetime &lifetime) const;
+    bool operator!=(const Lifetime &lifetime) const;
 
     explicit Lifetime(Kind kind);
     Lifetime(Kind kind, const VariableNode *placeholder, uint32_t unique);
@@ -36,14 +39,17 @@ using MultipleLifetime = std::vector<std::shared_ptr<Lifetime>>;
 
 std::string toString(const MultipleLifetime &lifetime);
 std::shared_ptr<MultipleLifetime> copy(const MultipleLifetime &lifetime);
-int64_t lifetimeLevel(const MultipleLifetime &lifetime, const BuilderScope &scope);
+bool compare(const MultipleLifetime &ls, const MultipleLifetime &rs);
+std::optional<int64_t> lifetimeLevel(const MultipleLifetime &lifetime, const BuilderScope &scope);
 
 struct VariableLifetime : public Lifetime {
     const VariableNode *node = nullptr;
 
     [[nodiscard]] std::string toString() const override;
     [[nodiscard]] std::shared_ptr<Lifetime> copy() const override;
-    [[nodiscard]] int64_t lifetimeLevel(const BuilderScope &scope) const override;
+    [[nodiscard]] std::optional<int64_t> lifetimeLevel(const BuilderScope &scope) const override;
+
+    bool operator==(const Lifetime &lifetime) const override;
 
     explicit VariableLifetime(const VariableNode *node,
         const VariableNode *placeholder = nullptr, uint32_t unique = 0);
@@ -54,7 +60,9 @@ struct ReferenceLifetime : public Lifetime {
 
     [[nodiscard]] std::string toString() const override;
     [[nodiscard]] std::shared_ptr<Lifetime> copy() const override;
-    [[nodiscard]] int64_t lifetimeLevel(const BuilderScope &scope) const override;
+    [[nodiscard]] std::optional<int64_t> lifetimeLevel(const BuilderScope &scope) const override;
+
+    bool operator==(const Lifetime &lifetime) const override;
 
     explicit ReferenceLifetime(std::shared_ptr<MultipleLifetime> lifetime,
         const VariableNode *representing = nullptr, uint32_t unique = 0);
@@ -69,3 +77,13 @@ std::shared_ptr<Lifetime> makeDefaultLifetime(
 // will always return value
 std::shared_ptr<Lifetime> makeAnonymousLifetime(
     const Typename &type, const VariableNode *representing, uint32_t unique = 0);
+
+using PlaceholderId = std::pair<const VariableNode *, uint32_t>;
+
+struct PlaceholderIdHash {
+    size_t operator()(const PlaceholderId &id) const {
+        return std::hash<const VariableNode *>()(id.first) ^ std::hash<uint32_t>()(id.second);
+    }
+};
+
+using LifetimeMatches = std::unordered_map<PlaceholderId, MultipleLifetime, PlaceholderIdHash>;

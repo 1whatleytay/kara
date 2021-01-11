@@ -85,7 +85,9 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
 BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const BuilderResult &result) {
     switch (node->is<Kind>()) {
         case Kind::Call: {
-            if (!std::holds_alternative<FunctionTypename>(result.type))
+            const FunctionTypename *type = std::get_if<FunctionTypename>(&result.type);
+
+            if (!type)
                 throw VerifyError(node,
                     "Must call a function pointer object, instead called {}.",
                     toString(result.type));
@@ -94,33 +96,57 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
                 throw VerifyError(node,
                     "Internal strangeness with function pointer object.");
 
-            const auto &type = std::get<FunctionTypename>(result.type);
-
-            if (type.parameters.size() != node->children.size())
+            if (type->parameters.size() != node->children.size())
                 throw VerifyError(node,
                     "Function takes {} arguments, but {} passed.",
-                    type.parameters.size(), node->children.size());
+                    type->parameters.size(), node->children.size());
 
+            LifetimeMatches lifetimeMatches;
+
+            std::vector<std::vector<MultipleLifetime *>> expandedLifetimes(node->children.size());
             std::vector<Value *> parameters(node->children.size());
 
             for (size_t a = 0; a < node->children.size(); a++) {
                 auto *exp = node->children[a]->as<ExpressionNode>();
                 BuilderResult parameter = makeExpression(exp->result);
 
-                if (type.parameters[a] != parameter.type)
+                if (type->parameters[a] != parameter.type)
                     throw VerifyError(exp,
                         "Expression is being passed to function that expects {} type but got {}.",
-                        toString(type.parameters[a]), toString(parameter.type));
+                        toString(type->parameters[a]), toString(parameter.type));
 
                 parameters[a] = get(parameter);
+
+                auto transform = type->transforms.find(a);
+
+                if (transform != type->transforms.end()) {
+                    std::vector<MultipleLifetime *> expanded =
+                        expand({ parameter.lifetime.get() }, parameter.lifetimeDepth);
+
+                    join(lifetimeMatches,
+                        expanded,
+                        *transform->second.initial);
+
+                    expandedLifetimes[a] = std::move(expanded);
+                }
+            }
+
+            // One more iteration to apply the transforms
+            for (size_t a = 0; a < node->children.size(); a++) {
+                auto transform = type->transforms.find(a);
+
+                if (transform == type->transforms.end() || !transform->second.final)
+                    continue;
+
+                build(lifetimeMatches, expandedLifetimes[a], *transform->second.final);
             }
 
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 current.CreateCall(reinterpret_cast<Function *>(result.value), parameters),
-                *type.returnType,
+                *type->returnType,
 
-                0, { } // TODO: Implement lifetimes for function returns
+                0, { } // TODO: Implement lifetimes for function returns ON IT
             );
         }
 
@@ -142,7 +168,7 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
     BuilderResult value = makeExpression(*operation.a);
 
     switch (operation.op->op) {
-        case UnaryNode::Operation::At:
+        case UnaryNode::Operation::Reference:
             if (value.kind != BuilderResult::Kind::Reference)
                 throw VerifyError(operation.op, "Cannot get reference of temporary.");
 
@@ -151,20 +177,41 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
                 value.value,
                 ReferenceTypename { std::make_shared<Typename>(value.type) },
 
-                value.lifetimeDepth - 1, value.lifetime // TODO: definitely breaks
+                value.lifetimeDepth - 1, value.lifetime // probably breaks?
             );
 
-        case UnaryNode::Operation::Fetch:
+        case UnaryNode::Operation::Fetch: {
             if (!std::holds_alternative<ReferenceTypename>(value.type))
                 throw VerifyError(operation.op, "Cannot dereference value of non reference.");
+
+
+            std::vector<MultipleLifetime *> resultLifetimes =
+                expand({ value.lifetime.get() }, value.lifetimeDepth + 1);
+
+            // I feel like I could combine these two any_ofs but my brain is just ARGH
+            auto lifetimeIsOkay = [this](MultipleLifetime *x) {
+                return !::lifetimeLevel(*x, *this).has_value();
+            };
+
+            auto lifetimeIsEmpty = [](MultipleLifetime *x) {
+                return x->empty();
+            };
+
+            // Basically, do any of the variables referenced by this expression not exist in scope?
+            if (std::any_of(resultLifetimes.begin(), resultLifetimes.end(), lifetimeIsOkay))
+                throw VerifyError(operation.op, "Cannot dereference value with lifetime that has gone out of scope.");
+
+            if (resultLifetimes.empty() || std::all_of(resultLifetimes.begin(), resultLifetimes.end(), lifetimeIsEmpty))
+                throw VerifyError(operation.op, "Cannot dereference value which may not point to anything.");
 
             return BuilderResult(
                 BuilderResult::Kind::Reference,
                 get(value),
                 *std::get<ReferenceTypename>(value.type).value,
 
-                value.lifetimeDepth + 1, value.lifetime // TODO: definitely breaks
+                value.lifetimeDepth + 1, value.lifetime // probably breaks?
             );
+        }
 
         default:
             assert(false);

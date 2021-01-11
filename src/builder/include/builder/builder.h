@@ -17,6 +17,7 @@
 using namespace llvm;
 
 struct CodeNode;
+struct DebugNode;
 struct AssignNode;
 struct FunctionNode;
 struct VariableNode;
@@ -81,7 +82,7 @@ struct BuilderScope {
 
     int64_t lifetimeLevel = 0;
 
-    // separate for now... for data efficiency - use findVariable/findLifetime functions
+    // separate for now... for data efficiency - use findVariable function
     std::unordered_map<const VariableNode *, std::unique_ptr<BuilderVariable>> variables;
     std::unordered_map<const VariableNode *, std::shared_ptr<MultipleLifetime>> lifetimes;
 
@@ -96,17 +97,25 @@ struct BuilderScope {
     BuilderResult makeExpressionCombinator(const ExpressionCombinator &combinator);
     BuilderResult makeExpression(const ExpressionResult &result);
 
+    void makeDebug(const DebugNode *node);
     void makeAssign(const AssignNode *node);
     void makeStatement(const StatementNode *node);
 
-    std::vector<MultipleLifetime *> expand(MultipleLifetime &lifetime, int32_t depth, bool doCopy = false);
+    std::vector<MultipleLifetime *> expand(
+        const std::vector<MultipleLifetime *> &lifetime, bool doCopy = false);
+    std::vector<MultipleLifetime *> expand(
+        std::vector<MultipleLifetime *> lifetime, int32_t depth, bool doCopy = false);
+
+    void join(LifetimeMatches &matches,
+        std::vector<MultipleLifetime *> lifetime, const MultipleLifetime &initial);
+    void build(const LifetimeMatches &matches,
+        const std::vector<MultipleLifetime *> &lifetime, const MultipleLifetime &final);
 
     BuilderScope(const CodeNode *node, BuilderScope &parent);
     BuilderScope(const CodeNode *node, BuilderFunction &function);
 
 private:
-    // Abstract out of constructor.
-    void build(const CodeNode *node);
+    BuilderScope(const CodeNode *node, BuilderFunction &function, BuilderScope *parent);
 };
 
 struct BuilderFunction {

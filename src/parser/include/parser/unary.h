@@ -5,7 +5,7 @@
 struct UnaryNode : public Node {
     enum class Operation {
         Not,
-        At,
+        Reference,
         Fetch,
     };
 
