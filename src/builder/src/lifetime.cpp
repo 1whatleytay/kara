@@ -32,14 +32,12 @@ std::shared_ptr<Lifetime> VariableLifetime::copy() const {
     return std::make_shared<VariableLifetime>(node, placeholderVariable, placeholderUnique);
 }
 
-std::optional<int64_t> VariableLifetime::lifetimeLevel(const BuilderScope &scope) const {
+bool VariableLifetime::resolves(const BuilderScope &scope) const {
     // Is a placeholder node, definitely outlives the function... I think.
     if (!node)
-        return -1;
+        return true;
 
-    auto var = scope.findVariable(node);
-
-    return var.has_value() ? var.value().variable.lifetimeLevel : std::optional<int64_t>();
+    return scope.findVariable(node).has_value();
 }
 
 bool VariableLifetime::operator==(const Lifetime &lifetime) const {
@@ -55,15 +53,17 @@ VariableLifetime::VariableLifetime(const VariableNode *node, const VariableNode 
     : Lifetime(Lifetime::Kind::Variable, placeholder, unique), node(node) { }
 
 std::string ReferenceLifetime::toString() const {
-    return fmt::format("&{}{}", placeholderString(), ::toString(*children));
+    return fmt::format("&{}{}", placeholderString(), children->toString());
 }
 
 std::shared_ptr<Lifetime> ReferenceLifetime::copy() const {
-    return std::make_shared<ReferenceLifetime>(::copy(*children), placeholderVariable, placeholderUnique);
+    return std::make_shared<ReferenceLifetime>(
+        std::make_shared<MultipleLifetime>(children->copy()),
+        placeholderVariable, placeholderUnique);
 }
 
-std::optional<int64_t> ReferenceLifetime::lifetimeLevel(const BuilderScope &scope) const {
-    return ::lifetimeLevel(*children, scope);
+bool ReferenceLifetime::resolves(const BuilderScope &scope) const {
+    return children->resolves(scope);
 }
 
 bool ReferenceLifetime::operator==(const Lifetime &lifetime) const {
@@ -72,7 +72,7 @@ bool ReferenceLifetime::operator==(const Lifetime &lifetime) const {
 
     auto refLifetime = dynamic_cast<const ReferenceLifetime &>(lifetime);
 
-    return compare(*children, *refLifetime.children);
+    return children->compare(*refLifetime.children);
 }
 
 ReferenceLifetime::ReferenceLifetime(std::shared_ptr<MultipleLifetime> lifetime,
@@ -131,28 +131,28 @@ std::shared_ptr<Lifetime> makeAnonymousLifetime(
     return std::visit(visitor, type);
 }
 
-std::string toString(const MultipleLifetime &lifetime) {
-    std::vector<std::string> children(lifetime.size());
-    std::transform(lifetime.begin(), lifetime.end(), children.begin(), [](const auto &e) {
+std::string MultipleLifetime::toString() const {
+    std::vector<std::string> children(size());
+    std::transform(begin(), end(), children.begin(), [](const auto &e) {
         return e->toString();
     });
 
     return fmt::format("{{ {} }}", fmt::join(children, ", "));
 }
 
-std::shared_ptr<MultipleLifetime> copy(const MultipleLifetime &lifetime) {
-    std::shared_ptr<MultipleLifetime> result = std::make_shared<MultipleLifetime>(lifetime.size());
-    std::transform(lifetime.begin(), lifetime.end(), result->begin(), [](const auto &x) { return x->copy(); });
+MultipleLifetime MultipleLifetime::copy() const {
+    MultipleLifetime result(size());
+    std::transform(begin(), end(), result.begin(), [](const auto &x) { return x->copy(); });
 
     return result;
 }
 
-bool compare(const MultipleLifetime &ls, const MultipleLifetime &rs) {
-    if (ls.size() != rs.size())
+bool MultipleLifetime::compare(const MultipleLifetime &other) const {
+    if (size() != other.size())
         return false;
 
-    for (size_t a = 0; a < ls.size(); a++) {
-        if (*ls[a] != *rs[a]) {
+    for (size_t a = 0; a < size(); a++) {
+        if (operator[](a) != other[a]) {
             return false;
         }
     }
@@ -160,18 +160,9 @@ bool compare(const MultipleLifetime &ls, const MultipleLifetime &rs) {
     return true;
 }
 
-std::optional<int64_t> lifetimeLevel(const MultipleLifetime &lifetime, const BuilderScope &scope) {
-    int64_t level = -1;
-
-    for (const auto &e : lifetime) {
-        std::optional<int64_t> eLevel = e->lifetimeLevel(scope);
-
-        if (!eLevel.has_value())
-            return std::nullopt;
-
-        if (eLevel.value() > level)
-            level = eLevel.value();
-    }
-
-    return level;
+bool MultipleLifetime::resolves(const BuilderScope &scope) const {
+    return std::all_of(begin(), end(),
+        [scope](const std::shared_ptr<Lifetime> &l) { return l->resolves(scope); });
 }
+
+MultipleLifetime::MultipleLifetime(size_t size) : std::vector<std::shared_ptr<Lifetime>>(size) { }

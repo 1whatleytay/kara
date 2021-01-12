@@ -58,14 +58,14 @@ BuilderFunction::BuilderFunction(const FunctionNode *node, Builder &builder)
         std::shared_ptr<MultipleLifetime> initial = std::make_shared<MultipleLifetime>();
         initial->push_back(makeAnonymousLifetime(varType, varNode));
 
-        std::shared_ptr<MultipleLifetime> final = scope.lifetimes[varNode];
+        const auto &scopeLifetime = scope.lifetimes[varNode];
 
         // If the transform is redundant, drop it.
-        final = compare(*initial, *final) ? nullptr : std::move(final);
+        const auto &final = initial->compare(*scopeLifetime) ? nullptr : scopeLifetime;
 
         type.transforms[a] = LifetimeTransform {
             std::move(initial),
-            std::move(final)
+            final
         };
     }
 

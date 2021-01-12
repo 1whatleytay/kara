@@ -189,8 +189,8 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
                 expand({ value.lifetime.get() }, value.lifetimeDepth + 1);
 
             // I feel like I could combine these two any_ofs but my brain is just ARGH
-            auto lifetimeIsOkay = [this](MultipleLifetime *x) {
-                return !::lifetimeLevel(*x, *this).has_value();
+            auto lifetimeIsNotOkay = [this](MultipleLifetime *x) {
+                return !x->resolves(*this);
             };
 
             auto lifetimeIsEmpty = [](MultipleLifetime *x) {
@@ -198,7 +198,7 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
             };
 
             // Basically, do any of the variables referenced by this expression not exist in scope?
-            if (std::any_of(resultLifetimes.begin(), resultLifetimes.end(), lifetimeIsOkay))
+            if (std::any_of(resultLifetimes.begin(), resultLifetimes.end(), lifetimeIsNotOkay))
                 throw VerifyError(operation.op, "Cannot dereference value with lifetime that has gone out of scope.");
 
             if (resultLifetimes.empty() || std::all_of(resultLifetimes.begin(), resultLifetimes.end(), lifetimeIsEmpty))

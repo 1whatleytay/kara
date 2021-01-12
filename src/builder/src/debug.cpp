@@ -20,7 +20,7 @@ void BuilderScope::makeDebug(const DebugNode *node) {
             std::vector<std::string> concat(debugLifetimes.size());
 
             std::transform(debugLifetimes.begin(), debugLifetimes.end(), concat.begin(),
-                [](MultipleLifetime *x) { return toString(*x); });
+                [](MultipleLifetime *x) { return x->toString(); });
 
             fmt::print("[DEBUG:{}] [ {} ] (depth: {})\n",
                 details.lineNumber, fmt::join(concat, " "), result.lifetimeDepth);
@@ -41,8 +41,7 @@ void BuilderScope::makeDebug(const DebugNode *node) {
                 auto varInfo = findVariable(astVar);
 
                 if (varInfo) {
-                    fmt::print("[DEBUG:{}] {} (scope: {})\n", details.lineNumber,
-                        toString(*varInfo.value().lifetime), varInfo.value().variable.lifetimeLevel);
+                    fmt::print("[DEBUG:{}] {}\n", details.lineNumber, varInfo.value().lifetime->toString());
                 } else {
                     fmt::print("[DEBUG:{}] No lifetime for {}\n", details.lineNumber, astVar->name);
                 }

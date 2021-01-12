@@ -24,7 +24,7 @@ struct Lifetime {
     [[nodiscard]] std::string placeholderString() const;
     [[nodiscard]] virtual std::string toString() const = 0;
     [[nodiscard]] virtual std::shared_ptr<Lifetime> copy() const = 0;
-    [[nodiscard]] virtual std::optional<int64_t> lifetimeLevel(const BuilderScope &scope) const = 0;
+    [[nodiscard]] virtual bool resolves(const BuilderScope &scope) const = 0;
 
     virtual bool operator==(const Lifetime &lifetime) const;
     bool operator!=(const Lifetime &lifetime) const;
@@ -35,19 +35,23 @@ struct Lifetime {
     virtual ~Lifetime() = default;
 };
 
-using MultipleLifetime = std::vector<std::shared_ptr<Lifetime>>;
+struct MultipleLifetime : public std::vector<std::shared_ptr<Lifetime>> {
+    std::string toString() const;
+    MultipleLifetime copy() const;
+    bool compare(const MultipleLifetime &other) const;
 
-std::string toString(const MultipleLifetime &lifetime);
-std::shared_ptr<MultipleLifetime> copy(const MultipleLifetime &lifetime);
-bool compare(const MultipleLifetime &ls, const MultipleLifetime &rs);
-std::optional<int64_t> lifetimeLevel(const MultipleLifetime &lifetime, const BuilderScope &scope);
+    bool resolves(const BuilderScope &scope) const;
+
+    MultipleLifetime() = default;
+    MultipleLifetime(size_t size);
+};
 
 struct VariableLifetime : public Lifetime {
     const VariableNode *node = nullptr;
 
     [[nodiscard]] std::string toString() const override;
     [[nodiscard]] std::shared_ptr<Lifetime> copy() const override;
-    [[nodiscard]] std::optional<int64_t> lifetimeLevel(const BuilderScope &scope) const override;
+    [[nodiscard]] bool resolves(const BuilderScope &scope) const override;
 
     bool operator==(const Lifetime &lifetime) const override;
 
@@ -60,7 +64,7 @@ struct ReferenceLifetime : public Lifetime {
 
     [[nodiscard]] std::string toString() const override;
     [[nodiscard]] std::shared_ptr<Lifetime> copy() const override;
-    [[nodiscard]] std::optional<int64_t> lifetimeLevel(const BuilderScope &scope) const override;
+    [[nodiscard]] bool resolves(const BuilderScope &scope) const override;
 
     bool operator==(const Lifetime &lifetime) const override;
 

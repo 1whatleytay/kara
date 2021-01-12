@@ -53,7 +53,6 @@ struct BuilderVariable {
 
     Value *value = nullptr;
 
-    int64_t lifetimeLevel = 0;
     std::shared_ptr<MultipleLifetime> lifetime;
 
     BuilderVariable(const VariableNode *node, BuilderScope &scope); // regular variable
@@ -80,10 +79,8 @@ struct BuilderScope {
 
     Typename returnType = TypenameNode::nothing;
 
-    int64_t lifetimeLevel = 0;
-
     // separate for now... for data efficiency - use findVariable function
-    std::unordered_map<const VariableNode *, std::unique_ptr<BuilderVariable>> variables;
+    std::unordered_map<const VariableNode *, std::shared_ptr<BuilderVariable>> variables; // im sorry it isn't working
     std::unordered_map<const VariableNode *, std::shared_ptr<MultipleLifetime>> lifetimes;
 
     std::optional<BuilderVariableInfo> findVariable(const VariableNode *node) const;

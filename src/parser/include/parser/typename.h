@@ -14,7 +14,7 @@ using Typename = std::variant<StackTypename, FunctionTypename, ReferenceTypename
 
 // Oh dear...
 struct Lifetime;
-using MultipleLifetime = std::vector<std::shared_ptr<Lifetime>>;
+struct MultipleLifetime;
 
 struct LifetimeTransform {
     std::shared_ptr<MultipleLifetime> initial;

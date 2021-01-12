@@ -72,7 +72,7 @@ std::vector<MultipleLifetime *> BuilderScope::expand(const std::vector<MultipleL
                         assert(x.has_value());
 
                         if (doCopy) {
-                            std::shared_ptr<MultipleLifetime> temp = copy(*x.value().lifetime);
+                            auto temp = std::make_shared<MultipleLifetime>(x.value().lifetime->copy());
 
                             p = temp.get();
                             lifetimes[node] = std::move(temp);
@@ -129,9 +129,8 @@ void BuilderScope::join(LifetimeMatches &matches,
         MultipleLifetime currentLifetimeLifetime;
 
         for (MultipleLifetime *x : lifetime) {
-            // I apologize for this shared_ptr.
-            auto temp = copy(*x);
-            currentLifetimeLifetime.insert(currentLifetimeLifetime.end(), temp->begin(), temp->end());
+            auto temp = x->copy();
+            currentLifetimeLifetime.insert(currentLifetimeLifetime.end(), temp.begin(), temp.end());
         }
 
         matches[id] = std::move(currentLifetimeLifetime);
@@ -161,15 +160,15 @@ void BuilderScope::join(LifetimeMatches &matches,
 void BuilderScope::build(const LifetimeMatches &matches,
     const std::vector<MultipleLifetime *> &lifetime, const MultipleLifetime &final) {
     for (const auto &e : matches) {
-        fmt::print("Match: ({}:{}) {}\n", e.first.first->name, e.first.second, toString(e.second));
+        fmt::print("Match: ({}:{}) {}\n", e.first.first->name, e.first.second, e.second.toString());
     }
 
     std::vector<std::string> strings(lifetime.size());
     std::transform(lifetime.begin(), lifetime.end(), strings.begin(),
-        [](MultipleLifetime *l) { return toString(*l); });
+        [](MultipleLifetime *l) { return l->toString(); });
     fmt::print(" From: [ {} ]\n", fmt::join(strings, ", "));
 
-    fmt::print("Final: {}\n", toString(final));
+    fmt::print("Final: {}\n", final.toString());
 
     assert(false);
 }
@@ -181,9 +180,7 @@ BuilderScope::BuilderScope(const CodeNode *node, BuilderFunction &function, Buil
 
     current.SetInsertPoint(currentBlock);
 
-    if (parent) {
-        lifetimeLevel = parent->lifetimeLevel + 1;
-    } else {
+    if (!parent) {
         const FunctionNode *astFunction = function.node;
         const Function *llvmFunction = function.function;
 

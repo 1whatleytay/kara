@@ -26,8 +26,6 @@ BuilderVariable::BuilderVariable(const VariableNode *node, BuilderScope &scope)
 
     scope.lifetimes[node] = std::move(scopeLifetime);
 
-    lifetimeLevel = scope.lifetimeLevel;
-
     lifetime = makeExpressionLifetime();
 }
 
@@ -40,8 +38,6 @@ BuilderVariable::BuilderVariable(const VariableNode *node, Value *input, Builder
     auto scopeLifetime = std::make_shared<MultipleLifetime>();
     scopeLifetime->push_back(makeAnonymousLifetime(node->type, node));
     scope.lifetimes[node] = std::move(scopeLifetime);
-
-    lifetimeLevel = -1;
 
     lifetime = makeExpressionLifetime();
 }
