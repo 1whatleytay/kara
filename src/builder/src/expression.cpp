@@ -2,6 +2,7 @@
 
 #include <builder/error.h>
 
+#include <parser/bool.h>
 #include <parser/number.h>
 #include <parser/function.h>
 #include <parser/operator.h>
@@ -65,15 +66,21 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
             }
         }
 
+        case Kind::Bool: {
+            return BuilderResult(
+                BuilderResult::Kind::Raw,
+                ConstantInt::get(Type::getInt1Ty(function.builder.context), node->as<BoolNode>()->value),
+                TypenameNode::boolean
+            );
+        }
+
         case Kind::Number: {
             Value *value = ConstantInt::get(Type::getInt32Ty(function.builder.context), node->as<NumberNode>()->value);
 
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 value,
-                TypenameNode::integer,
-
-                0, std::make_shared<MultipleLifetime>()
+                TypenameNode::integer
             );
         }
 
@@ -144,9 +151,9 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 current.CreateCall(reinterpret_cast<Function *>(result.value), parameters),
-                *type->returnType,
+                *type->returnType
 
-                0, { } // TODO: Implement lifetimes for function returns ON IT
+                // TODO: Implement lifetimes for function returns ON IT
             );
         }
 
@@ -168,6 +175,17 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
     BuilderResult value = makeExpression(*operation.a);
 
     switch (operation.op->op) {
+        case UnaryNode::Operation::Not: {
+            if (value.type != TypenameNode::boolean)
+                throw VerifyError(operation.op, "Source type for not expression must be bool.");
+
+            return BuilderResult(
+                BuilderResult::Kind::Raw,
+                current.CreateNot(get(value)),
+                TypenameNode::boolean
+            );
+        }
+
         case UnaryNode::Operation::Reference:
             if (value.kind != BuilderResult::Kind::Reference)
                 throw VerifyError(operation.op, "Cannot get reference of temporary.");
@@ -229,36 +247,98 @@ BuilderResult BuilderScope::makeExpressionCombinator(const ExpressionCombinator 
             toString(a.type), toString(b.type));
     }
 
-    Value *value;
-
     switch (combinator.op->op) {
         case OperatorNode::Operation::Add:
-            value = current.CreateAdd(get(a), get(b));
-            break;
+            return BuilderResult(
+                BuilderResult::Kind::Raw,
+                current.CreateAdd(get(a), get(b)),
+                TypenameNode::integer
+            );
 
         case OperatorNode::Operation::Sub:
-            value = current.CreateSub(get(a), get(b));
-            break;
+            return BuilderResult(
+                BuilderResult::Kind::Raw,
+                current.CreateSub(get(a), get(b)),
+                TypenameNode::integer
+            );
 
         case OperatorNode::Operation::Mul:
-            value = current.CreateMul(get(a), get(b));
-            break;
+            return BuilderResult(
+                BuilderResult::Kind::Raw,
+                current.CreateMul(get(a), get(b)),
+                TypenameNode::integer
+            );
 
         case OperatorNode::Operation::Div:
-            value = current.CreateSDiv(get(a), get(b));
-            break;
+            return BuilderResult(
+                BuilderResult::Kind::Raw,
+                current.CreateSDiv(get(a), get(b)),
+                TypenameNode::integer
+            );
+
+        case OperatorNode::Operation::Equals:
+            if (a.type != TypenameNode::integer || b.type != TypenameNode::integer)
+                throw VerifyError(combinator.op, "Left side and right side to expression must be int.");
+
+            return BuilderResult(
+                BuilderResult::Kind::Raw,
+                current.CreateICmpEQ(get(a), get(b)),
+                TypenameNode::boolean
+            );
+
+        case OperatorNode::Operation::NotEquals:
+            if (a.type != TypenameNode::integer || b.type != TypenameNode::integer)
+                throw VerifyError(combinator.op, "Left side and right side to expression must be int.");
+
+            return BuilderResult(
+                BuilderResult::Kind::Raw,
+                current.CreateICmpNE(get(a), get(b)),
+                TypenameNode::boolean
+            );
+
+        case OperatorNode::Operation::Greater:
+            if (a.type != TypenameNode::integer || b.type != TypenameNode::integer)
+                throw VerifyError(combinator.op, "Left side and right side to expression must be int.");
+
+            return BuilderResult(
+                BuilderResult::Kind::Raw,
+                current.CreateICmpSGT(get(a), get(b)),
+                TypenameNode::boolean
+            );
+
+        case OperatorNode::Operation::GreaterEqual:
+            if (a.type != TypenameNode::integer || b.type != TypenameNode::integer)
+                throw VerifyError(combinator.op, "Left side and right side to expression must be int.");
+
+            return BuilderResult(
+                BuilderResult::Kind::Raw,
+                current.CreateICmpSGE(get(a), get(b)),
+                TypenameNode::boolean
+            );
+
+        case OperatorNode::Operation::Lesser:
+            if (a.type != TypenameNode::integer || b.type != TypenameNode::integer)
+                throw VerifyError(combinator.op, "Left side and right side to expression must be int.");
+
+            return BuilderResult(
+                BuilderResult::Kind::Raw,
+                current.CreateICmpSLT(get(a), get(b)),
+                TypenameNode::boolean
+            );
+
+        case OperatorNode::Operation::LesserEqual:
+            if (a.type != TypenameNode::integer || b.type != TypenameNode::integer)
+                throw VerifyError(combinator.op, "Left side and right side to expression must be int.");
+
+            return BuilderResult(
+                BuilderResult::Kind::Raw,
+                current.CreateICmpSLE(get(a), get(b)),
+                TypenameNode::boolean
+            );
 
         default:
             throw VerifyError(combinator.op, "Unimplemented combinator operator.");
     }
-
-    return BuilderResult(
-        BuilderResult::Kind::Raw,
-        value,
-        TypenameNode::integer,
-
-        0, std::make_shared<MultipleLifetime>()
-    );
 }
 
 BuilderResult BuilderScope::makeExpression(const ExpressionResult &result) {

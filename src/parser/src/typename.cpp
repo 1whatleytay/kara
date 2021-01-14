@@ -4,6 +4,7 @@
 
 const Typename TypenameNode::nothing = StackTypename { "nothing" };
 const Typename TypenameNode::integer = StackTypename { "int" };
+const Typename TypenameNode::boolean = StackTypename { "bool" };
 
 bool StackTypename::operator==(const StackTypename &other) const {
     return value == other.value;

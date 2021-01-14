@@ -21,4 +21,8 @@ enum class Kind {
     Unary,
     Call,
     Debug,
+    If,
+    For,
+    ForIn,
+    Bool,
 };

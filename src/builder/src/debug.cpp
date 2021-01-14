@@ -40,6 +40,8 @@ void BuilderScope::makeDebug(const DebugNode *node) {
             if (astVar) {
                 auto varInfo = findVariable(astVar);
 
+                varInfo.value().lifetime->simplify();
+
                 if (varInfo) {
                     fmt::print("[DEBUG:{}] {}\n", details.lineNumber, varInfo.value().lifetime->toString());
                 } else {

@@ -16,7 +16,10 @@ add_library(builder STATIC
     src/statement.cpp
     src/scope.cpp
 	src/debug.cpp
-	src/lifetime.cpp)
+	src/lifetime.cpp
+    src/if.cpp
+    src/for.cpp
+    src/block.cpp)
 
 target_include_directories(builder PUBLIC include)
 target_link_libraries(builder PUBLIC parser options llvm)

@@ -22,13 +22,6 @@ void BuilderScope::makeAssign(const AssignNode *node) {
     assert(destination.lifetime && source.lifetime);
 
     if (std::holds_alternative<ReferenceTypename>(destination.type)) {
-//        int64_t sourceLifetimeLevel = ::lifetimeLevel(*source.lifetime, *this);
-//        int64_t destinationLifetimeLevel = ::lifetimeLevel(*destination.lifetime, *this);
-//
-//        if (sourceLifetimeLevel > destinationLifetimeLevel) {
-//            throw VerifyError(node, "Source in expression does not outlive the destination.");
-//        }
-
         std::vector<MultipleLifetime *> sourceLifetimes =
             expand({ source.lifetime.get() }, source.lifetimeDepth + 1, true);
         std::vector<MultipleLifetime *> destinationLifetimes =
@@ -36,9 +29,12 @@ void BuilderScope::makeAssign(const AssignNode *node) {
 
         for (auto dest : destinationLifetimes) {
             dest->clear();
+
             for (auto src : sourceLifetimes) {
                 dest->insert(dest->begin(), src->begin(), src->end());
             }
+
+            dest->simplify();
         }
     }
 

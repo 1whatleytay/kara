@@ -141,7 +141,7 @@ bool MultipleLifetime::compare(const MultipleLifetime &other) const {
         return false;
 
     for (size_t a = 0; a < size(); a++) {
-        if (operator[](a) != other[a]) {
+        if (*operator[](a) != *other[a]) {
             return false;
         }
     }
@@ -152,6 +152,17 @@ bool MultipleLifetime::compare(const MultipleLifetime &other) const {
 bool MultipleLifetime::resolves(const BuilderScope &scope) const {
     return std::all_of(begin(), end(),
         [scope](const std::shared_ptr<Lifetime> &l) { return l->resolves(scope); });
+}
+
+void MultipleLifetime::simplify() {
+    // really stupid unique algorithm, but it makes lifetimes look nice
+    for (size_t a = 0; a < size(); a++) {
+        const std::shared_ptr<Lifetime> &l = operator[](a);
+
+        erase(std::remove_if(begin() + a + 1, end(), [&l](const std::shared_ptr<Lifetime> &k) {
+            return k == l || *k == *l;
+        }), end());
+    }
 }
 
 MultipleLifetime::MultipleLifetime(size_t size) : std::vector<std::shared_ptr<Lifetime>>(size) { }

@@ -49,6 +49,8 @@ struct MultipleLifetime : public std::vector<std::shared_ptr<Lifetime>> {
 
     [[nodiscard]] bool resolves(const BuilderScope &scope) const;
 
+    void simplify();
+
     MultipleLifetime() = default;
     explicit MultipleLifetime(size_t size);
 };

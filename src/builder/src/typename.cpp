@@ -9,6 +9,9 @@ Type *Builder::makeStackTypename(const StackTypename &name) {
     if (type == TypenameNode::integer)
         return Type::getInt32Ty(context);
 
+    if (type == TypenameNode::boolean)
+        return Type::getInt1Ty(context);
+
     assert(false);
 }
 

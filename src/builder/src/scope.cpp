@@ -2,15 +2,16 @@
 
 #include <builder/search.h>
 
-#include <parser/scope.h>
+#include <parser/if.h>
+#include <parser/for.h>
+#include <parser/block.h>
 #include <parser/debug.h>
+#include <parser/scope.h>
 #include <parser/assign.h>
 #include <parser/function.h>
 #include <parser/variable.h>
 #include <parser/statement.h>
 #include <parser/reference.h>
-
-#include <fmt/printf.h>
 
 std::optional<BuilderVariableInfo> BuilderScope::findVariable(const VariableNode *node) const {
     const BuilderScope *scope = this;
@@ -139,48 +140,14 @@ void BuilderScope::join(LifetimeMatches &matches,
             currentLifetime = nullptr;
         };
     }
-
-//    fmt::print("Input:\n");
-//    fmt::print("\tInitial: {}\n", toString(initial));
-//    std::vector<std::string> strings(temp.size());
-//    std::transform(temp.begin(), temp.end(), strings.begin(),
-//        [](MultipleLifetime *l) { return toString(*l); });
-//    fmt::print("\tExpression: [ {} ]\n", fmt::join(strings, ", "));
-//
-//    fmt::print("Output:\n");
-//    for (const auto &e : matches) {
-//        fmt::print("\t({}:{}) {}\n", e.first.first->name, e.first.second, toString(*e.second));
-//    }
 }
 
 void BuilderScope::build(const LifetimeMatches &matches,
     const std::vector<MultipleLifetime *> &lifetime, const MultipleLifetime &final) {
-//    for (const auto &e : matches) {
-//        fmt::print("Match: ({}:{}) {}\n", e.first.first->name, e.first.second, e.second.toString());
-//    }
-//
-//    {
-//        std::vector<std::string> strings(lifetime.size());
-//        std::transform(lifetime.begin(), lifetime.end(), strings.begin(),
-//            [](MultipleLifetime *l) { return l->toString(); });
-//        fmt::print(" From: [ {} ]\n", fmt::join(strings, ", "));
-//    }
-
-//    fmt::print("Final: {}\n", final.toString());
-
     MultipleLifetime finalResult = final;
     std::vector<MultipleLifetime *> lifetimeResult = lifetime;
 
     while (!finalResult.empty() && !lifetimeResult.empty()) {
-//        fmt::print("Iter Final: {}\n", finalResult.toString());
-//
-//        {
-//            std::vector<std::string> strings(lifetimeResult.size());
-//            std::transform(lifetimeResult.begin(), lifetimeResult.end(), strings.begin(),
-//                [](MultipleLifetime *l) { return l->toString(); });
-//            fmt::print("Iter Life:  [ {} ]\n", fmt::join(strings, ", "));
-//        }
-
         for (MultipleLifetime *l : lifetimeResult) {
             l->clear();
 
@@ -190,14 +157,12 @@ void BuilderScope::build(const LifetimeMatches &matches,
                 auto match = matches.find(x->id);
                 assert(match != matches.end());
 
-//                fmt::print("Adding {} to {}\n", match->second.toString(), l->toString());
-
                 auto temp = match->second.copy(); // pain, remove later if you think good things will happen
 
                 l->insert(l->end(), temp.begin(), temp.end());
             }
 
-//            fmt::print("L Result: {}\n", l->toString());
+            l->simplify();
         }
 
         auto expandable = [](const std::shared_ptr<Lifetime> &l) {
@@ -210,13 +175,34 @@ void BuilderScope::build(const LifetimeMatches &matches,
         finalResult = flatten(expand({ &finalResult }));
         lifetimeResult = expand(lifetimeResult);
     }
+}
 
-//    {
-//        std::vector<std::string> strings(lifetime.size());
-//        std::transform(lifetime.begin(), lifetime.end(), strings.begin(),
-//            [](MultipleLifetime *l) { return l->toString(); });
-//        fmt::print(" To: [ {} ]\n", fmt::join(strings, ", "));
-//    }
+void BuilderScope::mergeLifetimes(const BuilderScope &sub) {
+    for (const auto &pair : sub.lifetimes) {
+        // Don't merge any variables that do not exist beyond that scope.
+        if (sub.variables.find(pair.first) != sub.variables.end())
+            continue;
+
+        std::shared_ptr<MultipleLifetime> &lifetime = lifetimes[pair.first];
+
+        // Going to try to reuse it actually... other scope is going to be destructed anyway.
+        lifetime = pair.second;
+        lifetime->simplify();
+    }
+}
+
+void BuilderScope::mergePossibleLifetimes(const BuilderScope &sub) {
+    for (auto &pair : sub.lifetimes) {
+        // Don't merge any variables that do not exist beyond that scope.
+        if (sub.variables.find(pair.first) != sub.variables.end())
+            continue;
+
+        MultipleLifetime &lifetime = *lifetimes[pair.first];
+
+        // Add to existing lifetimes.
+        lifetime.insert(lifetime.begin(), pair.second->begin(), pair.second->end());
+        lifetime.simplify();
+    }
 }
 
 BuilderScope::BuilderScope(const CodeNode *node, BuilderFunction &function, BuilderScope *parent)
@@ -234,8 +220,10 @@ BuilderScope::BuilderScope(const CodeNode *node, BuilderFunction &function, Buil
         for (size_t a = 0; a < astFunction->parameterCount; a++) {
             const auto *parameterNode = astFunction->children[a]->as<VariableNode>();
 
-            variables[parameterNode] = std::make_unique<BuilderVariable>(
-                parameterNode, llvmFunction->getArg(a), *this);
+            Argument *argument = llvmFunction->getArg(a);
+            argument->setName(parameterNode->name);
+
+            variables[parameterNode] = std::make_shared<BuilderVariable>(parameterNode, argument, *this);
         }
     }
 
@@ -255,28 +243,17 @@ BuilderScope::BuilderScope(const CodeNode *node, BuilderFunction &function, Buil
                 makeStatement(child->as<StatementNode>());
                 break;
 
-            case Kind::Block: {
-                BuilderScope sub(child->children.front()->as<CodeNode>(), *this);
-
-                current.CreateBr(sub.openingBlock);
-
-                currentBlock = BasicBlock::Create(function.builder.context, "", function.function, function.exitBlock);
-                current.SetInsertPoint(currentBlock);
-
-                sub.current.CreateBr(currentBlock);
-
-                // Merge lifetimes
-                for (auto &pair : sub.lifetimes) {
-                    // Don't merge any variables that do not exist beyond that scope.
-                    if (sub.variables.find(pair.first) != sub.variables.end())
-                        continue;
-
-                    // Going to try to reuse it actually... other scope is going to be destructed anyway.
-                    lifetimes[pair.first] = std::move(pair.second);
-                }
-
+            case Kind::Block:
+                makeBlock(child->as<BlockNode>());
                 break;
-            }
+
+            case Kind::If:
+                makeIf(child->as<IfNode>());
+                break;
+
+            case Kind::For:
+                makeFor(child->as<ForNode>());
+                break;
 
             case Kind::Expression:
                 makeExpression(child->as<ExpressionNode>()->result);

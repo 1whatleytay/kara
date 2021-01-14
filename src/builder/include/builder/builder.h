@@ -16,7 +16,10 @@
 
 using namespace llvm;
 
+struct IfNode;
+struct ForNode;
 struct CodeNode;
+struct BlockNode;
 struct DebugNode;
 struct AssignNode;
 struct FunctionNode;
@@ -43,7 +46,7 @@ struct BuilderResult {
     std::shared_ptr<MultipleLifetime> lifetime;
 
     BuilderResult(Kind kind, Value *value, Typename type,
-        int32_t lifetimeDepth, std::shared_ptr<MultipleLifetime> lifetime);
+        int32_t lifetimeDepth = 0, std::shared_ptr<MultipleLifetime> lifetime = std::make_shared<MultipleLifetime>());
 };
 
 struct BuilderVariable {
@@ -94,9 +97,15 @@ struct BuilderScope {
     BuilderResult makeExpressionCombinator(const ExpressionCombinator &combinator);
     BuilderResult makeExpression(const ExpressionResult &result);
 
+    void makeIf(const IfNode *node);
+    void makeFor(const ForNode *node);
+    void makeBlock(const BlockNode *node);
     void makeDebug(const DebugNode *node);
     void makeAssign(const AssignNode *node);
     void makeStatement(const StatementNode *node);
+
+    void mergeLifetimes(const BuilderScope &sub);
+    void mergePossibleLifetimes(const BuilderScope &sub);
 
     std::vector<MultipleLifetime *> expand(
         const std::vector<MultipleLifetime *> &lifetime, bool doCopy = false);

@@ -56,6 +56,7 @@ struct ReferenceTypename {
 struct TypenameNode : public Node {
     static const Typename nothing;
     static const Typename integer;
+    static const Typename boolean;
 
     Typename type;
 
