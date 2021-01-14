@@ -8,7 +8,7 @@ std::shared_ptr<MultipleLifetime> BuilderVariable::makeExpressionLifetime() cons
     auto base = std::make_shared<MultipleLifetime>();
     auto child = std::make_shared<MultipleLifetime>();
 
-    base->push_back(std::make_shared<ReferenceLifetime>(child));
+    base->push_back(std::make_shared<ReferenceLifetime>(child, PlaceholderId { nullptr, 0 }));
     child->push_back(std::make_shared<VariableLifetime>(node));
 
     return base;
@@ -20,7 +20,7 @@ BuilderVariable::BuilderVariable(const VariableNode *node, BuilderScope &scope)
         function.builder.makeTypename(node->type), nullptr, node->name);
 
     auto scopeLifetime = std::make_shared<MultipleLifetime>();
-    std::shared_ptr<Lifetime> defaultLifetime = makeDefaultLifetime(node->type, node);
+    std::shared_ptr<Lifetime> defaultLifetime = makeDefaultLifetime(node->type, { node, 0 });
     if (defaultLifetime)
         scopeLifetime->push_back(std::move(defaultLifetime));
 
@@ -36,7 +36,7 @@ BuilderVariable::BuilderVariable(const VariableNode *node, Value *input, Builder
     function.entry.CreateStore(input, value);
 
     auto scopeLifetime = std::make_shared<MultipleLifetime>();
-    scopeLifetime->push_back(makeAnonymousLifetime(node->type, node));
+    scopeLifetime->push_back(makeAnonymousLifetime(node->type, { node, 0 }));
     scope.lifetimes[node] = std::move(scopeLifetime);
 
     lifetime = makeExpressionLifetime();

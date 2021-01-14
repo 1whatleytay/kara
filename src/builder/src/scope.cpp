@@ -119,12 +119,8 @@ void BuilderScope::join(LifetimeMatches &matches,
 
         Lifetime *mainPlaceholder = currentLifetime->front().get();
 
-        assert(mainPlaceholder->placeholderVariable);
+        assert(mainPlaceholder->id.first);
 
-        PlaceholderId id = {
-            mainPlaceholder->placeholderVariable,
-            mainPlaceholder->placeholderUnique
-        };
         // Oh dear this name
         MultipleLifetime currentLifetimeLifetime;
 
@@ -133,7 +129,7 @@ void BuilderScope::join(LifetimeMatches &matches,
             currentLifetimeLifetime.insert(currentLifetimeLifetime.end(), temp.begin(), temp.end());
         }
 
-        matches[id] = std::move(currentLifetimeLifetime);
+        matches[mainPlaceholder->id] = std::move(currentLifetimeLifetime);
 
         lifetime = expand(lifetime, 1);
 
@@ -159,18 +155,68 @@ void BuilderScope::join(LifetimeMatches &matches,
 
 void BuilderScope::build(const LifetimeMatches &matches,
     const std::vector<MultipleLifetime *> &lifetime, const MultipleLifetime &final) {
-    for (const auto &e : matches) {
-        fmt::print("Match: ({}:{}) {}\n", e.first.first->name, e.first.second, e.second.toString());
+//    for (const auto &e : matches) {
+//        fmt::print("Match: ({}:{}) {}\n", e.first.first->name, e.first.second, e.second.toString());
+//    }
+//
+//    {
+//        std::vector<std::string> strings(lifetime.size());
+//        std::transform(lifetime.begin(), lifetime.end(), strings.begin(),
+//            [](MultipleLifetime *l) { return l->toString(); });
+//        fmt::print(" From: [ {} ]\n", fmt::join(strings, ", "));
+//    }
+
+//    fmt::print("Final: {}\n", final.toString());
+
+    MultipleLifetime finalResult = final;
+    std::vector<MultipleLifetime *> lifetimeResult = lifetime;
+
+    while (!finalResult.empty() && !lifetimeResult.empty()) {
+//        fmt::print("Iter Final: {}\n", finalResult.toString());
+//
+//        {
+//            std::vector<std::string> strings(lifetimeResult.size());
+//            std::transform(lifetimeResult.begin(), lifetimeResult.end(), strings.begin(),
+//                [](MultipleLifetime *l) { return l->toString(); });
+//            fmt::print("Iter Life:  [ {} ]\n", fmt::join(strings, ", "));
+//        }
+
+        for (MultipleLifetime *l : lifetimeResult) {
+            l->clear();
+
+            for (const auto &x : finalResult) {
+                assert(x->id.first);
+
+                auto match = matches.find(x->id);
+                assert(match != matches.end());
+
+//                fmt::print("Adding {} to {}\n", match->second.toString(), l->toString());
+
+                auto temp = match->second.copy(); // pain, remove later if you think good things will happen
+
+                l->insert(l->end(), temp.begin(), temp.end());
+            }
+
+//            fmt::print("L Result: {}\n", l->toString());
+        }
+
+        auto expandable = [](const std::shared_ptr<Lifetime> &l) {
+            return l->kind != Lifetime::Kind::Variable || dynamic_cast<VariableLifetime &>(*l).node;
+        };
+
+        if (!std::all_of(finalResult.begin(), finalResult.end(), expandable))
+            break;
+
+        finalResult = flatten(expand({ &finalResult }));
+        lifetimeResult = expand(lifetimeResult);
     }
 
-    std::vector<std::string> strings(lifetime.size());
-    std::transform(lifetime.begin(), lifetime.end(), strings.begin(),
-        [](MultipleLifetime *l) { return l->toString(); });
-    fmt::print(" From: [ {} ]\n", fmt::join(strings, ", "));
-
-    fmt::print("Final: {}\n", final.toString());
-
-    assert(false);
+//    {
+//        std::vector<std::string> strings(lifetime.size());
+//        std::transform(lifetime.begin(), lifetime.end(), strings.begin(),
+//            [](MultipleLifetime *l) { return l->toString(); });
+//        fmt::print(" To: [ {} ]\n", fmt::join(strings, ", "));
+//    }
 }
 
 BuilderScope::BuilderScope(const CodeNode *node, BuilderFunction &function, BuilderScope *parent)

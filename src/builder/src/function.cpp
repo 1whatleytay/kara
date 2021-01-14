@@ -56,7 +56,7 @@ BuilderFunction::BuilderFunction(const FunctionNode *node, Builder &builder)
             continue;
 
         std::shared_ptr<MultipleLifetime> initial = std::make_shared<MultipleLifetime>();
-        initial->push_back(makeAnonymousLifetime(varType, varNode));
+        initial->push_back(makeAnonymousLifetime(varType, { varNode, 0 }));
 
         const auto &scopeLifetime = scope.lifetimes[varNode];
 

@@ -7,9 +7,7 @@
 #include <fmt/format.h>
 
 bool Lifetime::operator==(const Lifetime &lifetime) const {
-    return kind == lifetime.kind
-        && placeholderVariable == lifetime.placeholderVariable
-        && placeholderUnique == lifetime.placeholderUnique;
+    return kind == lifetime.kind && id == lifetime.id;
 }
 
 bool Lifetime::operator!=(const Lifetime &lifetime) const {
@@ -17,19 +15,18 @@ bool Lifetime::operator!=(const Lifetime &lifetime) const {
 }
 
 std::string Lifetime::placeholderString() const {
-    return placeholderVariable ? fmt::format("({}.{})", placeholderVariable->name, placeholderUnique) : "";
+    return id.first ? fmt::format("({}.{})", id.first->name, id.second) : "";
 }
 
 Lifetime::Lifetime(Kind kind) : kind(kind) { }
-Lifetime::Lifetime(Kind kind, const VariableNode *placeholder, uint32_t unique)
-    : kind(kind), placeholderVariable(placeholder), placeholderUnique(unique) { }
+Lifetime::Lifetime(Kind kind, PlaceholderId id) : kind(kind), id(std::move(id)) { }
 
 std::string VariableLifetime::toString() const {
     return fmt::format("{}{}", placeholderString(), node ? node->name : "<anon>");
 }
 
 std::shared_ptr<Lifetime> VariableLifetime::copy() const {
-    return std::make_shared<VariableLifetime>(node, placeholderVariable, placeholderUnique);
+    return std::make_shared<VariableLifetime>(node, id);
 }
 
 bool VariableLifetime::resolves(const BuilderScope &scope) const {
@@ -49,17 +46,15 @@ bool VariableLifetime::operator==(const Lifetime &lifetime) const {
     return node == varLifetime.node;
 }
 
-VariableLifetime::VariableLifetime(const VariableNode *node, const VariableNode *placeholder, uint32_t unique)
-    : Lifetime(Lifetime::Kind::Variable, placeholder, unique), node(node) { }
+VariableLifetime::VariableLifetime(const VariableNode *node, PlaceholderId id)
+    : Lifetime(Lifetime::Kind::Variable, std::move(id)), node(node) { }
 
 std::string ReferenceLifetime::toString() const {
     return fmt::format("&{}{}", placeholderString(), children->toString());
 }
 
 std::shared_ptr<Lifetime> ReferenceLifetime::copy() const {
-    return std::make_shared<ReferenceLifetime>(
-        std::make_shared<MultipleLifetime>(children->copy()),
-        placeholderVariable, placeholderUnique);
+    return std::make_shared<ReferenceLifetime>(std::make_shared<MultipleLifetime>(children->copy()), id);
 }
 
 bool ReferenceLifetime::resolves(const BuilderScope &scope) const {
@@ -75,26 +70,22 @@ bool ReferenceLifetime::operator==(const Lifetime &lifetime) const {
     return children->compare(*refLifetime.children);
 }
 
-ReferenceLifetime::ReferenceLifetime(std::shared_ptr<MultipleLifetime> lifetime,
-    const VariableNode *representing, uint32_t unique)
-    : Lifetime(Lifetime::Kind::Reference, representing, unique), children(std::move(lifetime)) { }
-ReferenceLifetime::ReferenceLifetime(const ReferenceTypename &type, const VariableNode *representing, uint32_t unique)
-    : Lifetime(Lifetime::Kind::Reference, representing, unique) {
+ReferenceLifetime::ReferenceLifetime(std::shared_ptr<MultipleLifetime> lifetime, PlaceholderId id)
+    : Lifetime(Lifetime::Kind::Reference, std::move(id)), children(std::move(lifetime)) { }
+ReferenceLifetime::ReferenceLifetime(const ReferenceTypename &type, PlaceholderId id)
+    : Lifetime(Lifetime::Kind::Reference, std::move(id)) {
     Typename &subType = *type.value;
 
     children = std::make_shared<MultipleLifetime>();
-    children->push_back(makeAnonymousLifetime(subType, representing, unique + 1));
+    children->push_back(makeAnonymousLifetime(subType, { id.first, id.second + 1 }));
 }
 
-std::shared_ptr<Lifetime> makeDefaultLifetime(
-    const Typename &type, const VariableNode *representing, uint32_t unique) {
+std::shared_ptr<Lifetime> makeDefaultLifetime(const Typename &type, const PlaceholderId &id) {
     struct {
-        const VariableNode *representing;
-        uint32_t unique;
+        const PlaceholderId &id;
 
         std::shared_ptr<Lifetime> operator()(const ReferenceTypename &type) const {
-            return std::make_shared<ReferenceLifetime>(
-                std::make_shared<MultipleLifetime>(), representing, unique);
+            return std::make_shared<ReferenceLifetime>(std::make_shared<MultipleLifetime>(), id);
         }
 
         std::shared_ptr<Lifetime> operator()(const StackTypename &) const {
@@ -104,29 +95,27 @@ std::shared_ptr<Lifetime> makeDefaultLifetime(
         std::shared_ptr<Lifetime> operator()(const FunctionTypename &) const {
             assert(false);
         }
-    } visitor { representing, unique };
+    } visitor { id };
 
     return std::visit(visitor, type);
 }
 
-std::shared_ptr<Lifetime> makeAnonymousLifetime(
-    const Typename &type, const VariableNode *representing, uint32_t unique) {
+std::shared_ptr<Lifetime> makeAnonymousLifetime(const Typename &type, const PlaceholderId &id) {
     struct {
-        const VariableNode *representing;
-        uint32_t unique;
+        const PlaceholderId &id;
 
         std::shared_ptr<Lifetime> operator()(const ReferenceTypename &type) const {
-            return std::make_shared<ReferenceLifetime>(type, representing, unique);
+            return std::make_shared<ReferenceLifetime>(type, id);
         }
 
         std::shared_ptr<Lifetime> operator()(const StackTypename &) const {
-            return std::make_shared<VariableLifetime>(nullptr, representing, unique);
+            return std::make_shared<VariableLifetime>(nullptr, id);
         }
 
         std::shared_ptr<Lifetime> operator()(const FunctionTypename &) const {
             assert(false);
         }
-    } visitor { representing, unique };
+    } visitor { id };
 
     return std::visit(visitor, type);
 }
@@ -166,3 +155,12 @@ bool MultipleLifetime::resolves(const BuilderScope &scope) const {
 }
 
 MultipleLifetime::MultipleLifetime(size_t size) : std::vector<std::shared_ptr<Lifetime>>(size) { }
+
+MultipleLifetime flatten(const std::vector<MultipleLifetime *> &lifetime) {
+    MultipleLifetime result;
+
+    for (MultipleLifetime *x : lifetime)
+        result.insert(result.end(), x->begin(), x->end());
+
+    return result;
+}
