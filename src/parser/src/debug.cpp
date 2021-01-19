@@ -7,7 +7,7 @@ DebugNode::DebugNode(Node *parent) : Node(parent, Kind::Debug) {
     match("debug", true);
 
     if (next("(")) {
-        type = select<Type>({ "exp", "var" });
+        type = select<Type>({ "exp", "var", "return" });
 
         needs(")");
     }
@@ -19,6 +19,9 @@ DebugNode::DebugNode(Node *parent) : Node(parent, Kind::Debug) {
 
         case Type::Reference:
             push<ReferenceNode>();
+            break;
+
+        default:
             break;
     }
 }

@@ -12,6 +12,9 @@ Type *Builder::makeStackTypename(const StackTypename &name) {
     if (type == TypenameNode::boolean)
         return Type::getInt1Ty(context);
 
+    if (type == TypenameNode::null)
+        return Type::getInt8PtrTy(context);
+
     assert(false);
 }
 

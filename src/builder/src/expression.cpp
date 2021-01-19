@@ -30,7 +30,7 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
                         BuilderResult::Kind::Reference,
 
                         info.variable.value,
-                        info.variable.node->type,
+                        info.variable.type,
 
                         1, info.variable.lifetime // depth: 1, some alias lifetime
                     );
@@ -66,13 +66,19 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
             }
         }
 
-        case Kind::Bool: {
+        case Kind::Null:
+            return BuilderResult(
+                BuilderResult::Kind::Raw,
+                ConstantPointerNull::get(Type::getInt8PtrTy(function.builder.context)),
+                TypenameNode::null
+            );
+
+        case Kind::Bool:
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 ConstantInt::get(Type::getInt1Ty(function.builder.context), node->as<BoolNode>()->value),
                 TypenameNode::boolean
             );
-        }
 
         case Kind::Number: {
             Value *value = ConstantInt::get(Type::getInt32Ty(function.builder.context), node->as<NumberNode>()->value);
@@ -117,11 +123,14 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
                 auto *exp = node->children[a]->as<ExpressionNode>();
                 BuilderResult parameter = makeExpression(exp->result);
 
-                if (type->parameters[a] != parameter.type)
+                std::optional<BuilderResult> parameterConverted = convert(parameter, type->parameters[a]);
+
+                if (!parameterConverted)
                     throw VerifyError(exp,
                         "Expression is being passed to function that expects {} type but got {}.",
                         toString(type->parameters[a]), toString(parameter.type));
 
+                parameter = *parameterConverted;
                 parameters[a] = get(parameter);
 
                 auto transform = type->transforms.find(a);
@@ -148,12 +157,15 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
                 build(lifetimeMatches, expandedLifetimes[a], *transform->second.final);
             }
 
+            std::shared_ptr<MultipleLifetime> resultLifetime = std::make_shared<MultipleLifetime>();
+            build(lifetimeMatches, { resultLifetime.get() }, *type->returnTransformFinal);
+
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 current.CreateCall(reinterpret_cast<Function *>(result.value), parameters),
-                *type->returnType
+                *type->returnType,
 
-                // TODO: Implement lifetimes for function returns ON IT
+                0, std::move(resultLifetime)
             );
         }
 

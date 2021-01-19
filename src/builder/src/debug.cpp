@@ -53,5 +53,17 @@ void BuilderScope::makeDebug(const DebugNode *node) {
 
             break;
         }
+
+        case DebugNode::Type::Return: {
+            MultipleLifetime *final = function.type.returnTransformFinal.get();
+
+            if (final) {
+                fmt::print("[DEBUG:{}] {}\n", details.lineNumber, final->toString());
+            } else {
+                fmt::print("[DEBUG:{}] No return transform lifetime.\n", details.lineNumber);
+            }
+
+            break;
+        }
     }
 }

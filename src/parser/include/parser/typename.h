@@ -17,6 +17,7 @@ struct Lifetime;
 struct MultipleLifetime;
 
 struct LifetimeTransform {
+    // This is unfortunate, they could be regular vectors.
     std::shared_ptr<MultipleLifetime> initial;
     std::shared_ptr<MultipleLifetime> final; // can be nullptr, meaning no transform
 };
@@ -39,6 +40,8 @@ struct FunctionTypename {
     std::shared_ptr<Typename> returnType;
     std::vector<Typename> parameters;
 
+    std::shared_ptr<MultipleLifetime> returnTransformFinal; // please initialize me
+
     // could be a vector ig
     std::unordered_map<size_t, LifetimeTransform> transforms;
 
@@ -57,6 +60,7 @@ struct TypenameNode : public Node {
     static const Typename nothing;
     static const Typename integer;
     static const Typename boolean;
+    static const Typename null;
 
     Typename type;
 

@@ -8,20 +8,49 @@
 void BuilderScope::makeStatement(const StatementNode *node) {
     switch (node->op) {
         case StatementNode::Operation::Return: {
-            if (node->children.empty() && returnType != TypenameNode::nothing) {
-                throw VerifyError(node,
-                    "Method is of type {} but return statement does not return anything",
-                    toString(returnType));
+            if (node->children.empty()) {
+                if (*function.type.returnType != TypenameNode::nothing) {
+                    throw VerifyError(node,
+                        "Method is of type {} but return statement does not return anything",
+                        toString(*function.type.returnType));
+                }
+            } else {
+                if (!node->children.empty() && *function.type.returnType == TypenameNode::nothing) {
+                    throw VerifyError(node,
+                        "Method does not have a return type but return statement returns value.");
+                }
+
+                // lambda :S
+                BuilderResult resultRaw = makeExpression(node->children.front()->as<ExpressionNode>()->result);
+                std::optional<BuilderResult> resultConverted = convert(resultRaw, *function.type.returnType);
+
+                if (!resultConverted.has_value()) {
+                    throw VerifyError(node,
+                        "Cannot return {} from a function that returns {}.",
+                        toString(resultRaw.type),
+                        toString(*function.type.returnType));
+                }
+
+                BuilderResult result = std::move(*resultConverted);
+
+                if (result.lifetime) {
+                    std::vector<MultipleLifetime *> sourceLifetimes =
+                        expand({ result.lifetime.get() }, result.lifetimeDepth + 1, true);
+                    std::vector<MultipleLifetime *> destinationLifetimes =
+                        expand({ function.type.returnTransformFinal.get() }, true);
+
+                    for (auto dest : destinationLifetimes) {
+                        for (auto src : sourceLifetimes) {
+                            dest->insert(dest->begin(), src->begin(), src->end());
+                        }
+
+                        dest->simplify();
+                    }
+                }
+
+                current.CreateStore(get(result), function.returnValue);
             }
 
-            if (!node->children.empty() && returnType == TypenameNode::nothing) {
-                throw VerifyError(node,
-                    "Method does not return anything but return statement returns value.");
-            }
-
-            BuilderResult result = makeExpression(node->children.front()->as<ExpressionNode>()->result);
-
-            current.CreateStore(get(result), function.returnValue);
             current.CreateBr(function.exitBlock);
 
             break;

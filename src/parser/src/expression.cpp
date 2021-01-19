@@ -2,6 +2,7 @@
 
 #include <parser/call.h>
 #include <parser/bool.h>
+#include <parser/null.h>
 #include <parser/number.h>
 #include <parser/reference.h>
 #include <parser/parentheses.h>
@@ -35,7 +36,7 @@ ExpressionNode::ExpressionNode(Node *parent) : Node(parent, Kind::Expression) {
     while(!end() && !exit) {
         while (push<UnaryNode>(true));
 
-        push<ParenthesesNode, BoolNode, NumberNode, ReferenceNode>();
+        push<ParenthesesNode, NullNode, BoolNode, NumberNode, ReferenceNode>();
 
         while (true) {
             if (!push<CallNode, OperatorNode>(true)) {

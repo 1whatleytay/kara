@@ -17,6 +17,7 @@ add_library(builder STATIC
     src/scope.cpp
 	src/debug.cpp
 	src/lifetime.cpp
+	src/scope-lifetime.cpp
     src/if.cpp
     src/for.cpp
     src/block.cpp)

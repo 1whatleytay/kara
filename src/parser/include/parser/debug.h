@@ -6,6 +6,7 @@ struct DebugNode : public Node {
     enum class Type {
         Expression,
         Reference,
+        Return,
     };
 
     Type type = Type::Expression;

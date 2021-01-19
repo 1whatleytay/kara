@@ -1,5 +1,6 @@
 #include <builder/builder.h>
 
+#include <builder/error.h>
 #include <builder/lifetime.h>
 
 #include <parser/scope.h>
@@ -11,13 +12,28 @@
 FunctionTypename makeFunctionTypenameBase(const FunctionNode *node) {
     std::vector<Typename> parameters(node->parameterCount);
 
-    for (size_t a = 0; a < node->parameterCount; a++)
-        parameters[a] = node->children[a]->as<VariableNode>()->type;
+    for (size_t a = 0; a < node->parameterCount; a++) {
+        const auto &type = node->children[a]->as<VariableNode>()->fixedType;
+
+        if (!type) {
+            throw VerifyError(node->children[a].get(),
+                "Function parameter must have given type, default parameters are not implemented.");
+        }
+
+        parameters[a] = *type;
+    }
+
+    auto m = std::make_shared<MultipleLifetime>();
+    m->push_back(makeAnonymousLifetime(node->returnType, { nullptr, 0 }));
 
     return {
         FunctionTypename::Kind::Pointer,
         std::make_shared<Typename>(node->returnType),
-        std::move(parameters)
+        std::move(parameters),
+
+        // im sorry, this should be in constructor but...
+        // i can't tell if it should have by lifetime yet, because like StructLifetime now and VariableLifetime ref
+        std::move(m)
     };
 }
 
@@ -26,8 +42,16 @@ BuilderFunction::BuilderFunction(const FunctionNode *node, Builder &builder)
     Type *returnType = builder.makeTypename(node->returnType);
     std::vector<Type *> parameterTypes(node->parameterCount);
 
-    for (size_t a = 0; a < node->parameterCount; a++)
-        parameterTypes[a] = builder.makeTypename(node->children[a]->as<VariableNode>()->type);
+    for (size_t a = 0; a < node->parameterCount; a++) {
+        const auto &parameterType = node->children[a]->as<VariableNode>()->fixedType;
+
+        if (!parameterType.has_value()) {
+            throw VerifyError(node->children[a].get(),
+                "Function parameter must have given type, default parameters are not implemented.");
+        }
+
+        parameterTypes[a] = builder.makeTypename(parameterType.value());
+    }
 
     FunctionType *valueType = FunctionType::get(returnType, parameterTypes, false);
 
@@ -48,9 +72,8 @@ BuilderFunction::BuilderFunction(const FunctionNode *node, Builder &builder)
 
     // Publish ending information about lifetimes.
     for (size_t a = 0; a < node->parameterCount; a++) {
-        auto *varNode = node->children[a]->as<VariableNode>();
-
-        const Typename &varType = varNode->type;
+        const auto *varNode = node->children[a]->as<VariableNode>();
+        const auto &varType = varNode->fixedType.value();
 
         if (!std::holds_alternative<ReferenceTypename>(varType))
             continue;

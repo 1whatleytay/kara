@@ -25,4 +25,5 @@ enum class Kind {
     For,
     ForIn,
     Bool,
+    Null,
 };

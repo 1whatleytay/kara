@@ -11,7 +11,9 @@ void BuilderScope::makeBlock(const BlockNode *node) {
     current.CreateBr(sub.openingBlock);
     current.SetInsertPoint(currentBlock);
 
-    sub.current.CreateBr(currentBlock);
+    if (!sub.currentBlock->getTerminator()) {
+        sub.current.CreateBr(currentBlock);
 
-    mergeLifetimes(sub);
+        mergeLifetimes(sub);
+    }
 }

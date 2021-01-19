@@ -6,7 +6,8 @@
 
 struct VariableNode : public Node {
     std::string name;
-    Typename type;
+    std::optional<Typename> fixedType;
+
     bool isMutable = false;
 
     explicit VariableNode(Node *parent, bool isExplicit = true);

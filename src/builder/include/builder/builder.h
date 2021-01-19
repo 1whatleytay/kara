@@ -53,6 +53,7 @@ struct BuilderVariable {
     BuilderFunction &function;
 
     const VariableNode *node = nullptr;
+    Typename type;
 
     Value *value = nullptr;
 
@@ -80,8 +81,6 @@ struct BuilderScope {
 
     IRBuilder<> current;
 
-    Typename returnType = TypenameNode::nothing;
-
     // separate for now... for data efficiency - use findVariable function
     std::unordered_map<const VariableNode *, std::shared_ptr<BuilderVariable>> variables; // im sorry it isn't working
     std::unordered_map<const VariableNode *, std::shared_ptr<MultipleLifetime>> lifetimes;
@@ -96,6 +95,8 @@ struct BuilderScope {
     BuilderResult makeExpressionOperation(const ExpressionOperation &operation);
     BuilderResult makeExpressionCombinator(const ExpressionCombinator &combinator);
     BuilderResult makeExpression(const ExpressionResult &result);
+
+    std::optional<BuilderResult> convert(const BuilderResult &result, const Typename &type);
 
     void makeIf(const IfNode *node);
     void makeFor(const ForNode *node);

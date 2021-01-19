@@ -19,6 +19,7 @@ add_library(parser STATIC
     include/parser/if.h
     include/parser/for.h
     include/parser/bool.h
+    include/parser/null.h
 	
 	src/root.cpp
     src/function.cpp
@@ -38,7 +39,8 @@ add_library(parser STATIC
     src/debug.cpp
     src/if.cpp
     src/for.cpp
-    src/bool.cpp)
+    src/bool.cpp
+    src/null.cpp)
 
 target_include_directories(parser PUBLIC include)
 target_link_libraries(parser PUBLIC fmt hermes)
