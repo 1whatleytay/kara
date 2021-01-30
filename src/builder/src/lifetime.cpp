@@ -72,12 +72,23 @@ bool ReferenceLifetime::operator==(const Lifetime &lifetime) const {
 
 ReferenceLifetime::ReferenceLifetime(std::shared_ptr<MultipleLifetime> lifetime, PlaceholderId id)
     : Lifetime(Lifetime::Kind::Reference, std::move(id)), children(std::move(lifetime)) { }
+ReferenceLifetime::ReferenceLifetime(const ArrayTypename &type, PlaceholderId id) // same :/
+    : Lifetime(Lifetime::Kind::Reference, std::move(id)) {
+    Typename &subType = *type.value;
+
+    children = std::make_shared<MultipleLifetime>();
+
+    if (auto x = makeAnonymousLifetime(subType, { id.first, id.second + 1 }))
+        children->push_back(std::move(x));
+}
 ReferenceLifetime::ReferenceLifetime(const ReferenceTypename &type, PlaceholderId id)
     : Lifetime(Lifetime::Kind::Reference, std::move(id)) {
     Typename &subType = *type.value;
 
     children = std::make_shared<MultipleLifetime>();
-    children->push_back(makeAnonymousLifetime(subType, { id.first, id.second + 1 }));
+
+    if (auto x = makeAnonymousLifetime(subType, { id.first, id.second + 1 }))
+        children->push_back(std::move(x));
 }
 
 std::shared_ptr<Lifetime> makeDefaultLifetime(const Typename &type, const PlaceholderId &id) {
@@ -95,6 +106,12 @@ std::shared_ptr<Lifetime> makeDefaultLifetime(const Typename &type, const Placeh
         std::shared_ptr<Lifetime> operator()(const FunctionTypename &) const {
             assert(false);
         }
+
+        std::shared_ptr<Lifetime> operator()(const ArrayTypename &type) const {
+            return makeDefaultLifetime(*type.value, id);
+//            return nullptr;
+//            return std::make_shared<ReferenceLifetime>(std::make_shared<MultipleLifetime>(), id);
+        }
     } visitor { id };
 
     return std::visit(visitor, type);
@@ -109,11 +126,17 @@ std::shared_ptr<Lifetime> makeAnonymousLifetime(const Typename &type, const Plac
         }
 
         std::shared_ptr<Lifetime> operator()(const StackTypename &) const {
-            return std::make_shared<VariableLifetime>(nullptr, id);
+            return id.first ? std::make_shared<VariableLifetime>(nullptr, id) : nullptr;
         }
 
         std::shared_ptr<Lifetime> operator()(const FunctionTypename &) const {
             assert(false);
+        }
+
+        std::shared_ptr<Lifetime> operator()(const ArrayTypename &type) const {
+            return makeAnonymousLifetime(*type.value, id);
+//            return id.first ? std::make_shared<VariableLifetime>(nullptr, id) : nullptr;
+//            return std::make_shared<ReferenceLifetime>(type, id);
         }
     } visitor { id };
 

@@ -48,7 +48,19 @@ std::optional<BuilderVariableInfo> BuilderScope::findVariable(const VariableNode
 }
 
 Value *BuilderScope::get(const BuilderResult &result) {
-    return result.kind == BuilderResult::Kind::Reference ? current.CreateLoad(result.value) : result.value;
+    return result.kind != BuilderResult::Kind::Raw ? current.CreateLoad(result.value) : result.value;
+}
+
+Value *BuilderScope::ref(const BuilderResult &result) {
+    if (result.kind == BuilderResult::Kind::Raw) {
+        Value *ref = current.CreateAlloca(function.builder.makeTypename(result.type));
+
+        current.CreateStore(result.value, ref);
+
+        return ref;
+    } else {
+        return result.value;
+    }
 }
 
 BuilderScope::BuilderScope(const CodeNode *node, BuilderFunction &function, BuilderScope *parent)

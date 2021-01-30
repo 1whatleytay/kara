@@ -3,6 +3,7 @@
 #include <builder/error.h>
 
 #include <parser/bool.h>
+#include <parser/array.h>
 #include <parser/number.h>
 #include <parser/function.h>
 #include <parser/operator.h>
@@ -79,6 +80,62 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
                 ConstantInt::get(Type::getInt1Ty(function.builder.context), node->as<BoolNode>()->value),
                 TypenameNode::boolean
             );
+
+        case Kind::Array: {
+            auto *e = node->as<ArrayNode>();
+
+            std::vector<BuilderResult> results;
+            results.reserve(e->children.size());
+
+            std::transform(e->children.begin(), e->children.end(), std::back_inserter(results),
+                [this](const std::unique_ptr<Node> &x) { return makeExpression(x->as<ExpressionNode>()->result); });
+
+            Typename subType = results.empty() ? TypenameNode::any : results.front().type;
+
+            if (!std::all_of(results.begin(), results.end(), [subType](const BuilderResult &result) {
+                return result.type == subType;
+            })) {
+                throw VerifyError(e, "Array elements must all be the same type ({}).", toString(subType));
+            }
+
+            ArrayTypename type = {
+                ArrayTypename::Kind::FixedSize,
+                std::make_shared<Typename>(subType),
+                results.size()
+            };
+
+            Type *arrayType = function.builder.makeTypename(type);
+
+            Value *value;
+
+            auto existingAllocation = literals.find(node);
+            if (existingAllocation == literals.end()) {
+                value = function.entry.CreateAlloca(arrayType);
+                literals[node] = value;
+            } else {
+                value = existingAllocation->second;
+            }
+
+            for (size_t a = 0; a < results.size(); a++) {
+                const BuilderResult &result = results[a];
+
+                Value *index = ConstantInt::get(Type::getInt64Ty(function.builder.context), a);
+                Value *point = current.CreateInBoundsGEP(value, {
+                    ConstantInt::get(Type::getInt64Ty(function.builder.context), 0),
+                    index
+                });
+
+                current.CreateStore(get(result), point);
+            }
+
+            return BuilderResult(
+                BuilderResult::Kind::Literal,
+                value,
+                type
+
+                // lifetime :/
+            );
+        }
 
         case Kind::Number: {
             Value *value = ConstantInt::get(Type::getInt32Ty(function.builder.context), node->as<NumberNode>()->value);
@@ -169,6 +226,42 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
             );
         }
 
+        case Kind::Index: {
+            // Not get(result.value) we don't want to drop the pointer :|
+            // this can't work....
+
+            const ArrayTypename *arrayType = std::get_if<ArrayTypename>(&result.type);
+
+            if (!arrayType) {
+                throw VerifyError(node,
+                    "Indexing must only be applied on array types, type is {}.",
+                    toString(result.type));
+            }
+
+            BuilderResult index = makeExpression(node->children.front()->as<ExpressionNode>()->result);
+            std::optional<BuilderResult> indexConverted = convert(index, TypenameNode::integer);
+
+            if (!indexConverted.has_value()) {
+                throw VerifyError(node->children.front().get(),
+                    "Must be able to be converted to int type for indexing, instead type is {}.",
+                    toString(index.type));
+            }
+
+            index = indexConverted.value();
+
+            return BuilderResult(
+                result.kind == BuilderResult::Kind::Reference
+                    ? BuilderResult::Kind::Reference : BuilderResult::Kind::Literal,
+                current.CreateGEP(ref(result), {
+                    ConstantInt::get(Type::getInt64Ty(function.builder.context), 0),
+                    get(index)
+                }),
+                *arrayType->value,
+
+                result.lifetimeDepth, result.lifetime // probably breaks?
+            );
+        }
+
         default:
             assert(false);
     }
@@ -214,7 +307,6 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
             if (!std::holds_alternative<ReferenceTypename>(value.type))
                 throw VerifyError(operation.op, "Cannot dereference value of non reference.");
 
-
             std::vector<MultipleLifetime *> resultLifetimes =
                 expand({ value.lifetime.get() }, value.lifetimeDepth + 1);
 
@@ -228,11 +320,13 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
             };
 
             // Basically, do any of the variables referenced by this expression not exist in scope?
-            if (std::any_of(resultLifetimes.begin(), resultLifetimes.end(), lifetimeIsNotOkay))
-                throw VerifyError(operation.op, "Cannot dereference value with lifetime that has gone out of scope.");
+            if (!function.builder.options.noLifetimes) {
+                if (std::any_of(resultLifetimes.begin(), resultLifetimes.end(), lifetimeIsNotOkay))
+                    throw VerifyError(operation.op, "Cannot dereference value with lifetime that has gone out of scope.");
 
-            if (resultLifetimes.empty() || std::all_of(resultLifetimes.begin(), resultLifetimes.end(), lifetimeIsEmpty))
-                throw VerifyError(operation.op, "Cannot dereference value which may not point to anything.");
+                if (resultLifetimes.empty() || std::all_of(resultLifetimes.begin(), resultLifetimes.end(), lifetimeIsEmpty))
+                    throw VerifyError(operation.op, "Cannot dereference value which may not point to anything.");
+            }
 
             return BuilderResult(
                 BuilderResult::Kind::Reference,

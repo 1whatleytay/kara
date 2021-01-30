@@ -90,7 +90,10 @@ BuilderVariable::BuilderVariable(const VariableNode *node, Value *input, Builder
     function.entry.CreateStore(input, value);
 
     auto scopeLifetime = std::make_shared<MultipleLifetime>();
-    scopeLifetime->push_back(makeAnonymousLifetime(*node->fixedType, { node, 0 }));
+
+    if (auto x = makeAnonymousLifetime(*node->fixedType, { node, 0 }))
+        scopeLifetime->push_back(std::move(x));
+
     scope.lifetimes[node] = std::move(scopeLifetime);
 
     lifetime = makeExpressionLifetime();

@@ -14,10 +14,16 @@ void BuilderScope::makeIf(const IfNode *node) {
         currentBlock = BasicBlock::Create(function.builder.context, "", function.function, function.exitBlock);
 
         BuilderResult conditionResult = makeExpression(node->children.front()->as<ExpressionNode>()->result);
-        Value *condition = get(conditionResult);
+        std::optional<BuilderResult> conditionConverted = convert(conditionResult, TypenameNode::boolean);
 
-        if (conditionResult.type != TypenameNode::boolean)
-            throw VerifyError(node->children.front().get(), "Condition for if statement must be a bool.");
+        if (!conditionConverted) {
+            throw VerifyError(node->children.front().get(),
+                "Condition for if statement must evaluate to true or false.");
+        }
+
+        conditionResult = *conditionConverted;
+
+        Value *condition = get(conditionResult);
 
         current.CreateCondBr(condition, sub.openingBlock, currentBlock);
         current.SetInsertPoint(currentBlock);

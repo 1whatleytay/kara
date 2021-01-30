@@ -24,7 +24,8 @@ FunctionTypename makeFunctionTypenameBase(const FunctionNode *node) {
     }
 
     auto m = std::make_shared<MultipleLifetime>();
-    m->push_back(makeAnonymousLifetime(node->returnType, { nullptr, 0 }));
+    if (auto x = makeAnonymousLifetime(node->returnType, { nullptr, 0 }))
+        m->push_back(std::move(x));
 
     return {
         FunctionTypename::Kind::Pointer,
@@ -79,7 +80,8 @@ BuilderFunction::BuilderFunction(const FunctionNode *node, Builder &builder)
             continue;
 
         std::shared_ptr<MultipleLifetime> initial = std::make_shared<MultipleLifetime>();
-        initial->push_back(makeAnonymousLifetime(varType, { varNode, 0 }));
+        if (auto x = makeAnonymousLifetime(varType, { varNode, 0 }))
+            initial->push_back(std::move(x));
 
         const auto &scopeLifetime = scope.lifetimes[varNode];
 

@@ -11,40 +11,44 @@
 #include <sstream>
 
 int main(int count, const char **args) {
-    Options options(count, args);
+    try {
+        Options options(count, args);
 
-    std::string source;
-    {
-        std::ifstream stream(options.inputFile);
+        std::string source;
+        {
+            std::ifstream stream(options.inputFile);
 
-        if (!stream.is_open()) {
-            fmt::print("Cannot find input file {}.\n", options.inputFile);
-            return 0;
+            if (!stream.is_open()) {
+                fmt::print("Cannot find input file {}.\n", options.inputFile);
+                return 0;
+            }
+
+            std::stringstream buffer;
+            buffer << stream.rdbuf();
+            source = buffer.str();
         }
 
-        std::stringstream buffer;
-        buffer << stream.rdbuf();
-        source = buffer.str();
-    }
-
-    State state(source);
-
-    try {
-        RootNode root(state);
+        State state(source);
 
         try {
-            Builder builder(&root, options);
-        } catch (const VerifyError &e) {
-            LineDetails details(source, e.node->index, false);
+            RootNode root(state);
+
+            try {
+                Builder builder(&root, options);
+            } catch (const VerifyError &e) {
+                LineDetails details(source, e.node->index, false);
+
+                fmt::print("{} [line {}]\n{}\n{}\n",
+                    e.issue, details.lineNumber, details.line, details.marker);
+            }
+        } catch (const ParseError &e) {
+            LineDetails details(source, e.index);
 
             fmt::print("{} [line {}]\n{}\n{}\n",
                 e.issue, details.lineNumber, details.line, details.marker);
         }
-    } catch (const ParseError &e) {
-        LineDetails details(source, e.index);
-
-        fmt::print("{} [line {}]\n{}\n{}\n",
-            e.issue, details.lineNumber, details.line, details.marker);
+    } catch (const OptionsError &e) {
+        return 1;
     }
 
 	return 0;

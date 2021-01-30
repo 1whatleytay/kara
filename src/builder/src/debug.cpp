@@ -65,5 +65,26 @@ void BuilderScope::makeDebug(const DebugNode *node) {
 
             break;
         }
+
+        case DebugNode::Type::Type: {
+            auto *reference = node->children.front()->as<ReferenceNode>();
+
+            const auto *astVar = search::exclusive::scope(node, [reference](const Node *node) {
+                return node->is(Kind::Variable)
+                    && node->as<VariableNode>()->name == reference->name;
+            })->as<VariableNode>();
+
+            if (astVar) {
+                auto varInfo = findVariable(astVar);
+
+                if (varInfo) {
+                    fmt::print("[DEBUG:{}] {}\n", details.lineNumber, toString(varInfo.value().variable.type));
+                } else {
+                    fmt::print("[DEBUG:{}] No lifetime for {}\n", details.lineNumber, astVar->name);
+                }
+            } else {
+                fmt::print("[DEBUG:{}] Cannot find {}\n", details.lineNumber, reference->name);
+            }
+        }
     }
 }

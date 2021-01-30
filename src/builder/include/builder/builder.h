@@ -35,7 +35,8 @@ struct BuilderFunction;
 struct BuilderResult {
     enum class Kind {
         Raw,
-        Reference
+        Reference,
+        Literal
     };
 
     Kind kind = Kind::Raw;
@@ -81,6 +82,10 @@ struct BuilderScope {
 
     IRBuilder<> current;
 
+    // For things like array literals that have to be on stack for a bit...
+    // Not sure why it's tied to the scope :| it might cause problems in the future
+    std::unordered_map<const Node *, Value *> literals;
+
     // separate for now... for data efficiency - use findVariable function
     std::unordered_map<const VariableNode *, std::shared_ptr<BuilderVariable>> variables; // im sorry it isn't working
     std::unordered_map<const VariableNode *, std::shared_ptr<MultipleLifetime>> lifetimes;
@@ -88,6 +93,7 @@ struct BuilderScope {
     std::optional<BuilderVariableInfo> findVariable(const VariableNode *node) const;
 
     Value *get(const BuilderResult &result);
+    Value *ref(const BuilderResult &result);
 
     BuilderResult makeExpressionNounContent(const Node *node);
     BuilderResult makeExpressionNounModifier(const Node *node, const BuilderResult &result);
@@ -145,6 +151,8 @@ struct BuilderFunction {
 };
 
 struct Builder {
+    Options options;
+
     LLVMContext context;
     Module module;
 
@@ -155,5 +163,5 @@ struct Builder {
     Type *makeStackTypename(const StackTypename &type);
     Type *makeTypename(const Typename &type);
 
-    Builder(RootNode *root, const Options &options);
+    Builder(RootNode *root, Options options);
 };

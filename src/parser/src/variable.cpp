@@ -13,12 +13,13 @@ VariableNode::VariableNode(Node *parent, bool isExplicit) : Node(parent, Kind::V
 
     name = token();
 
-    if (std::unique_ptr<TypenameNode> typeNode = pick<TypenameNode>(true))
-        fixedType = std::move(typeNode->type);
-
     if (next("=")) {
         push<ExpressionNode>();
-    } else if (!fixedType) {
-        error("No fixed type or default value provided to variable.");
+    } else {
+        fixedType = pick<TypenameNode>()->type;
+
+        if (next("=")) {
+            push<ExpressionNode>();
+        }
     }
 }

@@ -7,6 +7,7 @@ struct DebugNode : public Node {
         Expression,
         Reference,
         Return,
+        Type
     };
 
     Type type = Type::Expression;

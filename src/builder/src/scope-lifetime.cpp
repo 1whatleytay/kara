@@ -85,11 +85,8 @@ void BuilderScope::join(LifetimeMatches &matches,
 
         lifetime = expand(lifetime, 1);
 
-        if (mainPlaceholder->kind == Lifetime::Kind::Reference) {
-            currentLifetime = dynamic_cast<ReferenceLifetime *>(mainPlaceholder)->children.get();
-        } else {
-            currentLifetime = nullptr;
-        };
+        currentLifetime = mainPlaceholder->kind == Lifetime::Kind::Reference
+            ? dynamic_cast<ReferenceLifetime *>(mainPlaceholder)->children.get() : nullptr;
     }
 }
 

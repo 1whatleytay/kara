@@ -15,8 +15,8 @@ BuilderResult::BuilderResult(Kind kind, Value *value, Typename type,
     int32_t lifetimeDepth, std::shared_ptr<MultipleLifetime> lifetime)
     : kind(kind), value(value), type(std::move(type)), lifetimeDepth(lifetimeDepth), lifetime(std::move(lifetime)) { }
 
-Builder::Builder(RootNode *root, const Options &options)
-    : context(), module(fs::path(options.inputFile).filename().string(), context) {
+Builder::Builder(RootNode *root, Options passedOptions)
+    : context(), module(fs::path(options.inputFile).filename().string(), context), options(std::move(passedOptions)) {
     for (const auto &node : root->children) {
         switch (node->is<Kind>()) {
             case Kind::Function:

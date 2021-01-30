@@ -21,6 +21,14 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &result, 
         );
     }
 
+    if (type == TypenameNode::boolean && std::holds_alternative<ReferenceTypename>(result.type)) {
+        return BuilderResult(
+            BuilderResult::Kind::Raw,
+            current.CreateIsNotNull(get(result)),
+            type
+        );
+    }
+
     // look through conversion operators...
     // convert reference to raw
     // convert raw to reference
@@ -50,6 +58,8 @@ void BuilderScope::makeAssign(const AssignNode *node) {
 
     std::vector<MultipleLifetime *> sourceLifetimes =
         expand({ source.lifetime.get() }, source.lifetimeDepth + 1, true);
+    std::vector<MultipleLifetime *> k =
+        expand({ destination.lifetime.get() }, destination.lifetimeDepth, false);
     std::vector<MultipleLifetime *> destinationLifetimes =
         expand({ destination.lifetime.get() }, destination.lifetimeDepth + 1, true);
 

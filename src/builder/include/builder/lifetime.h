@@ -77,13 +77,13 @@ struct ReferenceLifetime : public Lifetime {
     bool operator==(const Lifetime &lifetime) const override;
 
     explicit ReferenceLifetime(std::shared_ptr<MultipleLifetime> lifetime, PlaceholderId id);
+
+    ReferenceLifetime(const ArrayTypename &type, PlaceholderId id);
     ReferenceLifetime(const ReferenceTypename &type, PlaceholderId id);
 };
 
-// can return null
+// both can return null
 std::shared_ptr<Lifetime> makeDefaultLifetime(const Typename &type, const PlaceholderId &id);
-
-// will always return value
 std::shared_ptr<Lifetime> makeAnonymousLifetime(const Typename &type, const PlaceholderId &id);
 
 using LifetimeMatches = std::unordered_map<PlaceholderId, MultipleLifetime, PlaceholderIdHash>;

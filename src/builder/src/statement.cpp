@@ -33,7 +33,7 @@ void BuilderScope::makeStatement(const StatementNode *node) {
 
                 BuilderResult result = std::move(*resultConverted);
 
-                if (result.lifetime) {
+                if (result.lifetime && !result.lifetime->empty()) {
                     std::vector<MultipleLifetime *> sourceLifetimes =
                         expand({ result.lifetime.get() }, result.lifetimeDepth + 1, true);
                     std::vector<MultipleLifetime *> destinationLifetimes =
