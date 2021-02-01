@@ -43,6 +43,8 @@ struct Lifetime {
 };
 
 struct MultipleLifetime : public std::vector<std::shared_ptr<Lifetime>> {
+    bool determinable = true;
+
     [[nodiscard]] std::string toString() const;
     [[nodiscard]] MultipleLifetime copy() const;
     [[nodiscard]] bool compare(const MultipleLifetime &other) const;
@@ -52,7 +54,7 @@ struct MultipleLifetime : public std::vector<std::shared_ptr<Lifetime>> {
     void simplify();
 
     MultipleLifetime() = default;
-    explicit MultipleLifetime(size_t size);
+    explicit MultipleLifetime(size_t size, bool determinable = true);
 };
 
 struct VariableLifetime : public Lifetime {
@@ -67,6 +69,9 @@ struct VariableLifetime : public Lifetime {
     explicit VariableLifetime(const VariableNode *node, PlaceholderId id = { nullptr, 0 });
 };
 
+// Such a work around :||
+using LifetimeCreator = std::function<std::shared_ptr<Lifetime>(const Typename &type, const PlaceholderId &id)>;
+
 struct ReferenceLifetime : public Lifetime {
     std::shared_ptr<MultipleLifetime> children;
 
@@ -76,10 +81,9 @@ struct ReferenceLifetime : public Lifetime {
 
     bool operator==(const Lifetime &lifetime) const override;
 
-    explicit ReferenceLifetime(std::shared_ptr<MultipleLifetime> lifetime, PlaceholderId id);
-
-    ReferenceLifetime(const ArrayTypename &type, PlaceholderId id);
     ReferenceLifetime(const ReferenceTypename &type, PlaceholderId id);
+    ReferenceLifetime(const ArrayTypename &type, PlaceholderId id, const LifetimeCreator &creator);
+    ReferenceLifetime(std::shared_ptr<MultipleLifetime> lifetime, PlaceholderId id);
 };
 
 // both can return null

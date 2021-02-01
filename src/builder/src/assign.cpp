@@ -58,13 +58,12 @@ void BuilderScope::makeAssign(const AssignNode *node) {
 
     std::vector<MultipleLifetime *> sourceLifetimes =
         expand({ source.lifetime.get() }, source.lifetimeDepth + 1, true);
-    std::vector<MultipleLifetime *> k =
-        expand({ destination.lifetime.get() }, destination.lifetimeDepth, false);
     std::vector<MultipleLifetime *> destinationLifetimes =
         expand({ destination.lifetime.get() }, destination.lifetimeDepth + 1, true);
 
     for (auto dest : destinationLifetimes) {
-        dest->clear();
+        if (dest->determinable)
+            dest->clear();
 
         for (auto src : sourceLifetimes) {
             dest->insert(dest->begin(), src->begin(), src->end());

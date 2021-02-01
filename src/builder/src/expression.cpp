@@ -258,7 +258,7 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
                 }),
                 *arrayType->value,
 
-                result.lifetimeDepth, result.lifetime // probably breaks?
+                result.lifetimeDepth + 1, result.lifetime // probably breaks?
             );
         }
 

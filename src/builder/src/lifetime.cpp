@@ -70,17 +70,16 @@ bool ReferenceLifetime::operator==(const Lifetime &lifetime) const {
     return children->compare(*refLifetime.children);
 }
 
-ReferenceLifetime::ReferenceLifetime(std::shared_ptr<MultipleLifetime> lifetime, PlaceholderId id)
-    : Lifetime(Lifetime::Kind::Reference, std::move(id)), children(std::move(lifetime)) { }
-ReferenceLifetime::ReferenceLifetime(const ArrayTypename &type, PlaceholderId id) // same :/
+ReferenceLifetime::ReferenceLifetime(const ArrayTypename &type, PlaceholderId id, const LifetimeCreator &creator)
     : Lifetime(Lifetime::Kind::Reference, std::move(id)) {
     Typename &subType = *type.value;
 
-    children = std::make_shared<MultipleLifetime>();
+    children = std::make_shared<MultipleLifetime>(0, false);
 
-    if (auto x = makeAnonymousLifetime(subType, { id.first, id.second + 1 }))
+    if (auto x = creator(subType, { id.first, id.second + 1 }))
         children->push_back(std::move(x));
 }
+
 ReferenceLifetime::ReferenceLifetime(const ReferenceTypename &type, PlaceholderId id)
     : Lifetime(Lifetime::Kind::Reference, std::move(id)) {
     Typename &subType = *type.value;
@@ -90,6 +89,9 @@ ReferenceLifetime::ReferenceLifetime(const ReferenceTypename &type, PlaceholderI
     if (auto x = makeAnonymousLifetime(subType, { id.first, id.second + 1 }))
         children->push_back(std::move(x));
 }
+
+ReferenceLifetime::ReferenceLifetime(std::shared_ptr<MultipleLifetime> lifetime, PlaceholderId id)
+    : Lifetime(Lifetime::Kind::Reference, std::move(id)), children(std::move(lifetime)) { }
 
 std::shared_ptr<Lifetime> makeDefaultLifetime(const Typename &type, const PlaceholderId &id) {
     struct {
@@ -108,9 +110,9 @@ std::shared_ptr<Lifetime> makeDefaultLifetime(const Typename &type, const Placeh
         }
 
         std::shared_ptr<Lifetime> operator()(const ArrayTypename &type) const {
-            return makeDefaultLifetime(*type.value, id);
+//            return makeDefaultLifetime(*type.value, id);
 //            return nullptr;
-//            return std::make_shared<ReferenceLifetime>(std::make_shared<MultipleLifetime>(), id);
+            return std::make_shared<ReferenceLifetime>(type, id, makeDefaultLifetime);
         }
     } visitor { id };
 
@@ -134,7 +136,9 @@ std::shared_ptr<Lifetime> makeAnonymousLifetime(const Typename &type, const Plac
         }
 
         std::shared_ptr<Lifetime> operator()(const ArrayTypename &type) const {
-            return makeAnonymousLifetime(*type.value, id);
+            return std::make_shared<ReferenceLifetime>(type, id, makeAnonymousLifetime);
+
+//            return makeAnonymousLifetime(*type.value, id);
 //            return id.first ? std::make_shared<VariableLifetime>(nullptr, id) : nullptr;
 //            return std::make_shared<ReferenceLifetime>(type, id);
         }
@@ -149,7 +153,7 @@ std::string MultipleLifetime::toString() const {
         return e->toString();
     });
 
-    return fmt::format("{{ {} }}", fmt::join(children, ", "));
+    return fmt::format("{}{{ {} }}", determinable ? "" : "#", fmt::join(children, ", "));
 }
 
 MultipleLifetime MultipleLifetime::copy() const {
@@ -188,7 +192,8 @@ void MultipleLifetime::simplify() {
     }
 }
 
-MultipleLifetime::MultipleLifetime(size_t size) : std::vector<std::shared_ptr<Lifetime>>(size) { }
+MultipleLifetime::MultipleLifetime(size_t size, bool determinable)
+    : std::vector<std::shared_ptr<Lifetime>>(size), determinable(determinable) { }
 
 MultipleLifetime flatten(const std::vector<MultipleLifetime *> &lifetime) {
     MultipleLifetime result;
