@@ -1,6 +1,10 @@
 #include <builder/builder.h>
 
 #include <builder/error.h>
+#include <builder/lifetime/null.h>
+#include <builder/lifetime/multiple.h>
+#include <builder/lifetime/reference.h>
+#include <builder/lifetime/array.h>
 
 #include <parser/bool.h>
 #include <parser/array.h>
@@ -67,12 +71,15 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
             }
         }
 
-        case Kind::Null:
+        case Kind::Null: {
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 ConstantPointerNull::get(Type::getInt8PtrTy(function.builder.context)),
-                TypenameNode::null
+                TypenameNode::null,
+
+                0, std::make_shared<MultipleLifetime>(MultipleLifetime { ReferenceLifetime::null() })
             );
+        }
 
         case Kind::Bool:
             return BuilderResult(
@@ -106,18 +113,15 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
 
             Type *arrayType = function.builder.makeTypename(type);
 
-            Value *value;
+            Value *value = function.entry.CreateAlloca(arrayType);
 
-            auto existingAllocation = literals.find(node);
-            if (existingAllocation == literals.end()) {
-                value = function.entry.CreateAlloca(arrayType);
-                literals[node] = value;
-            } else {
-                value = existingAllocation->second;
-            }
+            MultipleLifetime lifetime;
 
             for (size_t a = 0; a < results.size(); a++) {
                 const BuilderResult &result = results[a];
+
+                auto resultLifetimes = flatten(expand({ result.lifetime.get() }, result.lifetimeDepth));
+                lifetime.insert(lifetime.end(), resultLifetimes.begin(), resultLifetimes.end());
 
                 Value *index = ConstantInt::get(Type::getInt64Ty(function.builder.context), a);
                 Value *point = current.CreateInBoundsGEP(value, {
@@ -131,9 +135,14 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
             return BuilderResult(
                 BuilderResult::Kind::Literal,
                 value,
-                type
+                type,
 
-                // lifetime :/
+                0, std::make_shared<MultipleLifetime>(MultipleLifetime {
+                    std::make_shared<ArrayLifetime>(
+                        std::vector<std::shared_ptr<MultipleLifetime>> { },
+                        std::move(lifetime), PlaceholderId { nullptr, 0 }
+                    )
+                })
             );
         }
 

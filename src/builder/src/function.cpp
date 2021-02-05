@@ -1,7 +1,8 @@
 #include <builder/builder.h>
 
 #include <builder/error.h>
-#include <builder/lifetime.h>
+#include <builder/lifetime/lifetime.h>
+#include <builder/lifetime/multiple.h>
 
 #include <parser/scope.h>
 #include <parser/assign.h>

@@ -1,6 +1,10 @@
 #include <builder/builder.h>
 
-#include <fmt/printf.h>
+#include <builder/lifetime/lifetime.h>
+#include <builder/lifetime/multiple.h>
+#include <builder/lifetime/reference.h>
+#include <builder/lifetime/variable.h>
+#include <builder/lifetime/array.h>
 
 std::vector<MultipleLifetime *> BuilderScope::expand(const std::vector<MultipleLifetime *> &lifetime, bool doCopy) {
     std::vector<MultipleLifetime *> newLifetimes;
@@ -9,11 +13,15 @@ std::vector<MultipleLifetime *> BuilderScope::expand(const std::vector<MultipleL
         for (const auto &sub : *b) {
             switch (sub->kind) {
                 case Lifetime::Kind::Reference:
-                    newLifetimes.push_back(dynamic_cast<ReferenceLifetime *>(sub.get())->children.get());
+                    newLifetimes.push_back(dynamic_cast<ReferenceLifetime &>(*sub).children.get());
+                    break;
+
+                case Lifetime::Kind::Array:
+                    newLifetimes.push_back(dynamic_cast<ArrayLifetime &>(*sub).take().get());
                     break;
 
                 case Lifetime::Kind::Variable: {
-                    const VariableNode *node = dynamic_cast<VariableLifetime *>(sub.get())->node;
+                    const VariableNode *node = dynamic_cast<VariableLifetime &>(*sub).node;
                     // I hate so much of this system...
                     MultipleLifetime *p;
 
@@ -40,6 +48,9 @@ std::vector<MultipleLifetime *> BuilderScope::expand(const std::vector<MultipleL
 
                     break;
                 }
+
+                case Lifetime::Kind::Null:
+                    break; // resolves will catch it im sure
 
                 default:
                     assert(false);

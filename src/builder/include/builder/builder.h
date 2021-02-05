@@ -1,6 +1,6 @@
 #pragma once
 
-#include <builder/lifetime.h>
+#include <builder/lifetime/lifetime.h>
 
 #include <options/options.h>
 
@@ -81,10 +81,6 @@ struct BuilderScope {
     BasicBlock *currentBlock = nullptr;
 
     IRBuilder<> current;
-
-    // For things like array literals that have to be on stack for a bit...
-    // Not sure why it's tied to the scope :| it might cause problems in the future
-    std::unordered_map<const Node *, Value *> literals;
 
     // separate for now... for data efficiency - use findVariable function
     std::unordered_map<const VariableNode *, std::shared_ptr<BuilderVariable>> variables; // im sorry it isn't working

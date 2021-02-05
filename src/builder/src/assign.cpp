@@ -1,6 +1,7 @@
 #include <builder/builder.h>
 
 #include <builder/error.h>
+#include <builder/lifetime/multiple.h>
 
 #include <parser/assign.h>
 #include <parser/variable.h>
@@ -62,8 +63,7 @@ void BuilderScope::makeAssign(const AssignNode *node) {
         expand({ destination.lifetime.get() }, destination.lifetimeDepth + 1, true);
 
     for (auto dest : destinationLifetimes) {
-        if (dest->determinable)
-            dest->clear();
+        dest->clear();
 
         for (auto src : sourceLifetimes) {
             dest->insert(dest->begin(), src->begin(), src->end());

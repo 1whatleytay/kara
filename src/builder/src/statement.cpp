@@ -1,6 +1,7 @@
 #include <builder/builder.h>
 
 #include <builder/error.h>
+#include <builder/lifetime/multiple.h>
 
 #include <parser/statement.h>
 #include <parser/expression.h>
