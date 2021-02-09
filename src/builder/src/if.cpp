@@ -61,12 +61,4 @@ void BuilderScope::makeIf(const IfNode *node) {
             node = nullptr;
         }
     }
-
-    for (auto &branch : branches) {
-        if (!branch.currentBlock->getTerminator()) {
-            mergePossibleLifetimes(branch);
-
-            branch.current.CreateBr(currentBlock);
-        }
-    }
 }

@@ -16,7 +16,6 @@ Options::Options(int count, const char **args) {
     app.add_option("-i,--input", inputFile, "Input source file.")->required();
     app.add_option("-o,--output", outputFile, "Output binary file.");
     app.add_flag("--print-ir", printIR, "Whether or not to print resultant IR.");
-    app.add_flag("--no-lifetimes", noLifetimes, "Whether or not to check reference lifetimes.");
 
     try {
         app.parse(count, args);

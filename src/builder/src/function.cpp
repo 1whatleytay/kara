@@ -1,8 +1,6 @@
 #include <builder/builder.h>
 
 #include <builder/error.h>
-#include <builder/lifetime/lifetime.h>
-#include <builder/lifetime/multiple.h>
 
 #include <parser/scope.h>
 #include <parser/assign.h>
@@ -24,18 +22,10 @@ FunctionTypename makeFunctionTypenameBase(const FunctionNode *node) {
         parameters[a] = *type;
     }
 
-    auto m = std::make_shared<MultipleLifetime>();
-    if (auto x = makeAnonymousLifetime(node->returnType, { nullptr, 0 }))
-        m->push_back(std::move(x));
-
     return {
         FunctionTypename::Kind::Pointer,
         std::make_shared<Typename>(node->returnType),
-        std::move(parameters),
-
-        // im sorry, this should be in constructor but...
-        // i can't tell if it should have by lifetime yet, because like StructLifetime now and VariableLifetime ref
-        std::move(m)
+        std::move(parameters)
     };
 }
 
@@ -71,29 +61,6 @@ BuilderFunction::BuilderFunction(const FunctionNode *node, Builder &builder)
         returnValue = entry.CreateAlloca(returnType, nullptr, "result");
 
     BuilderScope scope(node->children[node->parameterCount]->as<CodeNode>(), *this);
-
-    // Publish ending information about lifetimes.
-    for (size_t a = 0; a < node->parameterCount; a++) {
-        const auto *varNode = node->children[a]->as<VariableNode>();
-        const auto &varType = varNode->fixedType.value();
-
-        if (!std::holds_alternative<ReferenceTypename>(varType))
-            continue;
-
-        std::shared_ptr<MultipleLifetime> initial = std::make_shared<MultipleLifetime>();
-        if (auto x = makeAnonymousLifetime(varType, { varNode, 0 }))
-            initial->push_back(std::move(x));
-
-        const auto &scopeLifetime = scope.lifetimes[varNode];
-
-        // If the transform is redundant, drop it.
-        const auto &final = initial->compare(*scopeLifetime) ? nullptr : scopeLifetime;
-
-        type.transforms[a] = LifetimeTransform {
-            std::move(initial),
-            final
-        };
-    }
 
     entry.CreateBr(scope.openingBlock);
 

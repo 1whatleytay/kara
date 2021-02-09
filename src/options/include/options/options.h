@@ -15,7 +15,6 @@ struct Options {
     std::string outputFile;
 
     bool printIR = false;
-    bool noLifetimes = false;
 
     Options(int count, const char **args);
 };

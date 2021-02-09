@@ -1,7 +1,5 @@
 #pragma once
 
-#include <builder/lifetime/lifetime.h>
-
 #include <options/options.h>
 
 #include <parser/root.h>
@@ -43,11 +41,7 @@ struct BuilderResult {
     Value *value = nullptr;
     Typename type;
 
-    int32_t lifetimeDepth = 0;
-    std::shared_ptr<MultipleLifetime> lifetime;
-
-    BuilderResult(Kind kind, Value *value, Typename type,
-        int32_t lifetimeDepth = 0, std::shared_ptr<MultipleLifetime> lifetime = std::make_shared<MultipleLifetime>());
+    BuilderResult(Kind kind, Value *value, Typename type);
 };
 
 struct BuilderVariable {
@@ -58,19 +52,8 @@ struct BuilderVariable {
 
     Value *value = nullptr;
 
-    std::shared_ptr<MultipleLifetime> lifetime;
-
     BuilderVariable(const VariableNode *node, BuilderScope &scope); // regular variable
     BuilderVariable(const VariableNode *node, Value *input, BuilderScope &scope); // function parameter
-
-private:
-    [[nodiscard]] std::shared_ptr<MultipleLifetime> makeExpressionLifetime() const;
-};
-
-struct BuilderVariableInfo {
-    BuilderVariable &variable;
-    // regress to regular reference in future if you think its okay
-    const std::shared_ptr<MultipleLifetime> &lifetime;
 };
 
 struct BuilderScope {
@@ -83,10 +66,10 @@ struct BuilderScope {
     IRBuilder<> current;
 
     // separate for now... for data efficiency - use findVariable function
-    std::unordered_map<const VariableNode *, std::shared_ptr<BuilderVariable>> variables; // im sorry it isn't working
-    std::unordered_map<const VariableNode *, std::shared_ptr<MultipleLifetime>> lifetimes;
+    std::unordered_map<const VariableNode *, std::shared_ptr<BuilderVariable>> variables;
 
-    std::optional<BuilderVariableInfo> findVariable(const VariableNode *node) const;
+    BuilderVariable *findVariable(const VariableNode *node) const;
+    std::optional<BuilderResult> convert(const BuilderResult &result, const Typename &type);
 
     Value *get(const BuilderResult &result);
     Value *ref(const BuilderResult &result);
@@ -98,27 +81,12 @@ struct BuilderScope {
     BuilderResult makeExpressionCombinator(const ExpressionCombinator &combinator);
     BuilderResult makeExpression(const ExpressionResult &result);
 
-    std::optional<BuilderResult> convert(const BuilderResult &result, const Typename &type);
-
     void makeIf(const IfNode *node);
     void makeFor(const ForNode *node);
     void makeBlock(const BlockNode *node);
     void makeDebug(const DebugNode *node);
     void makeAssign(const AssignNode *node);
     void makeStatement(const StatementNode *node);
-
-    void mergeLifetimes(const BuilderScope &sub);
-    void mergePossibleLifetimes(const BuilderScope &sub);
-
-    std::vector<MultipleLifetime *> expand(
-        const std::vector<MultipleLifetime *> &lifetime, bool doCopy = false);
-    std::vector<MultipleLifetime *> expand(
-        std::vector<MultipleLifetime *> lifetime, int32_t depth, bool doCopy = false);
-
-    void join(LifetimeMatches &matches,
-        std::vector<MultipleLifetime *> lifetime, const MultipleLifetime &initial);
-    void build(const LifetimeMatches &matches,
-        const std::vector<MultipleLifetime *> &lifetime, const MultipleLifetime &final);
 
     BuilderScope(const CodeNode *node, BuilderScope &parent);
     BuilderScope(const CodeNode *node, BuilderFunction &function);

@@ -11,9 +11,8 @@
 
 namespace fs = std::filesystem;
 
-BuilderResult::BuilderResult(Kind kind, Value *value, Typename type,
-    int32_t lifetimeDepth, std::shared_ptr<MultipleLifetime> lifetime)
-    : kind(kind), value(value), type(std::move(type)), lifetimeDepth(lifetimeDepth), lifetime(std::move(lifetime)) { }
+BuilderResult::BuilderResult(Kind kind, Value *value, Typename type)
+    : kind(kind), value(value), type(std::move(type)) { }
 
 Builder::Builder(RootNode *root, Options passedOptions)
     : context(), module(fs::path(options.inputFile).filename().string(), context), options(std::move(passedOptions)) {

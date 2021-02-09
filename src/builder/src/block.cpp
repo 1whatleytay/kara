@@ -13,7 +13,5 @@ void BuilderScope::makeBlock(const BlockNode *node) {
 
     if (!sub.currentBlock->getTerminator()) {
         sub.current.CreateBr(currentBlock);
-
-        mergeLifetimes(sub);
     }
 }

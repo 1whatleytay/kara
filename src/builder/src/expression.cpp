@@ -1,10 +1,6 @@
 #include <builder/builder.h>
 
 #include <builder/error.h>
-#include <builder/lifetime/null.h>
-#include <builder/lifetime/multiple.h>
-#include <builder/lifetime/reference.h>
-#include <builder/lifetime/array.h>
 
 #include <parser/bool.h>
 #include <parser/array.h>
@@ -24,20 +20,16 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
 
             switch (e->is<Kind>()) {
                 case Kind::Variable: {
-                    auto varInfo = findVariable(e->as<VariableNode>());
+                    BuilderVariable *info = findVariable(e->as<VariableNode>());
 
-                    if (!varInfo)
+                    if (!info)
                         throw VerifyError(node, "Cannot find variable reference.");
-
-                    BuilderVariableInfo info = varInfo.value();
 
                     return BuilderResult(
                         BuilderResult::Kind::Reference,
 
-                        info.variable.value,
-                        info.variable.type,
-
-                        1, info.variable.lifetime // depth: 1, some alias lifetime
+                        info->value,
+                        info->type
                     );
                 }
 
@@ -60,9 +52,7 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
                         BuilderResult::Kind::Raw,
 
                         callable->function,
-                        callable->type,
-
-                        0, { }
+                        callable->type
                     );
                 }
 
@@ -75,9 +65,7 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 ConstantPointerNull::get(Type::getInt8PtrTy(function.builder.context)),
-                TypenameNode::null,
-
-                0, std::make_shared<MultipleLifetime>(MultipleLifetime { ReferenceLifetime::null() })
+                TypenameNode::null
             );
         }
 
@@ -115,13 +103,8 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
 
             Value *value = function.entry.CreateAlloca(arrayType);
 
-            MultipleLifetime lifetime;
-
             for (size_t a = 0; a < results.size(); a++) {
                 const BuilderResult &result = results[a];
-
-                auto resultLifetimes = flatten(expand({ result.lifetime.get() }, result.lifetimeDepth));
-                lifetime.insert(lifetime.end(), resultLifetimes.begin(), resultLifetimes.end());
 
                 Value *index = ConstantInt::get(Type::getInt64Ty(function.builder.context), a);
                 Value *point = current.CreateInBoundsGEP(value, {
@@ -135,14 +118,7 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
             return BuilderResult(
                 BuilderResult::Kind::Literal,
                 value,
-                type,
-
-                0, std::make_shared<MultipleLifetime>(MultipleLifetime {
-                    std::make_shared<ArrayLifetime>(
-                        std::vector<std::shared_ptr<MultipleLifetime>> { },
-                        std::move(lifetime), PlaceholderId { nullptr, 0 }
-                    )
-                })
+                type
             );
         }
 
@@ -180,9 +156,6 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
                     "Function takes {} arguments, but {} passed.",
                     type->parameters.size(), node->children.size());
 
-            LifetimeMatches lifetimeMatches;
-
-            std::vector<std::vector<MultipleLifetime *>> expandedLifetimes(node->children.size());
             std::vector<Value *> parameters(node->children.size());
 
             for (size_t a = 0; a < node->children.size(); a++) {
@@ -198,40 +171,12 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
 
                 parameter = *parameterConverted;
                 parameters[a] = get(parameter);
-
-                auto transform = type->transforms.find(a);
-
-                if (transform != type->transforms.end()) {
-                    std::vector<MultipleLifetime *> expanded =
-                        expand({ parameter.lifetime.get() }, parameter.lifetimeDepth);
-
-                    join(lifetimeMatches,
-                        expanded,
-                        *transform->second.initial);
-
-                    expandedLifetimes[a] = std::move(expanded);
-                }
             }
-
-            // One more iteration to apply the transforms
-            for (size_t a = 0; a < node->children.size(); a++) {
-                auto transform = type->transforms.find(a);
-
-                if (transform == type->transforms.end() || !transform->second.final)
-                    continue;
-
-                build(lifetimeMatches, expandedLifetimes[a], *transform->second.final);
-            }
-
-            std::shared_ptr<MultipleLifetime> resultLifetime = std::make_shared<MultipleLifetime>();
-            build(lifetimeMatches, { resultLifetime.get() }, *type->returnTransformFinal);
 
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 current.CreateCall(reinterpret_cast<Function *>(result.value), parameters),
-                *type->returnType,
-
-                0, std::move(resultLifetime)
+                *type->returnType
             );
         }
 
@@ -265,9 +210,7 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
                     ConstantInt::get(Type::getInt64Ty(function.builder.context), 0),
                     get(index)
                 }),
-                *arrayType->value,
-
-                result.lifetimeDepth + 1, result.lifetime // probably breaks?
+                *arrayType->value
             );
         }
 
@@ -307,42 +250,17 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 value.value,
-                ReferenceTypename { std::make_shared<Typename>(value.type) },
-
-                value.lifetimeDepth - 1, value.lifetime // probably breaks?
+                ReferenceTypename { std::make_shared<Typename>(value.type) }
             );
 
         case UnaryNode::Operation::Fetch: {
             if (!std::holds_alternative<ReferenceTypename>(value.type))
                 throw VerifyError(operation.op, "Cannot dereference value of non reference.");
 
-            std::vector<MultipleLifetime *> resultLifetimes =
-                expand({ value.lifetime.get() }, value.lifetimeDepth + 1);
-
-            // I feel like I could combine these two any_ofs but my brain is just ARGH
-            auto lifetimeIsNotOkay = [this](MultipleLifetime *x) {
-                return !x->resolves(*this);
-            };
-
-            auto lifetimeIsEmpty = [](MultipleLifetime *x) {
-                return x->empty();
-            };
-
-            // Basically, do any of the variables referenced by this expression not exist in scope?
-            if (!function.builder.options.noLifetimes) {
-                if (std::any_of(resultLifetimes.begin(), resultLifetimes.end(), lifetimeIsNotOkay))
-                    throw VerifyError(operation.op, "Cannot dereference value with lifetime that has gone out of scope.");
-
-                if (resultLifetimes.empty() || std::all_of(resultLifetimes.begin(), resultLifetimes.end(), lifetimeIsEmpty))
-                    throw VerifyError(operation.op, "Cannot dereference value which may not point to anything.");
-            }
-
             return BuilderResult(
                 BuilderResult::Kind::Reference,
                 get(value),
-                *std::get<ReferenceTypename>(value.type).value,
-
-                value.lifetimeDepth + 1, value.lifetime // probably breaks?
+                *std::get<ReferenceTypename>(value.type).value
             );
         }
 

@@ -1,7 +1,6 @@
 #include <builder/builder.h>
 
 #include <builder/error.h>
-#include <builder/lifetime/multiple.h>
 
 #include <parser/statement.h>
 #include <parser/expression.h>
@@ -33,21 +32,6 @@ void BuilderScope::makeStatement(const StatementNode *node) {
                 }
 
                 BuilderResult result = std::move(*resultConverted);
-
-                if (result.lifetime && !result.lifetime->empty()) {
-                    std::vector<MultipleLifetime *> sourceLifetimes =
-                        expand({ result.lifetime.get() }, result.lifetimeDepth + 1, true);
-                    std::vector<MultipleLifetime *> destinationLifetimes =
-                        expand({ function.type.returnTransformFinal.get() }, true);
-
-                    for (auto dest : destinationLifetimes) {
-                        for (auto src : sourceLifetimes) {
-                            dest->insert(dest->begin(), src->begin(), src->end());
-                        }
-
-                        dest->simplify();
-                    }
-                }
 
                 current.CreateStore(get(result), function.returnValue);
             }

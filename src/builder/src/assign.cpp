@@ -1,7 +1,6 @@
 #include <builder/builder.h>
 
 #include <builder/error.h>
-#include <builder/lifetime/multiple.h>
 
 #include <parser/assign.h>
 #include <parser/variable.h>
@@ -16,9 +15,7 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &result, 
         return BuilderResult(
             BuilderResult::Kind::Raw,
             current.CreatePointerCast(get(result), function.builder.makeTypename(type)),
-            type,
-
-            result.lifetimeDepth, result.lifetime
+            type
         );
     }
 
@@ -53,23 +50,6 @@ void BuilderScope::makeAssign(const AssignNode *node) {
 
     if (destination.kind != BuilderResult::Kind::Reference) {
         throw VerifyError(node, "Left side of assign expression must be some variable or reference.");
-    }
-
-    assert(destination.lifetime && source.lifetime);
-
-    std::vector<MultipleLifetime *> sourceLifetimes =
-        expand({ source.lifetime.get() }, source.lifetimeDepth + 1, true);
-    std::vector<MultipleLifetime *> destinationLifetimes =
-        expand({ destination.lifetime.get() }, destination.lifetimeDepth + 1, true);
-
-    for (auto dest : destinationLifetimes) {
-        dest->clear();
-
-        for (auto src : sourceLifetimes) {
-            dest->insert(dest->begin(), src->begin(), src->end());
-        }
-
-        dest->simplify();
     }
 
     current.CreateStore(get(source), destination.value);

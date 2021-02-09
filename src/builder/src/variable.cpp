@@ -1,23 +1,10 @@
 #include <builder/builder.h>
 
 #include <builder/error.h>
-#include <builder/lifetime/multiple.h>
-#include <builder/lifetime/variable.h>
-#include <builder/lifetime/reference.h>
 
 #include <parser/variable.h>
 
 #include <fmt/format.h>
-
-std::shared_ptr<MultipleLifetime> BuilderVariable::makeExpressionLifetime() const {
-    auto base = std::make_shared<MultipleLifetime>();
-    auto child = std::make_shared<MultipleLifetime>();
-
-    base->push_back(std::make_shared<ReferenceLifetime>(child, PlaceholderId { nullptr, 0 }));
-    child->push_back(std::make_shared<VariableLifetime>(node));
-
-    return base;
-}
 
 BuilderVariable::BuilderVariable(const VariableNode *node, BuilderScope &scope)
     : function(scope.function), node(node) {
@@ -49,36 +36,8 @@ BuilderVariable::BuilderVariable(const VariableNode *node, BuilderScope &scope)
 
     value = function.entry.CreateAlloca(function.builder.makeTypename(type), nullptr, node->name);
 
-    auto scopeLifetime = std::make_shared<MultipleLifetime>();
-    std::shared_ptr<Lifetime> defaultLifetime = makeDefaultLifetime(type, { node, 0 });
-    if (defaultLifetime)
-        scopeLifetime->push_back(std::move(defaultLifetime));
-
-    scope.lifetimes[node] = std::move(scopeLifetime);
-
-    lifetime = makeExpressionLifetime();
-
-    if (possibleDefault) {
-        const BuilderResult &result = *possibleDefault;
-
-        // could be abstracted out to some assign method, used in makeAssign and makeStatement
-        std::vector<MultipleLifetime *> sourceLifetimes =
-            scope.expand({ result.lifetime.get() }, result.lifetimeDepth + 1, true);
-        std::vector<MultipleLifetime *> destinationLifetimes =
-            scope.expand({ lifetime.get() }, 2, true);
-
-        for (auto dest : destinationLifetimes) {
-            dest->clear();
-
-            for (auto src : sourceLifetimes) {
-                dest->insert(dest->begin(), src->begin(), src->end());
-            }
-
-            dest->simplify();
-        }
-
-        scope.current.CreateStore(scope.get(result), value);
-    }
+    if (possibleDefault)
+        scope.current.CreateStore(scope.get(*possibleDefault), value);
 }
 
 BuilderVariable::BuilderVariable(const VariableNode *node, Value *input, BuilderScope &scope)
@@ -91,13 +50,4 @@ BuilderVariable::BuilderVariable(const VariableNode *node, Value *input, Builder
     value = function.entry.CreateAlloca(
         function.builder.makeTypename(type), nullptr, fmt::format("{}_value", node->name));
     function.entry.CreateStore(input, value);
-
-    auto scopeLifetime = std::make_shared<MultipleLifetime>();
-
-    if (auto x = makeAnonymousLifetime(*node->fixedType, { node, 0 }))
-        scopeLifetime->push_back(std::move(x));
-
-    scope.lifetimes[node] = std::move(scopeLifetime);
-
-    lifetime = makeExpressionLifetime();
 }

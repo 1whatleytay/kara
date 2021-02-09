@@ -13,16 +13,6 @@ struct FunctionTypename;
 struct ReferenceTypename;
 using Typename = std::variant<ArrayTypename, StackTypename, FunctionTypename, ReferenceTypename>;
 
-// Oh dear...
-struct Lifetime;
-struct MultipleLifetime;
-
-struct LifetimeTransform {
-    // This is unfortunate, they could be regular vectors.
-    std::shared_ptr<MultipleLifetime> initial;
-    std::shared_ptr<MultipleLifetime> final; // can be nullptr, meaning no transform
-};
-
 struct StackTypename {
     std::string value;
 
@@ -40,11 +30,6 @@ struct FunctionTypename {
     Kind kind;
     std::shared_ptr<Typename> returnType;
     std::vector<Typename> parameters;
-
-    std::shared_ptr<MultipleLifetime> returnTransformFinal; // please initialize me
-
-    // could be a vector ig
-    std::unordered_map<size_t, LifetimeTransform> transforms;
 
     bool operator==(const FunctionTypename &other) const;
     bool operator!=(const FunctionTypename &other) const;

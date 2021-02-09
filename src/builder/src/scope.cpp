@@ -13,38 +13,20 @@
 #include <parser/statement.h>
 #include <parser/reference.h>
 
-std::optional<BuilderVariableInfo> BuilderScope::findVariable(const VariableNode *node) const {
+BuilderVariable *BuilderScope::findVariable(const VariableNode *node) const {
     const BuilderScope *scope = this;
 
-    // yeah double pointer
-    // i'm just worried that a BuilderResult might outlive a BuilderVariable for some reason
-    const std::shared_ptr<MultipleLifetime> *lifetime = nullptr;
-
     while (scope) {
-        if (!lifetime) {
-            auto newLifetime = scope->lifetimes.find(node);
-
-            if (newLifetime != scope->lifetimes.end()) {
-                lifetime = &newLifetime->second; // god i hope this is a proper reference
-            }
-        }
-
         auto newVariable = scope->variables.find(node);
 
         if (newVariable != scope->variables.end()) {
-            if (!lifetime)
-                throw std::runtime_error("Missing lifetime.");
-
-            if (!*lifetime)
-                throw std::runtime_error("Incorrect lifetime for variable.");
-
-            return BuilderVariableInfo { *newVariable->second, *lifetime };
+            return newVariable->second.get();
         }
 
         scope = scope->parent;
     }
 
-    return std::nullopt;
+    return nullptr;
 }
 
 Value *BuilderScope::get(const BuilderResult &result) {

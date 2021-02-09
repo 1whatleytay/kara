@@ -4,13 +4,10 @@
 
 struct DebugNode : public Node {
     enum class Type {
-        Expression,
-        Reference,
-        Return,
         Type
     };
 
-    Type type = Type::Expression;
+    Type type = Type::Type;
 
     explicit DebugNode(Node *parent);
 };
