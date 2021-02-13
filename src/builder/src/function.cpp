@@ -22,6 +22,7 @@ FunctionTypename makeFunctionTypenameBase(const FunctionNode *node) {
         parameters[a] = *type;
     }
 
+
     return {
         FunctionTypename::Kind::Pointer,
         std::make_shared<Typename>(node->returnType),
@@ -31,7 +32,7 @@ FunctionTypename makeFunctionTypenameBase(const FunctionNode *node) {
 
 BuilderFunction::BuilderFunction(const FunctionNode *node, Builder &builder)
     : builder(builder), node(node), entry(builder.context), exit(builder.context) {
-    Type *returnType = builder.makeTypename(node->returnType);
+    Type *returnType = builder.makeTypename(node->returnType, node);
     std::vector<Type *> parameterTypes(node->parameterCount);
 
     for (size_t a = 0; a < node->parameterCount; a++) {
@@ -42,7 +43,7 @@ BuilderFunction::BuilderFunction(const FunctionNode *node, Builder &builder)
                 "Function parameter must have given type, default parameters are not implemented.");
         }
 
-        parameterTypes[a] = builder.makeTypename(parameterType.value());
+        parameterTypes[a] = builder.makeTypename(parameterType.value(), node);
     }
 
     FunctionType *valueType = FunctionType::get(returnType, parameterTypes, false);
@@ -57,7 +58,7 @@ BuilderFunction::BuilderFunction(const FunctionNode *node, Builder &builder)
     entry.SetInsertPoint(entryBlock);
     exit.SetInsertPoint(exitBlock);
 
-    if (node->returnType != TypenameNode::nothing)
+    if (node->returnType != types::nothing())
         returnValue = entry.CreateAlloca(returnType, nullptr, "result");
 
     BuilderScope scope(node->children[node->parameterCount]->as<CodeNode>(), *this);
@@ -67,7 +68,7 @@ BuilderFunction::BuilderFunction(const FunctionNode *node, Builder &builder)
     if (!scope.currentBlock->getTerminator())
         scope.current.CreateBr(exitBlock);
 
-    if (node->returnType == TypenameNode::nothing)
+    if (node->returnType == types::nothing())
         exit.CreateRetVoid();
     else
         exit.CreateRet(exit.CreateLoad(returnValue, "final"));

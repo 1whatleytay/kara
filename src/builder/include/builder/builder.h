@@ -17,6 +17,7 @@ using namespace llvm;
 struct IfNode;
 struct ForNode;
 struct CodeNode;
+struct TypeNode;
 struct BlockNode;
 struct DebugNode;
 struct AssignNode;
@@ -69,10 +70,11 @@ struct BuilderScope {
     std::unordered_map<const VariableNode *, std::shared_ptr<BuilderVariable>> variables;
 
     BuilderVariable *findVariable(const VariableNode *node) const;
-    std::optional<BuilderResult> convert(const BuilderResult &result, const Typename &type);
+    // Node for search scope.
+    std::optional<BuilderResult> convert(const BuilderResult &result, const Typename &type, const Node *node);
 
     Value *get(const BuilderResult &result);
-    Value *ref(const BuilderResult &result);
+    Value *ref(const BuilderResult &result, const Node *node);
 
     BuilderResult makeExpressionNounContent(const Node *node);
     BuilderResult makeExpressionNounModifier(const Node *node, const BuilderResult &result);
@@ -93,6 +95,14 @@ struct BuilderScope {
 
 private:
     BuilderScope(const CodeNode *node, BuilderFunction &function, BuilderScope *parent);
+};
+
+struct BuilderType {
+    StructType *type = nullptr;
+
+    std::unordered_map<const VariableNode *, size_t> indices;
+
+    BuilderType(const TypeNode *node, Builder &builder);
 };
 
 struct BuilderFunction {
@@ -120,12 +130,20 @@ struct Builder {
     LLVMContext context;
     Module module;
 
+    std::unordered_map<const TypeNode *, std::unique_ptr<BuilderType>> types;
     std::unordered_map<const FunctionNode *, std::unique_ptr<BuilderFunction>> functions;
 
-    static const Node *find(const ReferenceNode *node);
+    BuilderType *makeType(const TypeNode *node);
+    BuilderFunction *makeFunction(const FunctionNode *node);
 
-    Type *makeStackTypename(const StackTypename &type);
-    Type *makeTypename(const Typename &type);
+    static const Node *find(const ReferenceNode *node);
+    static const TypeNode *find(const StackTypename &type, const Node *node);
+
+    Type *makeBuiltinTypename(const StackTypename &type);
+
+    // Node needs to be passed to get a sense of scope.
+    Type *makeStackTypename(const StackTypename &type, const Node *node);
+    Type *makeTypename(const Typename &type, const Node *node);
 
     Builder(RootNode *root, Options options);
 };

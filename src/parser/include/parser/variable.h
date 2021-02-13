@@ -6,6 +6,7 @@
 
 struct VariableNode : public Node {
     std::string name;
+
     std::optional<Typename> fixedType;
 
     bool isMutable = false;

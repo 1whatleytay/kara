@@ -22,6 +22,8 @@ add_library(parser STATIC
     include/parser/null.h
     include/parser/array.h
     include/parser/index.h
+    include/parser/type.h
+    include/parser/dot.h
 	
 	src/root.cpp
     src/function.cpp
@@ -44,7 +46,9 @@ add_library(parser STATIC
     src/bool.cpp
     src/null.cpp
     src/array.cpp
-    src/index.cpp)
+    src/index.cpp
+    src/type.cpp
+    src/dot.cpp)
 
 target_include_directories(parser PUBLIC include)
 target_link_libraries(parser PUBLIC fmt hermes)

@@ -4,11 +4,13 @@
 
 #include <fmt/format.h>
 
-const Typename TypenameNode::any = StackTypename { "any" };
-const Typename TypenameNode::null = StackTypename { "null" };
-const Typename TypenameNode::integer = StackTypename { "int" };
-const Typename TypenameNode::boolean = StackTypename { "bool" };
-const Typename TypenameNode::nothing = StackTypename { "nothing" };
+namespace types {
+    Typename any() { return StackTypename{ "any" }; }
+    Typename null() { return StackTypename{ "null" }; }
+    Typename integer() { return StackTypename{ "int" }; }
+    Typename boolean() { return StackTypename{ "bool" }; }
+    Typename nothing() { return StackTypename{ "nothing" }; }
+}
 
 bool StackTypename::operator==(const StackTypename &other) const {
     return value == other.value;

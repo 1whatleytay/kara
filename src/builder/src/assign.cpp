@@ -7,19 +7,20 @@
 #include <parser/reference.h>
 
 // this copies :flushed:
-std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &result, const Typename &type) {
+std::optional<BuilderResult> BuilderScope::convert(
+    const BuilderResult &result, const Typename &type, const Node *node) {
     if (result.type == type)
         return result;
 
-    if (result.type == TypenameNode::null && std::holds_alternative<ReferenceTypename>(type)) {
+    if (result.type == types::null() && std::holds_alternative<ReferenceTypename>(type)) {
         return BuilderResult(
             BuilderResult::Kind::Raw,
-            current.CreatePointerCast(get(result), function.builder.makeTypename(type)),
+            current.CreatePointerCast(get(result), function.builder.makeTypename(type, node)),
             type
         );
     }
 
-    if (type == TypenameNode::boolean && std::holds_alternative<ReferenceTypename>(result.type)) {
+    if (type == types::boolean() && std::holds_alternative<ReferenceTypename>(result.type)) {
         return BuilderResult(
             BuilderResult::Kind::Raw,
             current.CreateIsNotNull(get(result)),
@@ -39,7 +40,7 @@ void BuilderScope::makeAssign(const AssignNode *node) {
     BuilderResult destination = makeExpression(node->children.front()->as<ExpressionNode>()->result);
 
     BuilderResult sourceRaw = makeExpression(node->children.back()->as<ExpressionNode>()->result);
-    std::optional<BuilderResult> sourceConverted = convert(sourceRaw, destination.type);
+    std::optional<BuilderResult> sourceConverted = convert(sourceRaw, destination.type, node);
 
     if (!sourceConverted.has_value()) {
         throw VerifyError(node, "Assignment of type {} to {} is not allowed.",

@@ -8,7 +8,7 @@ struct FunctionNode : public Node {
     std::string name;
 
     size_t parameterCount = 0;
-    Typename returnType = TypenameNode::nothing;
+    Typename returnType = types::nothing();
 
     explicit FunctionNode(Node *parent);
 };

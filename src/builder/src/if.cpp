@@ -14,7 +14,7 @@ void BuilderScope::makeIf(const IfNode *node) {
         currentBlock = BasicBlock::Create(function.builder.context, "", function.function, function.exitBlock);
 
         BuilderResult conditionResult = makeExpression(node->children.front()->as<ExpressionNode>()->result);
-        std::optional<BuilderResult> conditionConverted = convert(conditionResult, TypenameNode::boolean);
+        std::optional<BuilderResult> conditionConverted = convert(conditionResult, types::boolean(), node);
 
         if (!conditionConverted) {
             throw VerifyError(node->children.front().get(),

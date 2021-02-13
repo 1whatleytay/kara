@@ -33,9 +33,9 @@ Value *BuilderScope::get(const BuilderResult &result) {
     return result.kind != BuilderResult::Kind::Raw ? current.CreateLoad(result.value) : result.value;
 }
 
-Value *BuilderScope::ref(const BuilderResult &result) {
+Value *BuilderScope::ref(const BuilderResult &result, const Node *node) {
     if (result.kind == BuilderResult::Kind::Raw) {
-        Value *ref = function.entry.CreateAlloca(function.builder.makeTypename(result.type));
+        Value *ref = function.entry.CreateAlloca(function.builder.makeTypename(result.type, node));
 
         current.CreateStore(result.value, ref);
 

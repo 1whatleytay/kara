@@ -63,12 +63,6 @@ struct ArrayTypename {
 };
 
 struct TypenameNode : public Node {
-    static const Typename any;
-    static const Typename null;
-    static const Typename nothing;
-    static const Typename integer;
-    static const Typename boolean;
-
     Typename type;
 
     explicit TypenameNode(Node *parent);
@@ -80,3 +74,11 @@ std::string toString(const FunctionTypename &type);
 std::string toString(const ReferenceTypename &type);
 
 std::string toString(const Typename &type);
+
+namespace types {
+    Typename any();
+    Typename null();
+    Typename nothing();
+    Typename integer();
+    Typename boolean();
+}

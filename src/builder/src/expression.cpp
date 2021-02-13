@@ -1,8 +1,10 @@
 #include <builder/builder.h>
 
 #include <builder/error.h>
+#include <builder/search.h>
 
 #include <parser/bool.h>
+#include <parser/type.h>
 #include <parser/array.h>
 #include <parser/number.h>
 #include <parser/function.h>
@@ -36,17 +38,7 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
                 case Kind::Function: {
                     const auto *functionNode = e->as<FunctionNode>();
 
-                    BuilderFunction *callable;
-
-                    auto iterator = function.builder.functions.find(functionNode);
-                    if (iterator == function.builder.functions.end()) {
-                        auto builderFunction = std::make_unique<BuilderFunction>(functionNode, function.builder);
-                        callable = builderFunction.get();
-
-                        function.builder.functions[functionNode] = std::move(builderFunction);
-                    } else {
-                        callable = iterator->second.get();
-                    }
+                    BuilderFunction *callable = function.builder.makeFunction(functionNode);
 
                     return BuilderResult(
                         BuilderResult::Kind::Raw,
@@ -65,7 +57,7 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 ConstantPointerNull::get(Type::getInt8PtrTy(function.builder.context)),
-                TypenameNode::null
+                types::null()
             );
         }
 
@@ -73,7 +65,7 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 ConstantInt::get(Type::getInt1Ty(function.builder.context), node->as<BoolNode>()->value),
-                TypenameNode::boolean
+                types::boolean()
             );
 
         case Kind::Array: {
@@ -85,7 +77,7 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
             std::transform(e->children.begin(), e->children.end(), std::back_inserter(results),
                 [this](const std::unique_ptr<Node> &x) { return makeExpression(x->as<ExpressionNode>()->result); });
 
-            Typename subType = results.empty() ? TypenameNode::any : results.front().type;
+            Typename subType = results.empty() ? types::any() : results.front().type;
 
             if (!std::all_of(results.begin(), results.end(), [subType](const BuilderResult &result) {
                 return result.type == subType;
@@ -99,7 +91,7 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
                 results.size()
             };
 
-            Type *arrayType = function.builder.makeTypename(type);
+            Type *arrayType = function.builder.makeTypename(type, node);
 
             Value *value = function.entry.CreateAlloca(arrayType);
 
@@ -128,7 +120,7 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 value,
-                TypenameNode::integer
+                types::integer()
             );
         }
 
@@ -162,7 +154,7 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
                 auto *exp = node->children[a]->as<ExpressionNode>();
                 BuilderResult parameter = makeExpression(exp->result);
 
-                std::optional<BuilderResult> parameterConverted = convert(parameter, type->parameters[a]);
+                std::optional<BuilderResult> parameterConverted = convert(parameter, type->parameters[a], exp);
 
                 if (!parameterConverted)
                     throw VerifyError(exp,
@@ -180,6 +172,46 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
             );
         }
 
+        case Kind::Dot: {
+            const ReferenceNode *refNode = node->children.front()->as<ReferenceNode>();
+
+            const StackTypename *type = std::get_if<StackTypename>(&result.type);
+
+            if (!type)
+                throw VerifyError(node, "Dot operator can only be applied to stack typename at the moment.");
+
+            const TypeNode *typeNode = Builder::find(*type, node);
+
+            if (!typeNode)
+                throw VerifyError(node, "Cannot find type node for stack typename.");
+
+            BuilderType *builderType = function.builder.makeType(typeNode);
+
+            auto match = [refNode](const std::unique_ptr<Node> &node) {
+                return node->is(Kind::Variable) && node->as<VariableNode>()->name == refNode->name;
+            };
+
+            auto iterator = std::find_if(typeNode->children.begin(), typeNode->children.end(), match);
+
+            if (iterator == typeNode->children.end())
+                throw VerifyError(node, "Type {} does not have child {}.", typeNode->name, refNode->name);
+
+            const VariableNode *varNode = (*iterator)->as<VariableNode>();
+
+            if (!varNode->fixedType.has_value())
+                throw VerifyError(varNode, "All struct variables must have fixed type.");
+
+            size_t index = builderType->indices.at(varNode);
+
+            return BuilderResult(
+                result.kind == BuilderResult::Kind::Reference
+                    ? BuilderResult::Kind::Reference
+                    : BuilderResult::Kind::Literal,
+                current.CreateStructGEP(ref(result, node), index, refNode->name),
+                varNode->fixedType.value()
+            );
+        }
+
         case Kind::Index: {
             // Not get(result.value) we don't want to drop the pointer :|
             // this can't work....
@@ -193,7 +225,7 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
             }
 
             BuilderResult index = makeExpression(node->children.front()->as<ExpressionNode>()->result);
-            std::optional<BuilderResult> indexConverted = convert(index, TypenameNode::integer);
+            std::optional<BuilderResult> indexConverted = convert(index, types::integer(), node);
 
             if (!indexConverted.has_value()) {
                 throw VerifyError(node->children.front().get(),
@@ -206,7 +238,7 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
             return BuilderResult(
                 result.kind == BuilderResult::Kind::Reference
                     ? BuilderResult::Kind::Reference : BuilderResult::Kind::Literal,
-                current.CreateGEP(ref(result), {
+                current.CreateGEP(ref(result, node), {
                     ConstantInt::get(Type::getInt64Ty(function.builder.context), 0),
                     get(index)
                 }),
@@ -233,13 +265,13 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
 
     switch (operation.op->op) {
         case UnaryNode::Operation::Not: {
-            if (value.type != TypenameNode::boolean)
+            if (value.type != types::boolean())
                 throw VerifyError(operation.op, "Source type for not expression must be bool.");
 
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 current.CreateNot(get(value)),
-                TypenameNode::boolean
+                types::boolean()
             );
         }
 
@@ -274,7 +306,7 @@ BuilderResult BuilderScope::makeExpressionCombinator(const ExpressionCombinator 
     BuilderResult b = makeExpression(*combinator.b);
 
     // assuming just add stuff for now
-    if (a.type != TypenameNode::integer || b.type != TypenameNode::integer) {
+    if (a.type != types::integer() || b.type != types::integer()) {
         throw VerifyError(combinator.op,
             "Expected ls type int but got {}, rs type int but got {}.",
             toString(a.type), toString(b.type));
@@ -285,88 +317,88 @@ BuilderResult BuilderScope::makeExpressionCombinator(const ExpressionCombinator 
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 current.CreateAdd(get(a), get(b)),
-                TypenameNode::integer
+                types::integer()
             );
 
         case OperatorNode::Operation::Sub:
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 current.CreateSub(get(a), get(b)),
-                TypenameNode::integer
+                types::integer()
             );
 
         case OperatorNode::Operation::Mul:
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 current.CreateMul(get(a), get(b)),
-                TypenameNode::integer
+                types::integer()
             );
 
         case OperatorNode::Operation::Div:
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 current.CreateSDiv(get(a), get(b)),
-                TypenameNode::integer
+                types::integer()
             );
 
         case OperatorNode::Operation::Equals:
-            if (a.type != TypenameNode::integer || b.type != TypenameNode::integer)
+            if (a.type != types::integer() || b.type != types::integer())
                 throw VerifyError(combinator.op, "Left side and right side to expression must be int.");
 
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 current.CreateICmpEQ(get(a), get(b)),
-                TypenameNode::boolean
+                types::boolean()
             );
 
         case OperatorNode::Operation::NotEquals:
-            if (a.type != TypenameNode::integer || b.type != TypenameNode::integer)
+            if (a.type != types::integer() || b.type != types::integer())
                 throw VerifyError(combinator.op, "Left side and right side to expression must be int.");
 
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 current.CreateICmpNE(get(a), get(b)),
-                TypenameNode::boolean
+                types::boolean()
             );
 
         case OperatorNode::Operation::Greater:
-            if (a.type != TypenameNode::integer || b.type != TypenameNode::integer)
+            if (a.type != types::integer() || b.type != types::integer())
                 throw VerifyError(combinator.op, "Left side and right side to expression must be int.");
 
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 current.CreateICmpSGT(get(a), get(b)),
-                TypenameNode::boolean
+                types::boolean()
             );
 
         case OperatorNode::Operation::GreaterEqual:
-            if (a.type != TypenameNode::integer || b.type != TypenameNode::integer)
+            if (a.type != types::integer() || b.type != types::integer())
                 throw VerifyError(combinator.op, "Left side and right side to expression must be int.");
 
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 current.CreateICmpSGE(get(a), get(b)),
-                TypenameNode::boolean
+                types::boolean()
             );
 
         case OperatorNode::Operation::Lesser:
-            if (a.type != TypenameNode::integer || b.type != TypenameNode::integer)
+            if (a.type != types::integer() || b.type != types::integer())
                 throw VerifyError(combinator.op, "Left side and right side to expression must be int.");
 
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 current.CreateICmpSLT(get(a), get(b)),
-                TypenameNode::boolean
+                types::boolean()
             );
 
         case OperatorNode::Operation::LesserEqual:
-            if (a.type != TypenameNode::integer || b.type != TypenameNode::integer)
+            if (a.type != types::integer() || b.type != types::integer())
                 throw VerifyError(combinator.op, "Left side and right side to expression must be int.");
 
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 current.CreateICmpSLE(get(a), get(b)),
-                TypenameNode::boolean
+                types::boolean()
             );
 
         default:

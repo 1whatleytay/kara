@@ -1,5 +1,6 @@
 #include <parser/expression.h>
 
+#include <parser/dot.h>
 #include <parser/call.h>
 #include <parser/bool.h>
 #include <parser/null.h>
@@ -41,7 +42,7 @@ ExpressionNode::ExpressionNode(Node *parent) : Node(parent, Kind::Expression) {
         push<ParenthesesNode, ArrayNode, NullNode, BoolNode, NumberNode, ReferenceNode>();
 
         while (true) {
-            if (!push<CallNode, IndexNode, OperatorNode>(true)) {
+            if (!push<CallNode, IndexNode, DotNode, OperatorNode>(true)) {
                 exit = true;
                 break;
             }

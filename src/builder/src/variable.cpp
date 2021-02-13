@@ -17,7 +17,7 @@ BuilderVariable::BuilderVariable(const VariableNode *node, BuilderScope &scope)
         possibleDefault = result; // copy :|
 
         if (node->fixedType) {
-            std::optional<BuilderResult> resultConverted = scope.convert(result, *node->fixedType);
+            std::optional<BuilderResult> resultConverted = scope.convert(result, *node->fixedType, node);
 
             if (!resultConverted) {
                 throw VerifyError(node->children.front().get(),
@@ -34,7 +34,7 @@ BuilderVariable::BuilderVariable(const VariableNode *node, BuilderScope &scope)
         type = node->fixedType.value();
     }
 
-    value = function.entry.CreateAlloca(function.builder.makeTypename(type), nullptr, node->name);
+    value = function.entry.CreateAlloca(function.builder.makeTypename(type, node), nullptr, node->name);
 
     if (possibleDefault)
         scope.current.CreateStore(scope.get(*possibleDefault), value);
@@ -48,6 +48,6 @@ BuilderVariable::BuilderVariable(const VariableNode *node, Value *input, Builder
     type = *node->fixedType;
 
     value = function.entry.CreateAlloca(
-        function.builder.makeTypename(type), nullptr, fmt::format("{}_value", node->name));
+        function.builder.makeTypename(type, node), nullptr, fmt::format("{}_value", node->name));
     function.entry.CreateStore(input, value);
 }

@@ -28,4 +28,6 @@ enum class Kind {
     Null,
     Array,
     Index,
+    Type,
+    Dot,
 };

@@ -15,6 +15,7 @@ add_library(builder STATIC
     src/statement.cpp
     src/scope.cpp
 	src/debug.cpp
+	src/type.cpp
     src/if.cpp
     src/for.cpp
     src/block.cpp)

@@ -9,20 +9,20 @@ void BuilderScope::makeStatement(const StatementNode *node) {
     switch (node->op) {
         case StatementNode::Operation::Return: {
             if (node->children.empty()) {
-                if (*function.type.returnType != TypenameNode::nothing) {
+                if (*function.type.returnType != types::nothing()) {
                     throw VerifyError(node,
                         "Method is of type {} but return statement does not return anything",
                         toString(*function.type.returnType));
                 }
             } else {
-                if (!node->children.empty() && *function.type.returnType == TypenameNode::nothing) {
+                if (!node->children.empty() && *function.type.returnType == types::nothing()) {
                     throw VerifyError(node,
                         "Method does not have a return type but return statement returns value.");
                 }
 
                 // lambda :S
                 BuilderResult resultRaw = makeExpression(node->children.front()->as<ExpressionNode>()->result);
-                std::optional<BuilderResult> resultConverted = convert(resultRaw, *function.type.returnType);
+                std::optional<BuilderResult> resultConverted = convert(resultRaw, *function.type.returnType, node);
 
                 if (!resultConverted.has_value()) {
                     throw VerifyError(node,
