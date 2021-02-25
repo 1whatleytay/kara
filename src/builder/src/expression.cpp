@@ -142,14 +142,19 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
                 throw VerifyError(node,
                     "Internal strangeness with function pointer object.");
 
-            if (type->parameters.size() != node->children.size())
+            size_t extraParameter = result.implicit ? 1 : 0;
+
+            if (type->parameters.size() != node->children.size() + extraParameter)
                 throw VerifyError(node,
                     "Function takes {} arguments, but {} passed.",
                     type->parameters.size(), node->children.size());
 
-            std::vector<Value *> parameters(node->children.size());
+            std::vector<Value *> parameters(node->children.size() + extraParameter);
 
-            for (size_t a = 0; a < node->children.size(); a++) {
+            if (result.implicit)
+                parameters[0] = get(*result.implicit);
+
+            for (size_t a = extraParameter; a < node->children.size(); a++) {
                 auto *exp = node->children[a]->as<ExpressionNode>();
                 BuilderResult parameter = makeExpression(exp);
 
@@ -176,43 +181,101 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
 
             const ReferenceNode *refNode = node->children.front()->as<ReferenceNode>();
 
-            const StackTypename *type = std::get_if<StackTypename>(&infer.type);
+            // Set up to check if property exists, dereference if needed
+            Typename *subtype = &infer.type;
+
+            size_t numReferences = 0;
+
+            while (auto *type = std::get_if<ReferenceTypename>(subtype)) {
+                subtype = type->value.get();
+                numReferences++;
+            }
+
+            const StackTypename *type = std::get_if<StackTypename>(subtype);
 
             if (!type)
-                throw VerifyError(node, "Dot operator can only be applied to stack typename at the moment.");
+                throw VerifyError(node, "Dot operator must be applied on a stack typename.");
 
-            if (function.builder.makeBuiltinTypename(*type))
-                throw VerifyError(node, "Cannot operate on builtin types yet.");
+            if (!function.builder.makeBuiltinTypename(*type)) {
 
-            const TypeNode *typeNode = Builder::find(*type, node);
+                const TypeNode *typeNode = Builder::find(*type, node);
 
-            if (!typeNode)
-                throw VerifyError(node, "Cannot find type node for stack typename {}.", type->value);
+                if (!typeNode)
+                    throw VerifyError(node, "Cannot find type node for stack typename {}.", type->value);
 
-            BuilderType *builderType = function.builder.makeType(typeNode);
+                BuilderType *builderType = function.builder.makeType(typeNode);
 
-            auto match = [refNode](const std::unique_ptr<Node> &node) {
-                return node->is(Kind::Variable) && node->as<VariableNode>()->name == refNode->name;
+                auto match = [refNode](const std::unique_ptr<Node> &node) {
+                    return node->is(Kind::Variable) && node->as<VariableNode>()->name == refNode->name;
+                };
+
+                auto iterator = std::find_if(typeNode->children.begin(), typeNode->children.end(), match);
+
+                if (iterator != typeNode->children.end()) {
+                    const VariableNode *varNode = (*iterator)->as<VariableNode>();
+
+                    if (!varNode->fixedType.has_value())
+                        throw VerifyError(varNode, "All struct variables must have fixed type.");
+
+                    size_t index = builderType->indices.at(varNode);
+
+                    // I feel uneasy touching this...
+                    Value *structRef = numReferences > 0 ? get(infer) : ref(infer, node);
+
+                    for (size_t a = 1; a < numReferences; a++)
+                        structRef = current.CreateLoad(structRef);
+
+                    return BuilderResult(
+                        infer.kind == BuilderResult::Kind::Reference
+                            ? BuilderResult::Kind::Reference
+                            : BuilderResult::Kind::Literal,
+                        current.CreateStructGEP(structRef, index, refNode->name),
+                        varNode->fixedType.value()
+                    );
+                }
+            }
+
+            const auto &global = function.builder.root->children;
+
+            // Horrible workaround until I have scopes that don't generate code.
+            std::unique_ptr<BuilderResult> converted;
+
+            auto matchFunction = [&](const std::unique_ptr<Node> &node) {
+                if (!node->is(Kind::Function))
+                    return false;
+
+                auto *e = node->as<FunctionNode>();
+                if (e->name != refNode->name || e->parameterCount == 0)
+                    return false;
+
+                auto *var = e->children.front()->as<VariableNode>();
+                if (!var->fixedType.has_value())
+                    return false;
+
+                std::optional<BuilderResult> result = convert(infer, var->fixedType.value(), var);
+                if (!result.has_value())
+                    return false;
+
+                converted = std::make_unique<BuilderResult>(result.value());
+
+                return true;
             };
 
-            auto iterator = std::find_if(typeNode->children.begin(), typeNode->children.end(), match);
+            auto funcIterator = std::find_if(global.begin(), global.end(), matchFunction);
 
-            if (iterator == typeNode->children.end())
-                throw VerifyError(node, "Type {} does not have child {}.", typeNode->name, refNode->name);
+            if (funcIterator == global.end())
+                throw VerifyError(node, "Could not find method or field with name {}.", refNode->name);
 
-            const VariableNode *varNode = (*iterator)->as<VariableNode>();
+            BuilderFunction *callable = function.builder.makeFunction((*funcIterator)->as<FunctionNode>());
 
-            if (!varNode->fixedType.has_value())
-                throw VerifyError(varNode, "All struct variables must have fixed type.");
-
-            size_t index = builderType->indices.at(varNode);
+            assert(converted);
 
             return BuilderResult(
-                infer.kind == BuilderResult::Kind::Reference
-                    ? BuilderResult::Kind::Reference
-                    : BuilderResult::Kind::Literal,
-                current.CreateStructGEP(ref(infer, node), index, refNode->name),
-                varNode->fixedType.value()
+                BuilderResult::Kind::Raw,
+                callable->function,
+                callable->type,
+
+                std::move(converted)
             );
         }
 
@@ -273,12 +336,14 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
         case Kind::Unary:
             switch (operation.op->as<UnaryNode>()->op) {
                 case UnaryNode::Operation::Not: {
-                    if (value.type != types::boolean())
-                        throw VerifyError(operation.op, "Source type for not expression must be bool.");
+                    std::optional<BuilderResult> converted = convert(value, types::boolean(), operation.op);
+
+                    if (!converted.has_value())
+                        throw VerifyError(operation.op, "Source type for not expression must be convertible to bool.");
 
                     return BuilderResult(
                         BuilderResult::Kind::Raw,
-                        current.CreateNot(get(value)),
+                        current.CreateNot(get(converted.value())),
                         types::boolean()
                     );
                 }
@@ -502,9 +567,13 @@ BuilderResult BuilderScope::makeExpressionInferred(const BuilderResult &result) 
     const FunctionTypename *functionTypename = std::get_if<FunctionTypename>(&result.type);
 
     if (functionTypename && functionTypename->kind == FunctionTypename::Kind::Pointer) {
+        std::vector<Value *> params;
+        if (result.implicit)
+            params.push_back(get(*result.implicit));
+
         return BuilderResult(
             BuilderResult::Kind::Raw,
-            current.CreateCall(result.value),
+            current.CreateCall(result.value, params),
             *functionTypename->returnType
         );
     }

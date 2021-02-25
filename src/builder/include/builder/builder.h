@@ -48,7 +48,9 @@ struct BuilderResult {
     Value *value = nullptr;
     Typename type;
 
-    BuilderResult(Kind kind, Value *value, Typename type);
+    std::shared_ptr<BuilderResult> implicit;
+
+    BuilderResult(Kind kind, Value *value, Typename type, std::unique_ptr<BuilderResult> implicit = nullptr);
 };
 
 struct BuilderVariable {
@@ -158,6 +160,8 @@ struct BuilderTarget {
 };
 
 struct Builder {
+    const RootNode *root = nullptr;
+
     Options options;
 
     std::unique_ptr<LLVMContext> context;

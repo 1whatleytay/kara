@@ -8,6 +8,7 @@
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/TargetSelect.h>
+#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/Support/TargetRegistry.h>
 #include <llvm/Transforms/Utils/Cloning.h>
 #include <llvm/ExecutionEngine/Orc/LLJIT.h>
@@ -18,8 +19,8 @@
 
 namespace fs = std::filesystem;
 
-BuilderResult::BuilderResult(Kind kind, Value *value, Typename type)
-    : kind(kind), value(value), type(std::move(type)) { }
+BuilderResult::BuilderResult(Kind kind, Value *value, Typename type, std::unique_ptr<BuilderResult> implicit)
+    : kind(kind), value(value), type(std::move(type)), implicit(std::move(implicit)) { }
 
 BuilderType *Builder::makeType(const TypeNode *node) {
     auto iterator = types.find(node);
@@ -80,7 +81,7 @@ BuilderTarget::BuilderTarget(const std::string &suggestedTriple) {
     layout = std::make_unique<DataLayout>(machine->createDataLayout());
 }
 
-Builder::Builder(RootNode *root, Options opts) : options(std::move(opts)), target(options.triple) {
+Builder::Builder(RootNode *root, Options opts) : root(root), options(std::move(opts)), target(options.triple) {
     context = std::make_unique<LLVMContext>();
     module = std::make_unique<Module>(fs::path(options.inputFile).filename().string(), *context);
 
@@ -112,7 +113,18 @@ Builder::Builder(RootNode *root, Options opts) : options(std::move(opts)), targe
         throw std::runtime_error("Aborted.");
 
     if (!options.outputFile.empty()) {
+        legacy::PassManager manager;
 
+        std::error_code error;
+        raw_fd_ostream output(options.outputFile, error);
+
+        if (error)
+            throw std::runtime_error(fmt::format("Cannot open file {} for output", options.outputFile));
+
+        if (target.machine->addPassesToEmitFile(manager, output, nullptr, CodeGenFileType::CGFT_ObjectFile))
+            throw std::runtime_error("Target machine does not support object output.");
+
+        manager.run(*module);
     }
 
     if (options.interpret) {

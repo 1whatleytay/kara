@@ -47,11 +47,15 @@ void BuilderFunction::build() {
 
         BuilderResult result = scope.product.value();
 
-        if (result.type != *type.returnType) {
+        std::optional<BuilderResult> resultConverted = scope.convert(result, *type.returnType, node);
+
+        if (!resultConverted.has_value()) {
             throw VerifyError(bodyNode,
                 "Method returns type {} but expression is of type {}.",
                 toString(*type.returnType), toString(result.type));
         }
+
+        result = resultConverted.value();
 
         scope.current.CreateStore(scope.get(result), returnValue);
     }

@@ -12,7 +12,28 @@ std::optional<BuilderResult> BuilderScope::convert(
     if (result.type == type)
         return result;
 
-    if (result.type == types::null() && std::holds_alternative<ReferenceTypename>(type)) {
+    auto *typeRef = std::get_if<ReferenceTypename>(&type);
+    auto *resultRef = std::get_if<ReferenceTypename>(&result.type);
+
+    // Demote reference
+    if (resultRef && *resultRef->value == type) {
+        return BuilderResult(
+            BuilderResult::Kind::Reference,
+            get(result),
+            type
+        );
+    }
+
+    // Promote reference
+    if (typeRef && *typeRef->value == result.type) {
+        return BuilderResult(
+            BuilderResult::Kind::Raw,
+            ref(result, node),
+            type
+        );
+    }
+
+    if (result.type == types::null() && typeRef) {
         return BuilderResult(
             BuilderResult::Kind::Raw,
             current.CreatePointerCast(get(result), function.builder.makeTypename(type, node)),
@@ -20,7 +41,7 @@ std::optional<BuilderResult> BuilderScope::convert(
         );
     }
 
-    if (type == types::boolean() && std::holds_alternative<ReferenceTypename>(result.type)) {
+    if (type == types::boolean() && resultRef) {
         return BuilderResult(
             BuilderResult::Kind::Raw,
             current.CreateIsNotNull(get(result)),
