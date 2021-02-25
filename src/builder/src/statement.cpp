@@ -21,7 +21,7 @@ void BuilderScope::makeStatement(const StatementNode *node) {
                 }
 
                 // lambda :S
-                BuilderResult resultRaw = makeExpression(node->children.front()->as<ExpressionNode>()->result);
+                BuilderResult resultRaw = makeExpression(node->children.front()->as<ExpressionNode>());
                 std::optional<BuilderResult> resultConverted = convert(resultRaw, *function.type.returnType, node);
 
                 if (!resultConverted.has_value()) {

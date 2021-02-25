@@ -13,7 +13,7 @@ BuilderVariable::BuilderVariable(const VariableNode *node, BuilderScope &scope)
     std::optional<BuilderResult> possibleDefault;
 
     if (!node->children.empty()) {
-        BuilderResult result = scope.makeExpression(node->children.front()->as<ExpressionNode>()->result);
+        BuilderResult result = scope.makeExpression(node->children.front()->as<ExpressionNode>());
         possibleDefault = result; // copy :|
 
         if (node->fixedType) {

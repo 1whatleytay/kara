@@ -37,9 +37,9 @@ std::optional<BuilderResult> BuilderScope::convert(
 }
 
 void BuilderScope::makeAssign(const AssignNode *node) {
-    BuilderResult destination = makeExpression(node->children.front()->as<ExpressionNode>()->result);
+    BuilderResult destination = makeExpression(node->children.front()->as<ExpressionNode>());
 
-    BuilderResult sourceRaw = makeExpression(node->children.back()->as<ExpressionNode>()->result);
+    BuilderResult sourceRaw = makeExpression(node->children.back()->as<ExpressionNode>());
     std::optional<BuilderResult> sourceConverted = convert(sourceRaw, destination.type, node);
 
     if (!sourceConverted.has_value()) {

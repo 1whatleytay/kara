@@ -19,11 +19,11 @@ add_library(llvm INTERFACE)
 target_link_libraries(llvm INTERFACE
     LLVMMC
     LLVMCore
+    LLVMOrcJIT
     LLVMLinker
     LLVMIRReader
     LLVMX86CodeGen
     LLVMX86AsmParser
-    LLVMX86Disassembler
-    LLVMWebAssemblyCodeGen)
+    LLVMX86Disassembler)
 target_compile_definitions(llvm INTERFACE ${LLVM_DEFINITIONS})
 target_include_directories(llvm INTERFACE ${LLVM_INCLUDE_DIRS})

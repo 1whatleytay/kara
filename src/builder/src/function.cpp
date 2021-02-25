@@ -8,31 +8,68 @@
 #include <parser/variable.h>
 #include <parser/statement.h>
 
-FunctionTypename makeFunctionTypenameBase(const FunctionNode *node) {
+void BuilderFunction::build() {
     std::vector<Typename> parameters(node->parameterCount);
 
     for (size_t a = 0; a < node->parameterCount; a++) {
-        const auto &type = node->children[a]->as<VariableNode>()->fixedType;
+        const auto &fixed = node->children[a]->as<VariableNode>()->fixedType;
 
-        if (!type) {
+        if (!fixed) {
             throw VerifyError(node->children[a].get(),
                 "Function parameter must have given type, default parameters are not implemented.");
         }
 
-        parameters[a] = *type;
+        parameters[a] = *fixed;
     }
 
-
-    return {
+    type = {
         FunctionTypename::Kind::Pointer,
         std::make_shared<Typename>(node->returnType),
         std::move(parameters)
     };
+
+    entryBlock = BasicBlock::Create(*builder.context, "entry", function);
+    exitBlock = BasicBlock::Create(*builder.context, "exit", function);
+
+    entry.SetInsertPoint(entryBlock);
+    exit.SetInsertPoint(exitBlock);
+
+    if (node->returnType != types::nothing())
+        returnValue = entry.CreateAlloca(returnType, nullptr, "result");
+
+    const Node *bodyNode = node->children[node->parameterCount].get();
+
+    BuilderScope scope(bodyNode, *this);
+
+    if (bodyNode->is(Kind::Expression)) {
+        if (!scope.product.has_value())
+            throw VerifyError(bodyNode, "Missing product for expression type function.");
+
+        BuilderResult result = scope.product.value();
+
+        if (result.type != *type.returnType) {
+            throw VerifyError(bodyNode,
+                "Method returns type {} but expression is of type {}.",
+                toString(*type.returnType), toString(result.type));
+        }
+
+        scope.current.CreateStore(scope.get(result), returnValue);
+    }
+
+    entry.CreateBr(scope.openingBlock);
+
+    if (!scope.currentBlock->getTerminator())
+        scope.current.CreateBr(exitBlock);
+
+    if (node->returnType == types::nothing())
+        exit.CreateRetVoid();
+    else
+        exit.CreateRet(exit.CreateLoad(returnValue, "final"));
 }
 
 BuilderFunction::BuilderFunction(const FunctionNode *node, Builder &builder)
-    : builder(builder), node(node), entry(builder.context), exit(builder.context) {
-    Type *returnType = builder.makeTypename(node->returnType, node);
+    : builder(builder), node(node), entry(*builder.context), exit(*builder.context) {
+    returnType = builder.makeTypename(node->returnType, node);
     std::vector<Type *> parameterTypes(node->parameterCount);
 
     for (size_t a = 0; a < node->parameterCount; a++) {
@@ -48,28 +85,6 @@ BuilderFunction::BuilderFunction(const FunctionNode *node, Builder &builder)
 
     FunctionType *valueType = FunctionType::get(returnType, parameterTypes, false);
 
-    type = makeFunctionTypenameBase(node);
     function = Function::Create(
-        valueType, GlobalVariable::ExternalLinkage, 0, node->name, &builder.module);
-
-    entryBlock = BasicBlock::Create(builder.context, "entry", function);
-    exitBlock = BasicBlock::Create(builder.context, "exit", function);
-
-    entry.SetInsertPoint(entryBlock);
-    exit.SetInsertPoint(exitBlock);
-
-    if (node->returnType != types::nothing())
-        returnValue = entry.CreateAlloca(returnType, nullptr, "result");
-
-    BuilderScope scope(node->children[node->parameterCount]->as<CodeNode>(), *this);
-
-    entry.CreateBr(scope.openingBlock);
-
-    if (!scope.currentBlock->getTerminator())
-        scope.current.CreateBr(exitBlock);
-
-    if (node->returnType == types::nothing())
-        exit.CreateRetVoid();
-    else
-        exit.CreateRet(exit.CreateLoad(returnValue, "final"));
+        valueType, GlobalVariable::ExternalLinkage, 0, node->name, builder.module.get());
 }

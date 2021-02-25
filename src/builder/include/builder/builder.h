@@ -12,6 +12,12 @@
 
 #include <unordered_map>
 
+namespace llvm {
+    struct Target;
+    struct DataLayout;
+    struct TargetMachine;
+}
+
 using namespace llvm;
 
 struct IfNode;
@@ -66,6 +72,9 @@ struct BuilderScope {
 
     IRBuilder<> current;
 
+    // For ExpressionNode scopes, product is stored here
+    std::optional<BuilderResult> product;
+
     // separate for now... for data efficiency - use findVariable function
     std::unordered_map<const VariableNode *, std::shared_ptr<BuilderVariable>> variables;
 
@@ -81,7 +90,9 @@ struct BuilderScope {
     BuilderResult makeExpressionNoun(const ExpressionNoun &noun);
     BuilderResult makeExpressionOperation(const ExpressionOperation &operation);
     BuilderResult makeExpressionCombinator(const ExpressionCombinator &combinator);
-    BuilderResult makeExpression(const ExpressionResult &result);
+    BuilderResult makeExpressionResult(const ExpressionResult &result);
+    BuilderResult makeExpressionInferred(const BuilderResult &result);
+    BuilderResult makeExpression(const ExpressionNode *node);
 
     void makeIf(const IfNode *node);
     void makeFor(const ForNode *node);
@@ -90,19 +101,27 @@ struct BuilderScope {
     void makeAssign(const AssignNode *node);
     void makeStatement(const StatementNode *node);
 
-    BuilderScope(const CodeNode *node, BuilderScope &parent);
-    BuilderScope(const CodeNode *node, BuilderFunction &function);
+    BuilderScope(const Node *node, BuilderScope &parent);
+    BuilderScope(const Node *node, BuilderFunction &function);
 
 private:
-    BuilderScope(const CodeNode *node, BuilderFunction &function, BuilderScope *parent);
+    void makeParameters();
+
+    BuilderScope(const Node *node, BuilderFunction &function, BuilderScope *parent);
 };
 
 struct BuilderType {
+    Builder &builder;
+    const TypeNode *node = nullptr;
+
     StructType *type = nullptr;
 
     std::unordered_map<const VariableNode *, size_t> indices;
 
-    BuilderType(const TypeNode *node, Builder &builder);
+    // for avoiding recursive problems
+    void build();
+
+    explicit BuilderType(const TypeNode *node, Builder &builder);
 };
 
 struct BuilderFunction {
@@ -116,19 +135,35 @@ struct BuilderFunction {
     IRBuilder<> entry;
     IRBuilder<> exit;
 
+    Type *returnType = nullptr;
     Value *returnValue = nullptr;
 
     FunctionTypename type;
     Function *function = nullptr;
 
+    void build();
+
     BuilderFunction(const FunctionNode *node, Builder &builder);
+};
+
+struct BuilderTarget {
+    std::string triple;
+    const Target *target;
+    TargetMachine *machine;
+    std::unique_ptr<DataLayout> layout;
+
+    [[nodiscard]] bool valid() const;
+
+    explicit BuilderTarget(const std::string &suggestedTriple);
 };
 
 struct Builder {
     Options options;
 
-    LLVMContext context;
-    Module module;
+    std::unique_ptr<LLVMContext> context;
+    std::unique_ptr<Module> module;
+
+    BuilderTarget target;
 
     std::unordered_map<const TypeNode *, std::unique_ptr<BuilderType>> types;
     std::unordered_map<const FunctionNode *, std::unique_ptr<BuilderFunction>> functions;
@@ -145,5 +180,5 @@ struct Builder {
     Type *makeStackTypename(const StackTypename &type, const Node *node);
     Type *makeTypename(const Typename &type, const Node *node);
 
-    Builder(RootNode *root, Options options);
+    Builder(RootNode *root, Options opts);
 };

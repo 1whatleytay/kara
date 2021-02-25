@@ -14,7 +14,9 @@ Options::Options(int count, const char **args) {
     CLI::App app("Kara Language");
 
     app.add_option("-i,--input", inputFile, "Input source file.")->required();
-    app.add_option("-o,--output", outputFile, "Output binary file.");
+    auto outputOption = app.add_option("-o,--output", outputFile, "Output binary file.");
+    app.add_option("-t,--triple", triple, "Target triple.");
+    app.add_flag("--interpret", interpret, "Whether or not to interpret and run the code.")->excludes(outputOption);
     app.add_flag("--print-ir", printIR, "Whether or not to print resultant IR.");
 
     try {

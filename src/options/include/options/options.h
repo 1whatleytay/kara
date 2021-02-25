@@ -14,7 +14,10 @@ struct Options {
     std::string inputFile;
     std::string outputFile;
 
+    std::string triple;
+
     bool printIR = false;
+    bool interpret = false;
 
     Options(int count, const char **args);
 };

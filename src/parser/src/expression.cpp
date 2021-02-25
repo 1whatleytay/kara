@@ -7,6 +7,7 @@
 #include <parser/array.h>
 #include <parser/index.h>
 #include <parser/number.h>
+#include <parser/ternary.h>
 #include <parser/reference.h>
 #include <parser/parentheses.h>
 
@@ -17,7 +18,7 @@ void ExpressionNoun::push(const Node *node) {
         content = node;
 }
 
-ExpressionOperation::ExpressionOperation(std::unique_ptr<ExpressionResult> a, UnaryNode *op)
+ExpressionOperation::ExpressionOperation(std::unique_ptr<ExpressionResult> a, Node *op)
     : a(std::move(a)), op(op) { }
 
 ExpressionCombinator::ExpressionCombinator(
@@ -52,6 +53,7 @@ ExpressionNode::ExpressionNode(Node *parent) : Node(parent, Kind::Expression) {
         }
     }
 
+
     // Calculate result (operator precedence).
     std::vector<ExpressionResult> results;
     std::vector<OperatorNode *> operators;
@@ -80,6 +82,8 @@ ExpressionNode::ExpressionNode(Node *parent) : Node(parent, Kind::Expression) {
 
         results.emplace_back(applyUnary(current, unary));
     }
+
+    postfix = pick<TernaryNode>(true);
 
     std::vector<OperatorNode::Operation> operatorOrder = {
         OperatorNode::Operation::Mul,
@@ -125,4 +129,10 @@ ExpressionNode::ExpressionNode(Node *parent) : Node(parent, Kind::Expression) {
         throw std::runtime_error("Internal result picker issue occurred.");
 
     result = std::move(results.front());
+
+    if (postfix) {
+        result = ExpressionOperation(
+            std::make_unique<ExpressionResult>(std::move(result)),
+            postfix.get());
+    }
 }

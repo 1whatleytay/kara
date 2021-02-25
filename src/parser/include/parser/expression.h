@@ -23,9 +23,9 @@ struct ExpressionNoun {
 struct ExpressionOperation {
     std::unique_ptr<ExpressionResult> a;
 
-    UnaryNode *op = nullptr;
+    Node *op = nullptr;
 
-    ExpressionOperation(std::unique_ptr<ExpressionResult> a, UnaryNode *op);
+    ExpressionOperation(std::unique_ptr<ExpressionResult> a, Node *op);
 };
 
 struct ExpressionCombinator {
@@ -38,8 +38,12 @@ struct ExpressionCombinator {
         std::unique_ptr<ExpressionResult> a, std::unique_ptr<ExpressionResult> b, OperatorNode *op);
 };
 
+
 struct ExpressionNode : public Node {
     ExpressionResult result;
+
+    // Just to keep it alive for result.
+    std::unique_ptr<Node> postfix;
 
     explicit ExpressionNode(Node *parent);
 };

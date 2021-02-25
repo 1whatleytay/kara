@@ -5,7 +5,7 @@
 #include <parser/type.h>
 #include <parser/variable.h>
 
-BuilderType::BuilderType(const TypeNode *node, Builder &builder) {
+void BuilderType::build() {
     std::vector<Type *> types;
 
     for (const auto &child : node->children) {
@@ -18,5 +18,9 @@ BuilderType::BuilderType(const TypeNode *node, Builder &builder) {
         types.push_back(builder.makeTypename(e->fixedType.value(), child.get()));
     }
 
-    type = StructType::create(types, node->name);
+    type->setBody(types);
+}
+
+BuilderType::BuilderType(const TypeNode *node, Builder &builder) : node(node), builder(builder) {
+    type = StructType::create(*builder.context, { }, node->name);
 }

@@ -3,6 +3,7 @@
 #include <parser/scope.h>
 #include <parser/typename.h>
 #include <parser/variable.h>
+#include <parser/expression.h>
 
 FunctionNode::FunctionNode(Node *parent) : Node(parent, Kind::Function) {
     name = token();
@@ -18,13 +19,17 @@ FunctionNode::FunctionNode(Node *parent) : Node(parent, Kind::Function) {
         needs(")");
     }
 
-    if (!peek("{")) {
+    if (!(peek("{") || peek("=>"))) {
         returnType = std::move(pick<TypenameNode>()->type);
     }
 
-    match("{");
+    if (next("=>")) {
+        push<ExpressionNode>();
+    } else {
+        match("{");
 
-    push<CodeNode>();
+        push<CodeNode>();
 
-    needs("}");
+        needs("}");
+    }
 }

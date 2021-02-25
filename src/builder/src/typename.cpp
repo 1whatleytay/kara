@@ -11,16 +11,16 @@ Type *Builder::makeBuiltinTypename(const StackTypename &stack) {
     Typename type(stack);
 
     if (type == types::nothing())
-        return Type::getVoidTy(context);
+        return Type::getVoidTy(*context);
 
     if (type == types::integer())
-        return Type::getInt32Ty(context);
+        return Type::getInt32Ty(*context);
 
     if (type == types::boolean())
-        return Type::getInt1Ty(context);
+        return Type::getInt1Ty(*context);
 
     if (type == types::null())
-        return Type::getInt8PtrTy(context);
+        return Type::getInt8PtrTy(*context);
 
     if (type == types::any())
         throw std::runtime_error("Any type is unsupported.");

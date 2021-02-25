@@ -1,7 +1,6 @@
 #include <builder/builder.h>
 
 #include <builder/error.h>
-#include <builder/search.h>
 
 #include <parser/bool.h>
 #include <parser/type.h>
@@ -15,7 +14,7 @@
 BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
     switch (node->is<Kind>()) {
         case Kind::Parentheses:
-            return makeExpression(node->children.front()->as<ExpressionNode>()->result);
+            return makeExpression(node->children.front()->as<ExpressionNode>());
 
         case Kind::Reference: {
             const Node *e = Builder::find(node->as<ReferenceNode>());
@@ -56,7 +55,7 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
         case Kind::Null: {
             return BuilderResult(
                 BuilderResult::Kind::Raw,
-                ConstantPointerNull::get(Type::getInt8PtrTy(function.builder.context)),
+                ConstantPointerNull::get(Type::getInt8PtrTy(*function.builder.context)),
                 types::null()
             );
         }
@@ -64,7 +63,7 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
         case Kind::Bool:
             return BuilderResult(
                 BuilderResult::Kind::Raw,
-                ConstantInt::get(Type::getInt1Ty(function.builder.context), node->as<BoolNode>()->value),
+                ConstantInt::get(Type::getInt1Ty(*function.builder.context), node->as<BoolNode>()->value),
                 types::boolean()
             );
 
@@ -75,7 +74,7 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
             results.reserve(e->children.size());
 
             std::transform(e->children.begin(), e->children.end(), std::back_inserter(results),
-                [this](const std::unique_ptr<Node> &x) { return makeExpression(x->as<ExpressionNode>()->result); });
+                [this](const std::unique_ptr<Node> &x) { return makeExpression(x->as<ExpressionNode>()); });
 
             Typename subType = results.empty() ? types::any() : results.front().type;
 
@@ -98,9 +97,9 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
             for (size_t a = 0; a < results.size(); a++) {
                 const BuilderResult &result = results[a];
 
-                Value *index = ConstantInt::get(Type::getInt64Ty(function.builder.context), a);
+                Value *index = ConstantInt::get(Type::getInt64Ty(*function.builder.context), a);
                 Value *point = current.CreateInBoundsGEP(value, {
-                    ConstantInt::get(Type::getInt64Ty(function.builder.context), 0),
+                    ConstantInt::get(Type::getInt64Ty(*function.builder.context), 0),
                     index
                 });
 
@@ -115,7 +114,7 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
         }
 
         case Kind::Number: {
-            Value *value = ConstantInt::get(Type::getInt32Ty(function.builder.context), node->as<NumberNode>()->value);
+            Value *value = ConstantInt::get(Type::getInt32Ty(*function.builder.context), node->as<NumberNode>()->value);
 
             return BuilderResult(
                 BuilderResult::Kind::Raw,
@@ -152,7 +151,7 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
 
             for (size_t a = 0; a < node->children.size(); a++) {
                 auto *exp = node->children[a]->as<ExpressionNode>();
-                BuilderResult parameter = makeExpression(exp->result);
+                BuilderResult parameter = makeExpression(exp);
 
                 std::optional<BuilderResult> parameterConverted = convert(parameter, type->parameters[a], exp);
 
@@ -173,17 +172,22 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
         }
 
         case Kind::Dot: {
+            BuilderResult infer = makeExpressionInferred(result);
+
             const ReferenceNode *refNode = node->children.front()->as<ReferenceNode>();
 
-            const StackTypename *type = std::get_if<StackTypename>(&result.type);
+            const StackTypename *type = std::get_if<StackTypename>(&infer.type);
 
             if (!type)
                 throw VerifyError(node, "Dot operator can only be applied to stack typename at the moment.");
 
+            if (function.builder.makeBuiltinTypename(*type))
+                throw VerifyError(node, "Cannot operate on builtin types yet.");
+
             const TypeNode *typeNode = Builder::find(*type, node);
 
             if (!typeNode)
-                throw VerifyError(node, "Cannot find type node for stack typename.");
+                throw VerifyError(node, "Cannot find type node for stack typename {}.", type->value);
 
             BuilderType *builderType = function.builder.makeType(typeNode);
 
@@ -204,31 +208,32 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
             size_t index = builderType->indices.at(varNode);
 
             return BuilderResult(
-                result.kind == BuilderResult::Kind::Reference
+                infer.kind == BuilderResult::Kind::Reference
                     ? BuilderResult::Kind::Reference
                     : BuilderResult::Kind::Literal,
-                current.CreateStructGEP(ref(result, node), index, refNode->name),
+                current.CreateStructGEP(ref(infer, node), index, refNode->name),
                 varNode->fixedType.value()
             );
         }
 
         case Kind::Index: {
-            // Not get(result.value) we don't want to drop the pointer :|
-            // this can't work....
+            BuilderResult infer = makeExpressionInferred(result);
 
-            const ArrayTypename *arrayType = std::get_if<ArrayTypename>(&result.type);
+            const ArrayTypename *arrayType = std::get_if<ArrayTypename>(&infer.type);
 
             if (!arrayType) {
                 throw VerifyError(node,
                     "Indexing must only be applied on array types, type is {}.",
-                    toString(result.type));
+                    toString(infer.type));
             }
 
-            BuilderResult index = makeExpression(node->children.front()->as<ExpressionNode>()->result);
+            auto *indexExpression = node->children.front()->as<ExpressionNode>();
+
+            BuilderResult index = makeExpression(indexExpression);
             std::optional<BuilderResult> indexConverted = convert(index, types::integer(), node);
 
             if (!indexConverted.has_value()) {
-                throw VerifyError(node->children.front().get(),
+                throw VerifyError(indexExpression,
                     "Must be able to be converted to int type for indexing, instead type is {}.",
                     toString(index.type));
             }
@@ -236,10 +241,11 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
             index = indexConverted.value();
 
             return BuilderResult(
-                result.kind == BuilderResult::Kind::Reference
-                    ? BuilderResult::Kind::Reference : BuilderResult::Kind::Literal,
-                current.CreateGEP(ref(result, node), {
-                    ConstantInt::get(Type::getInt64Ty(function.builder.context), 0),
+                infer.kind == BuilderResult::Kind::Reference
+                    ? BuilderResult::Kind::Reference
+                    : BuilderResult::Kind::Literal,
+                current.CreateGEP(ref(infer, node), {
+                    ConstantInt::get(Type::getInt64Ty(*function.builder.context), 0),
                     get(index)
                 }),
                 *arrayType->value
@@ -261,38 +267,104 @@ BuilderResult BuilderScope::makeExpressionNoun(const ExpressionNoun &noun) {
 }
 
 BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &operation) {
-    BuilderResult value = makeExpression(*operation.a);
+    BuilderResult value = makeExpressionResult(*operation.a);
 
-    switch (operation.op->op) {
-        case UnaryNode::Operation::Not: {
-            if (value.type != types::boolean())
-                throw VerifyError(operation.op, "Source type for not expression must be bool.");
+    switch (operation.op->is<Kind>()) {
+        case Kind::Unary:
+            switch (operation.op->as<UnaryNode>()->op) {
+                case UnaryNode::Operation::Not: {
+                    if (value.type != types::boolean())
+                        throw VerifyError(operation.op, "Source type for not expression must be bool.");
+
+                    return BuilderResult(
+                        BuilderResult::Kind::Raw,
+                        current.CreateNot(get(value)),
+                        types::boolean()
+                    );
+                }
+
+                case UnaryNode::Operation::Reference:
+                    if (value.kind != BuilderResult::Kind::Reference)
+                        throw VerifyError(operation.op, "Cannot get reference of temporary.");
+
+                    return BuilderResult(
+                        BuilderResult::Kind::Raw,
+                        value.value,
+                        ReferenceTypename { std::make_shared<Typename>(value.type) }
+                    );
+
+                case UnaryNode::Operation::Fetch: {
+                    if (!std::holds_alternative<ReferenceTypename>(value.type))
+                        throw VerifyError(operation.op, "Cannot dereference value of non reference.");
+
+                    return BuilderResult(
+                        BuilderResult::Kind::Reference,
+                        get(value),
+                        *std::get<ReferenceTypename>(value.type).value
+                    );
+                }
+
+                default:
+                    assert(false);
+            }
+
+        case Kind::Ternary: {
+            BuilderResult infer = makeExpressionInferred(value);
+
+            std::optional<BuilderResult> inferConverted = convert(infer, types::boolean(), operation.op);
+
+            if (!inferConverted.has_value()) {
+                throw VerifyError(operation.op,
+                    "Must be able to be converted to boolean type for ternary, instead type is {}.",
+                    toString(infer.type));
+            }
+
+            infer = inferConverted.value();
+
+            BuilderScope trueScope(operation.op->children[0]->as<ExpressionNode>(), *this);
+            BuilderScope falseScope(operation.op->children[1]->as<ExpressionNode>(), *this);
+
+            assert(trueScope.product.has_value() && falseScope.product.has_value());
+
+            BuilderResult onTrue = trueScope.product.value();
+            BuilderResult onFalse = falseScope.product.value();
+
+            std::optional<BuilderResult> medium = trueScope.convert(onTrue, onFalse.type, operation.op);
+
+            if (medium.has_value()) {
+                onTrue = medium.value();
+            } else {
+                medium = falseScope.convert(onFalse, onTrue.type, operation.op);
+
+                if (medium.has_value()) {
+                    onFalse = medium.value();
+                } else {
+                    throw VerifyError(operation.op,
+                        "Branches of ternary of type {} and {} cannot be converted to each other.",
+                        toString(onTrue.type), toString(onFalse.type));
+                }
+            }
+
+            assert(onTrue.type == onFalse.type);
+
+            Value *literal = function.entry.CreateAlloca(function.builder.makeTypename(onTrue.type, operation.op));
+
+            trueScope.current.CreateStore(trueScope.get(onTrue), literal);
+            falseScope.current.CreateStore(falseScope.get(onFalse), literal);
+
+            current.CreateCondBr(get(infer), trueScope.openingBlock, falseScope.openingBlock);
+
+            currentBlock = BasicBlock::Create(
+                *function.builder.context, "", function.function, function.exitBlock);
+            current.SetInsertPoint(currentBlock);
+
+            trueScope.current.CreateBr(currentBlock);
+            falseScope.current.CreateBr(currentBlock);
 
             return BuilderResult(
-                BuilderResult::Kind::Raw,
-                current.CreateNot(get(value)),
-                types::boolean()
-            );
-        }
-
-        case UnaryNode::Operation::Reference:
-            if (value.kind != BuilderResult::Kind::Reference)
-                throw VerifyError(operation.op, "Cannot get reference of temporary.");
-
-            return BuilderResult(
-                BuilderResult::Kind::Raw,
-                value.value,
-                ReferenceTypename { std::make_shared<Typename>(value.type) }
-            );
-
-        case UnaryNode::Operation::Fetch: {
-            if (!std::holds_alternative<ReferenceTypename>(value.type))
-                throw VerifyError(operation.op, "Cannot dereference value of non reference.");
-
-            return BuilderResult(
-                BuilderResult::Kind::Reference,
-                get(value),
-                *std::get<ReferenceTypename>(value.type).value
+                BuilderResult::Kind::Literal,
+                literal,
+                onTrue.type
             );
         }
 
@@ -302,8 +374,8 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
 }
 
 BuilderResult BuilderScope::makeExpressionCombinator(const ExpressionCombinator &combinator) {
-    BuilderResult a = makeExpression(*combinator.a);
-    BuilderResult b = makeExpression(*combinator.b);
+    BuilderResult a = makeExpressionInferred(makeExpressionResult(*combinator.a));
+    BuilderResult b = makeExpressionInferred(makeExpressionResult(*combinator.b));
 
     // assuming just add stuff for now
     if (a.type != types::integer() || b.type != types::integer()) {
@@ -406,7 +478,7 @@ BuilderResult BuilderScope::makeExpressionCombinator(const ExpressionCombinator 
     }
 }
 
-BuilderResult BuilderScope::makeExpression(const ExpressionResult &result) {
+BuilderResult BuilderScope::makeExpressionResult(const ExpressionResult &result) {
     struct {
         BuilderScope &scope;
 
@@ -424,4 +496,22 @@ BuilderResult BuilderScope::makeExpression(const ExpressionResult &result) {
     } visitor { *this };
 
     return std::visit(visitor, result);
+}
+
+BuilderResult BuilderScope::makeExpressionInferred(const BuilderResult &result) {
+    const FunctionTypename *functionTypename = std::get_if<FunctionTypename>(&result.type);
+
+    if (functionTypename && functionTypename->kind == FunctionTypename::Kind::Pointer) {
+        return BuilderResult(
+            BuilderResult::Kind::Raw,
+            current.CreateCall(result.value),
+            *functionTypename->returnType
+        );
+    }
+
+    return result;
+}
+
+BuilderResult BuilderScope::makeExpression(const ExpressionNode *node) {
+    return makeExpressionInferred(makeExpressionResult(node->result));
 }
