@@ -49,12 +49,72 @@ std::optional<BuilderResult> BuilderScope::convert(
         );
     }
 
+    if (types::isNumber(result.type) && types::isNumber(type)) {
+        Type *dest = function.builder.makeBuiltinTypename(std::get<StackTypename>(type));
+
+        if (types::isInteger(result.type) && types::isFloat(type)) { // int -> float
+            return BuilderResult(
+                BuilderResult::Kind::Raw,
+                types::isSigned(result.type)
+                    ? current.CreateSIToFP(get(result), dest)
+                    : current.CreateUIToFP(get(result), dest),
+                type
+            );
+        }
+
+        if (types::isFloat(result.type) && types::isInteger(type)) { // float -> int
+            return BuilderResult(
+                BuilderResult::Kind::Raw,
+                types::isSigned(type)
+                    ? current.CreateFPToSI(get(result), dest)
+                    : current.CreateFPToUI(get(result), dest),
+                type
+            );
+        }
+
+        // promote or demote
+        return BuilderResult(
+            BuilderResult::Kind::Raw,
+            types::isFloat(type)
+                ? types::priority(result.type) > types::priority(type)
+                ? current.CreateFPTrunc(get(result), dest)
+                : current.CreateFPExt(get(result), dest)
+                : types::isSigned(type)
+                ? current.CreateSExtOrTrunc(get(result), dest)
+                : current.CreateZExtOrTrunc(get(result), dest),
+            type
+        );
+    }
+
     // look through conversion operators...
     // convert reference to raw
     // convert raw to reference
 
     // all has gone to hell, error
     return std::nullopt;
+}
+
+std::optional<std::pair<BuilderResult, BuilderResult>> BuilderScope::convert(
+    const BuilderResult &a, BuilderScope &aScope,
+    const BuilderResult &b, BuilderScope &bScope,
+    const Node *node) {
+    std::optional<BuilderResult> medium;
+
+    // Try to convert second first, so it's at least consistent.
+    medium = bScope.convert(b, a.type, node);
+    if (medium.has_value())
+        return std::make_pair(a, medium.value());
+
+    medium = aScope.convert(a, b.type, node);
+    if (medium.has_value())
+        return std::make_pair(medium.value(), b);
+
+    return std::nullopt;
+}
+
+std::optional<std::pair<BuilderResult, BuilderResult>> BuilderScope::convert(
+    const BuilderResult &a, const BuilderResult &b, const Node *node) {
+    return convert(a, *this, b, *this, node);
 }
 
 void BuilderScope::makeAssign(const AssignNode *node) {

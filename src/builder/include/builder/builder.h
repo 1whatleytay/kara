@@ -81,8 +81,17 @@ struct BuilderScope {
     std::unordered_map<const VariableNode *, std::shared_ptr<BuilderVariable>> variables;
 
     BuilderVariable *findVariable(const VariableNode *node) const;
+
     // Node for search scope.
-    std::optional<BuilderResult> convert(const BuilderResult &result, const Typename &type, const Node *node);
+    std::optional<BuilderResult> convert(
+        const BuilderResult &result, const Typename &type, const Node *node);
+    static std::optional<std::pair<BuilderResult, BuilderResult>> convert(
+        const BuilderResult &a, BuilderScope &aScope,
+        const BuilderResult &b, BuilderScope &bScope,
+        const Node *node);
+
+    std::optional<std::pair<BuilderResult, BuilderResult>> convert(
+        const BuilderResult &a, const BuilderResult &b, const Node *node);
 
     Value *get(const BuilderResult &result);
     Value *ref(const BuilderResult &result, const Node *node);
@@ -178,7 +187,7 @@ struct Builder {
     static const Node *find(const ReferenceNode *node);
     static const TypeNode *find(const StackTypename &type, const Node *node);
 
-    Type *makeBuiltinTypename(const StackTypename &type);
+    Type *makeBuiltinTypename(const StackTypename &type) const;
 
     // Node needs to be passed to get a sense of scope.
     Type *makeStackTypename(const StackTypename &type, const Node *node);

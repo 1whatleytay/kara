@@ -7,25 +7,33 @@
 #include <fmt/format.h>
 #include <builder/error.h>
 
-Type *Builder::makeBuiltinTypename(const StackTypename &stack) {
+Type *Builder::makeBuiltinTypename(const StackTypename &stack) const {
     Typename type(stack);
 
-    if (type == types::nothing())
-        return Type::getVoidTy(*context);
-
-    if (type == types::integer())
-        return Type::getInt32Ty(*context);
-
-    if (type == types::boolean())
-        return Type::getInt1Ty(*context);
-
-    if (type == types::null())
-        return Type::getInt8PtrTy(*context);
+    std::vector<std::pair<Typename, Type *>> typeMap = {
+        { types::nothing(), Type::getVoidTy(*context) },
+        { types::i8(), Type::getInt8Ty(*context) },
+        { types::i16(), Type::getInt16Ty(*context) },
+        { types::i32(), Type::getInt32Ty(*context) },
+        { types::i64(), Type::getInt64Ty(*context) },
+        { types::u8(), Type::getInt8Ty(*context) },
+        { types::u16(), Type::getInt16Ty(*context) },
+        { types::u32(), Type::getInt32Ty(*context) },
+        { types::u64(), Type::getInt64Ty(*context) },
+        { types::f32(), Type::getFloatTy(*context) },
+        { types::f64(), Type::getDoubleTy(*context) },
+        { types::boolean(), Type::getInt1Ty(*context) },
+        { types::null(), Type::getInt8PtrTy(*context) },
+    };
 
     if (type == types::any())
         throw std::runtime_error("Any type is unsupported.");
 
-    return nullptr;
+    auto iterator = std::find_if(typeMap.begin(), typeMap.end(), [&type](const auto &e) {
+        return e.first == type;
+    });
+
+    return iterator == typeMap.end() ? nullptr : iterator->second;
 }
 
 Type *Builder::makeStackTypename(const StackTypename &type, const Node *node) {

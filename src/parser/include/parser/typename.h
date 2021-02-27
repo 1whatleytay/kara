@@ -79,6 +79,28 @@ namespace types {
     Typename any();
     Typename null();
     Typename nothing();
-    Typename integer();
+
     Typename boolean();
+
+    Typename i8();
+    Typename i16();
+    Typename i32();
+    Typename i64();
+
+    Typename u8();
+    Typename u16();
+    Typename u32();
+    Typename u64();
+
+    Typename f32();
+    Typename f64();
+
+    bool isSigned(const Typename &type);
+    bool isUnsigned(const Typename &type);
+    bool isInteger(const Typename &type);
+    bool isFloat(const Typename &type);
+
+    bool isNumber(const Typename &type);
+
+    int32_t priority(const Typename &type);
 }

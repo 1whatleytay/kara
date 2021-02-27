@@ -114,12 +114,24 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
         }
 
         case Kind::Number: {
-            Value *value = ConstantInt::get(Type::getInt32Ty(*function.builder.context), node->as<NumberNode>()->value);
+            auto *e = node->as<NumberNode>();
+
+            Type *type = function.builder.makeBuiltinTypename(std::get<StackTypename>(e->type));
+
+            assert(types::isNumber(e->type));
+
+            Value *value;
+            if (types::isSigned(e->type))
+                value = ConstantInt::getSigned(type, e->value.i);
+            if (types::isUnsigned(e->type))
+                value = ConstantInt::get(type, e->value.u);
+            if (types::isFloat(e->type))
+                value = ConstantFP::get(type, e->value.f);
 
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 value,
-                types::integer()
+                e->type
             );
         }
 
@@ -293,7 +305,7 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
             auto *indexExpression = node->children.front()->as<ExpressionNode>();
 
             BuilderResult index = makeExpression(indexExpression);
-            std::optional<BuilderResult> indexConverted = convert(index, types::integer(), node);
+            std::optional<BuilderResult> indexConverted = convert(index, types::i32(), node);
 
             if (!indexConverted.has_value()) {
                 throw VerifyError(indexExpression,
@@ -391,24 +403,19 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
 
             assert(trueScope.product.has_value() && falseScope.product.has_value());
 
-            BuilderResult onTrue = trueScope.product.value();
-            BuilderResult onFalse = falseScope.product.value();
+            BuilderResult productA = trueScope.product.value();
+            BuilderResult productB = falseScope.product.value();
 
-            std::optional<BuilderResult> medium = trueScope.convert(onTrue, onFalse.type, operation.op);
+            auto results = convert(productA, trueScope, productB, falseScope, operation.op);
 
-            if (medium.has_value()) {
-                onTrue = medium.value();
-            } else {
-                medium = falseScope.convert(onFalse, onTrue.type, operation.op);
-
-                if (medium.has_value()) {
-                    onFalse = medium.value();
-                } else {
-                    throw VerifyError(operation.op,
-                        "Branches of ternary of type {} and {} cannot be converted to each other.",
-                        toString(onTrue.type), toString(onFalse.type));
-                }
+            if (!results.has_value()) {
+                throw VerifyError(operation.op,
+                    "Branches of ternary of type {} and {} cannot be converted to each other.",
+                    toString(productA.type), toString(productB.type));
             }
+
+            BuilderResult onTrue = results.value().first;
+            BuilderResult onFalse = results.value().second;
 
             assert(onTrue.type == onFalse.type);
 
@@ -442,99 +449,162 @@ BuilderResult BuilderScope::makeExpressionCombinator(const ExpressionCombinator 
     BuilderResult a = makeExpressionInferred(makeExpressionResult(*combinator.a));
     BuilderResult b = makeExpressionInferred(makeExpressionResult(*combinator.b));
 
-    // assuming just add stuff for now
-    if (a.type != types::integer() || b.type != types::integer()) {
+    auto results = convert(a, b, combinator.op);
+
+    if (!results.has_value()) {
         throw VerifyError(combinator.op,
-            "Expected ls type int but got {}, rs type int but got {}.",
+            "Both sides of operator must be convertible to each other, but got ls type {}, and rs type {}.",
             toString(a.type), toString(b.type));
     }
 
+    a = results.value().first;
+    b = results.value().second;
+
+    using Requirement = std::function<bool()>;
+
+    auto asInt = std::make_pair([&]() {
+        return types::isNumber(a.type) && types::isNumber(b.type);
+    }, "int");
+
+    auto asRef = std::make_pair([&]() {
+        return std::holds_alternative<ReferenceTypename>(a.type) && std::holds_alternative<ReferenceTypename>(b.type);
+    }, "ref");
+
+    auto needs = [&](const std::vector<std::pair<Requirement, const char *>> &requirements) {
+        if (!std::any_of(requirements.begin(), requirements.end(), [](const auto &e) {
+            return e.first();
+        })) {
+            std::vector<std::string> options(requirements.size());
+
+            std::transform(requirements.begin(), requirements.end(), options.begin(), [](const auto &e) {
+                return e.second;
+            });
+
+            // TODO: Converting to desired behavior will provide better everything.
+            throw VerifyError(combinator.op,
+                "Both sides of operator must be {}, but decided type was {}.",
+                fmt::format("{}", fmt::join(options, " or ")), toString(a.type), toString(b.type));
+        }
+    };
+
     switch (combinator.op->op) {
         case OperatorNode::Operation::Add:
+            needs({ asInt });
+
             return BuilderResult(
                 BuilderResult::Kind::Raw,
-                current.CreateAdd(get(a), get(b)),
-                types::integer()
+                types::isFloat(a.type)
+                    ? current.CreateFAdd(get(a), get(b))
+                    : current.CreateAdd(get(a), get(b)),
+                a.type
             );
 
         case OperatorNode::Operation::Sub:
+            needs({ asInt });
+
             return BuilderResult(
                 BuilderResult::Kind::Raw,
-                current.CreateSub(get(a), get(b)),
-                types::integer()
+                types::isFloat(a.type)
+                    ? current.CreateFSub(get(a), get(b))
+                    : current.CreateSub(get(a), get(b)),
+                types::i32()
             );
 
         case OperatorNode::Operation::Mul:
+            needs({ asInt });
+
             return BuilderResult(
                 BuilderResult::Kind::Raw,
-                current.CreateMul(get(a), get(b)),
-                types::integer()
+                types::isFloat(a.type)
+                    ? current.CreateFMul(get(a), get(b))
+                    : current.CreateMul(get(a), get(b)),
+                types::i32()
             );
 
         case OperatorNode::Operation::Div:
+            needs({ asInt });
+
             return BuilderResult(
                 BuilderResult::Kind::Raw,
-                current.CreateSDiv(get(a), get(b)),
-                types::integer()
+                types::isFloat(a.type)
+                    ? current.CreateFDiv(get(a), get(b))
+                    : types::isSigned(a.type)
+                    ? current.CreateSDiv(get(a), get(b))
+                    : current.CreateUDiv(get(a), get(b)),
+                types::i32()
             );
 
         case OperatorNode::Operation::Equals:
-            if (a.type != types::integer() || b.type != types::integer())
-                throw VerifyError(combinator.op, "Left side and right side to expression must be int.");
+            needs({ asInt, asRef });
 
             return BuilderResult(
                 BuilderResult::Kind::Raw,
-                current.CreateICmpEQ(get(a), get(b)),
+                asRef.first() || !types::isFloat(a.type)
+                    ? current.CreateICmpEQ(get(a), get(b))
+                    : current.CreateFCmpOEQ(get(a), get(b)),
                 types::boolean()
             );
 
         case OperatorNode::Operation::NotEquals:
-            if (a.type != types::integer() || b.type != types::integer())
-                throw VerifyError(combinator.op, "Left side and right side to expression must be int.");
+            needs({ asInt, asRef });
 
             return BuilderResult(
                 BuilderResult::Kind::Raw,
-                current.CreateICmpNE(get(a), get(b)),
+                asRef.first() || !types::isFloat(a.type)
+                    ? current.CreateICmpNE(get(a), get(b))
+                    : current.CreateFCmpONE(get(a), get(b)),
                 types::boolean()
             );
 
         case OperatorNode::Operation::Greater:
-            if (a.type != types::integer() || b.type != types::integer())
-                throw VerifyError(combinator.op, "Left side and right side to expression must be int.");
+            needs({ asInt });
 
             return BuilderResult(
                 BuilderResult::Kind::Raw,
-                current.CreateICmpSGT(get(a), get(b)),
+                types::isFloat(a.type)
+                    ? current.CreateFCmpOGT(get(a), get(b))
+                    : types::isSigned(a.type)
+                    ? current.CreateICmpSGT(get(a), get(b))
+                    : current.CreateICmpUGT(get(a), get(b)),
                 types::boolean()
             );
 
         case OperatorNode::Operation::GreaterEqual:
-            if (a.type != types::integer() || b.type != types::integer())
-                throw VerifyError(combinator.op, "Left side and right side to expression must be int.");
+            needs({ asInt });
 
             return BuilderResult(
                 BuilderResult::Kind::Raw,
-                current.CreateICmpSGE(get(a), get(b)),
+                types::isFloat(a.type)
+                    ? current.CreateFCmpOGE(get(a), get(b))
+                    : types::isSigned(a.type)
+                    ? current.CreateICmpSGE(get(a), get(b))
+                    : current.CreateICmpUGE(get(a), get(b)),
                 types::boolean()
             );
 
         case OperatorNode::Operation::Lesser:
-            if (a.type != types::integer() || b.type != types::integer())
-                throw VerifyError(combinator.op, "Left side and right side to expression must be int.");
+            needs({ asInt });
 
             return BuilderResult(
                 BuilderResult::Kind::Raw,
-                current.CreateICmpSLT(get(a), get(b)),
+                types::isFloat(a.type)
+                    ? current.CreateFCmpOLT(get(a), get(b))
+                    : types::isSigned(a.type)
+                    ? current.CreateICmpSLT(get(a), get(b))
+                    : current.CreateICmpULT(get(a), get(b)),
                 types::boolean()
             );
 
         case OperatorNode::Operation::LesserEqual:
-            if (a.type != types::integer() || b.type != types::integer())
-                throw VerifyError(combinator.op, "Left side and right side to expression must be int.");
+            needs({ asInt });
 
             return BuilderResult(
                 BuilderResult::Kind::Raw,
-                current.CreateICmpSLE(get(a), get(b)),
+                types::isFloat(a.type)
+                    ? current.CreateFCmpOLE(get(a), get(b))
+                    : types::isSigned(a.type)
+                    ? current.CreateICmpSLE(get(a), get(b))
+                    : current.CreateICmpULE(get(a), get(b)),
                 types::boolean()
             );
 

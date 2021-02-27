@@ -5,7 +5,13 @@
 #include <parser/typename.h>
 
 struct NumberNode : public Node {
-    uint64_t value = 0;
+    union {
+        int64_t i = 0;
+        uint64_t u;
+        double f;
+    } value;
+
+    Typename type;
 
     explicit NumberNode(Node *parent);
 };
