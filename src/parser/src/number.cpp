@@ -8,13 +8,29 @@ NumberNode::NumberNode(Node *parent) : Node(parent, Kind::Number) {
     bool positive = select({ "-", "+" }, false, true) != 0;
 
     auto temp = tokenStoppable;
+    bool hasCapturedDot = false; // only capture one dot
     tokenStoppable = [&](const char *c, size_t s) {
+        if (*c == '.') {
+            if (hasCapturedDot)
+                return true;
+            else
+                hasCapturedDot = true;
+        }
+
         return *c != '.' && anyHard(c, s); // capture dot too
     };
     std::string full = token();
     tokenStoppable = temp;
 
     full.erase(std::remove_if(full.begin(), full.end(), [](char c) { return c == '_'; }), full.end());
+
+    size_t pos = full.rfind('.');
+    if (pos != std::string::npos && !std::all_of(full.begin() + pos + 1, full.end(), std::isdigit)) {
+        state.index -= full.size() - pos; // rollback
+        full = full.substr(0, pos);
+    }
+
+    std::string rest = state.pull(100);
 
     // Just a quick check.
     if (std::any_of(full.begin(), full.end(), [](char a) { return a != '.' && !std::isdigit(a); }))
