@@ -3,14 +3,14 @@
 #include <parser/type.h>
 #include <parser/function.h>
 
+#include <llvm/Support/Host.h>
 #include <llvm/IR/Verifier.h>
+#include <llvm/Support/raw_ostream.h>
 #include <llvm/Target/TargetOptions.h>
 #include <llvm/Target/TargetMachine.h>
-#include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/Support/TargetRegistry.h>
-#include <llvm/Transforms/Utils/Cloning.h>
 #include <llvm/ExecutionEngine/Orc/LLJIT.h>
 
 #include <fmt/printf.h>

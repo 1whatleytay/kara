@@ -187,7 +187,7 @@ struct Builder {
     static const Node *find(const ReferenceNode *node);
     static const TypeNode *find(const StackTypename &type, const Node *node);
 
-    Type *makeBuiltinTypename(const StackTypename &type) const;
+    [[nodiscard]] Type *makeBuiltinTypename(const StackTypename &type) const;
 
     // Node needs to be passed to get a sense of scope.
     Type *makeStackTypename(const StackTypename &type, const Node *node);

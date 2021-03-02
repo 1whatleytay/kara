@@ -638,12 +638,19 @@ BuilderResult BuilderScope::makeExpressionInferred(const BuilderResult &result) 
 
     if (functionTypename && functionTypename->kind == FunctionTypename::Kind::Pointer) {
         std::vector<Value *> params;
+
         if (result.implicit)
             params.push_back(get(*result.implicit));
 
+        auto *pointer = result.value->getType();
+        assert(pointer->isPointerTy());
+
+        auto *type = reinterpret_cast<FunctionType *>(pointer->getPointerElementType());
+        assert(type->isFunctionTy());
+
         return BuilderResult(
             BuilderResult::Kind::Raw,
-            current.CreateCall(result.value, params),
+            current.CreateCall(FunctionCallee(type, result.value), params),
             *functionTypename->returnType
         );
     }
