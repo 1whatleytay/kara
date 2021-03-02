@@ -7,8 +7,7 @@
 #include <parser/reference.h>
 
 // this copies :flushed:
-std::optional<BuilderResult> BuilderScope::convert(
-    const BuilderResult &result, const Typename &type, const Node *node) {
+std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &result, const Typename &type) {
     if (result.type == type)
         return result;
 
@@ -28,7 +27,7 @@ std::optional<BuilderResult> BuilderScope::convert(
     if (typeRef && *typeRef->value == result.type) {
         return BuilderResult(
             BuilderResult::Kind::Raw,
-            ref(result, node),
+            ref(result),
             type
         );
     }
@@ -36,7 +35,7 @@ std::optional<BuilderResult> BuilderScope::convert(
     if (result.type == types::null() && typeRef) {
         return BuilderResult(
             BuilderResult::Kind::Raw,
-            current.CreatePointerCast(get(result), function.builder.makeTypename(type, node)),
+            current.CreatePointerCast(get(result), function.builder.makeTypename(type)),
             type
         );
     }
@@ -96,16 +95,15 @@ std::optional<BuilderResult> BuilderScope::convert(
 
 std::optional<std::pair<BuilderResult, BuilderResult>> BuilderScope::convert(
     const BuilderResult &a, BuilderScope &aScope,
-    const BuilderResult &b, BuilderScope &bScope,
-    const Node *node) {
+    const BuilderResult &b, BuilderScope &bScope) {
     std::optional<BuilderResult> medium;
 
     // Try to convert second first, so it's at least consistent.
-    medium = bScope.convert(b, a.type, node);
+    medium = bScope.convert(b, a.type);
     if (medium.has_value())
         return std::make_pair(a, medium.value());
 
-    medium = aScope.convert(a, b.type, node);
+    medium = aScope.convert(a, b.type);
     if (medium.has_value())
         return std::make_pair(medium.value(), b);
 
@@ -113,15 +111,15 @@ std::optional<std::pair<BuilderResult, BuilderResult>> BuilderScope::convert(
 }
 
 std::optional<std::pair<BuilderResult, BuilderResult>> BuilderScope::convert(
-    const BuilderResult &a, const BuilderResult &b, const Node *node) {
-    return convert(a, *this, b, *this, node);
+    const BuilderResult &a, const BuilderResult &b) {
+    return convert(a, *this, b, *this);
 }
 
 void BuilderScope::makeAssign(const AssignNode *node) {
     BuilderResult destination = makeExpression(node->children.front()->as<ExpressionNode>());
 
     BuilderResult sourceRaw = makeExpression(node->children.back()->as<ExpressionNode>());
-    std::optional<BuilderResult> sourceConverted = convert(sourceRaw, destination.type, node);
+    std::optional<BuilderResult> sourceConverted = convert(sourceRaw, destination.type);
 
     if (!sourceConverted.has_value()) {
         throw VerifyError(node, "Assignment of type {} to {} is not allowed.",

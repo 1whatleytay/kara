@@ -26,11 +26,9 @@ NumberNode::NumberNode(Node *parent) : Node(parent, Kind::Number) {
 
     size_t pos = full.rfind('.');
     if (pos != std::string::npos && !std::all_of(full.begin() + pos + 1, full.end(), std::isdigit)) {
-        state.index -= full.size() - pos; // rollback
+        state.index -= full.size() - pos + 1; // rollback
         full = full.substr(0, pos);
     }
-
-    std::string rest = state.pull(100);
 
     // Just a quick check.
     if (std::any_of(full.begin(), full.end(), [](char a) { return a != '.' && !std::isdigit(a); }))

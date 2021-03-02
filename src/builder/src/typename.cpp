@@ -1,6 +1,6 @@
 #include <builder/builder.h>
 
-#include <builder/search.h>
+#include <parser/search.h>
 
 #include <parser/type.h>
 
@@ -36,37 +36,36 @@ Type *Builder::makeBuiltinTypename(const StackTypename &stack) const {
     return iterator == typeMap.end() ? nullptr : iterator->second;
 }
 
-Type *Builder::makeStackTypename(const StackTypename &type, const Node *node) {
+Type *Builder::makeStackTypename(const StackTypename &type) {
     Type *builtin = makeBuiltinTypename(type);
 
     if (builtin)
         return builtin;
 
-    const auto *found = Builder::find(type, node);
+    const auto *found = Builder::find(type);
 
     if (!found)
-        throw VerifyError(node, "Failed to find type matching {}.", type.value);
+        throw VerifyError(type.node, "Failed to find type matching {}.", type.value);
 
     return makeType(found)->type;
 }
 
-Type *Builder::makeTypename(const Typename &type, const Node *node) {
+Type *Builder::makeTypename(const Typename &type) {
     struct {
         Builder &builder;
-        const Node *node;
 
         Type *operator()(const StackTypename &type) {
-            return builder.makeStackTypename(type, node);
+            return builder.makeStackTypename(type);
         }
 
         Type *operator()(const ReferenceTypename &type) {
-            return PointerType::get(builder.makeTypename(*type.value, node), 0);
+            return PointerType::get(builder.makeTypename(*type.value), 0);
         }
 
         Type *operator()(const ArrayTypename &type) {
             switch (type.kind) {
                 case ArrayTypename::Kind::FixedSize:
-                    return ArrayType::get(builder.makeTypename(*type.value, node), type.size);
+                    return ArrayType::get(builder.makeTypename(*type.value), type.size);
                 default:
                     throw std::runtime_error(fmt::format("Type {} is unimplemented.", toString(type)));
             }
@@ -77,7 +76,7 @@ Type *Builder::makeTypename(const Typename &type, const Node *node) {
 
             return nullptr;
         }
-    } visitor { *this, node };
+    } visitor { *this };
 
     return std::visit(visitor, type);
 }

@@ -1,6 +1,7 @@
 #include <parser/typename.h>
 
 #include <parser/number.h>
+#include <parser/search.h>
 
 #include <fmt/format.h>
 
@@ -132,7 +133,9 @@ TypenameNode::TypenameNode(Node *parent) : Node(parent, Kind::Typename) {
         needs("]");
     } else {
         type = StackTypename {
-            token()
+            token(),
+
+            search::exclusive::parents(this, [](const Node *node) { return !node->is(Kind::Typename); })
         };
     }
 }

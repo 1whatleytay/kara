@@ -1,6 +1,6 @@
 #include <builder/builder.h>
 
-#include <builder/search.h>
+#include <parser/search.h>
 
 #include <parser/debug.h>
 #include <parser/variable.h>

@@ -1,5 +1,6 @@
 add_library(parser STATIC
 	include/parser/kinds.h
+	include/parser/search.h
     include/parser/root.h
     include/parser/function.h
     include/parser/variable.h
@@ -25,7 +26,8 @@ add_library(parser STATIC
     include/parser/type.h
     include/parser/dot.h
     include/parser/ternary.h
-	
+
+	src/search.cpp
 	src/root.cpp
     src/function.cpp
     src/variable.cpp

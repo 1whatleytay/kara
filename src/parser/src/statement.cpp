@@ -5,6 +5,8 @@
 StatementNode::StatementNode(Node *parent) : Node(parent, Kind::Statement) {
     op = select<Operation>({ "return", "break", "continue" }, true);
 
+    match();
+
     if (op == Operation::Return && !peek("}")) {
         push<ExpressionNode>();
 

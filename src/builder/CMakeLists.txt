@@ -1,7 +1,6 @@
 add_library(builder STATIC
 	include/builder/builder.h
     include/builder/error.h
-	include/builder/search.h
 
 	src/builder.cpp
     src/error.cpp
@@ -9,7 +8,6 @@ add_library(builder STATIC
     src/typename.cpp
     src/variable.cpp
     src/assign.cpp
-	src/search.cpp
     src/reference.cpp
     src/expression.cpp
     src/statement.cpp

@@ -1,13 +1,12 @@
 #include <builder/builder.h>
 
 #include <builder/error.h>
-#include <builder/search.h>
+#include <parser/search.h>
 
 #include <parser/if.h>
 #include <parser/for.h>
 #include <parser/block.h>
 #include <parser/debug.h>
-#include <parser/scope.h>
 #include <parser/assign.h>
 #include <parser/function.h>
 #include <parser/variable.h>
@@ -34,9 +33,9 @@ Value *BuilderScope::get(const BuilderResult &result) {
     return result.kind != BuilderResult::Kind::Raw ? current.CreateLoad(result.value) : result.value;
 }
 
-Value *BuilderScope::ref(const BuilderResult &result, const Node *node) {
+Value *BuilderScope::ref(const BuilderResult &result) {
     if (result.kind == BuilderResult::Kind::Raw) {
-        Value *ref = function.entry.CreateAlloca(function.builder.makeTypename(result.type, node));
+        Value *ref = function.entry.CreateAlloca(function.builder.makeTypename(result.type));
 
         current.CreateStore(result.value, ref);
 

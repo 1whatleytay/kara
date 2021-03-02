@@ -90,7 +90,7 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
                 results.size()
             };
 
-            Type *arrayType = function.builder.makeTypename(type, node);
+            Type *arrayType = function.builder.makeTypename(type);
 
             Value *value = function.entry.CreateAlloca(arrayType);
 
@@ -170,7 +170,7 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
                 auto *exp = node->children[a]->as<ExpressionNode>();
                 BuilderResult parameter = makeExpression(exp);
 
-                std::optional<BuilderResult> parameterConverted = convert(parameter, type->parameters[a], exp);
+                std::optional<BuilderResult> parameterConverted = convert(parameter, type->parameters[a]);
 
                 if (!parameterConverted)
                     throw VerifyError(exp,
@@ -210,7 +210,7 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
 
             if (!function.builder.makeBuiltinTypename(*type)) {
 
-                const TypeNode *typeNode = Builder::find(*type, node);
+                const TypeNode *typeNode = Builder::find(*type);
 
                 if (!typeNode)
                     throw VerifyError(node, "Cannot find type node for stack typename {}.", type->value);
@@ -232,7 +232,7 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
                     size_t index = builderType->indices.at(varNode);
 
                     // I feel uneasy touching this...
-                    Value *structRef = numReferences > 0 ? get(infer) : ref(infer, node);
+                    Value *structRef = numReferences > 0 ? get(infer) : ref(infer);
 
                     for (size_t a = 1; a < numReferences; a++)
                         structRef = current.CreateLoad(structRef);
@@ -264,7 +264,7 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
                 if (!var->fixedType.has_value())
                     return false;
 
-                std::optional<BuilderResult> result = convert(infer, var->fixedType.value(), var);
+                std::optional<BuilderResult> result = convert(infer, var->fixedType.value());
                 if (!result.has_value())
                     return false;
 
@@ -305,7 +305,7 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
             auto *indexExpression = node->children.front()->as<ExpressionNode>();
 
             BuilderResult index = makeExpression(indexExpression);
-            std::optional<BuilderResult> indexConverted = convert(index, types::i32(), node);
+            std::optional<BuilderResult> indexConverted = convert(index, types::i32());
 
             if (!indexConverted.has_value()) {
                 throw VerifyError(indexExpression,
@@ -319,7 +319,7 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
                 infer.kind == BuilderResult::Kind::Reference
                     ? BuilderResult::Kind::Reference
                     : BuilderResult::Kind::Literal,
-                current.CreateGEP(ref(infer, node), {
+                current.CreateGEP(ref(infer), {
                     ConstantInt::get(Type::getInt64Ty(*function.builder.context), 0),
                     get(index)
                 }),
@@ -348,7 +348,7 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
         case Kind::Unary:
             switch (operation.op->as<UnaryNode>()->op) {
                 case UnaryNode::Operation::Not: {
-                    std::optional<BuilderResult> converted = convert(value, types::boolean(), operation.op);
+                    std::optional<BuilderResult> converted = convert(value, types::boolean());
 
                     if (!converted.has_value())
                         throw VerifyError(operation.op, "Source type for not expression must be convertible to bool.");
@@ -388,7 +388,7 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
         case Kind::Ternary: {
             BuilderResult infer = makeExpressionInferred(value);
 
-            std::optional<BuilderResult> inferConverted = convert(infer, types::boolean(), operation.op);
+            std::optional<BuilderResult> inferConverted = convert(infer, types::boolean());
 
             if (!inferConverted.has_value()) {
                 throw VerifyError(operation.op,
@@ -406,7 +406,7 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
             BuilderResult productA = trueScope.product.value();
             BuilderResult productB = falseScope.product.value();
 
-            auto results = convert(productA, trueScope, productB, falseScope, operation.op);
+            auto results = convert(productA, trueScope, productB, falseScope);
 
             if (!results.has_value()) {
                 throw VerifyError(operation.op,
@@ -419,7 +419,7 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
 
             assert(onTrue.type == onFalse.type);
 
-            Value *literal = function.entry.CreateAlloca(function.builder.makeTypename(onTrue.type, operation.op));
+            Value *literal = function.entry.CreateAlloca(function.builder.makeTypename(onTrue.type));
 
             trueScope.current.CreateStore(trueScope.get(onTrue), literal);
             falseScope.current.CreateStore(falseScope.get(onFalse), literal);
@@ -449,7 +449,7 @@ BuilderResult BuilderScope::makeExpressionCombinator(const ExpressionCombinator 
     BuilderResult a = makeExpressionInferred(makeExpressionResult(*combinator.a));
     BuilderResult b = makeExpressionInferred(makeExpressionResult(*combinator.b));
 
-    auto results = convert(a, b, combinator.op);
+    auto results = convert(a, b);
 
     if (!results.has_value()) {
         throw VerifyError(combinator.op,

@@ -22,7 +22,7 @@ void BuilderScope::makeStatement(const StatementNode *node) {
 
                 // lambda :S
                 BuilderResult resultRaw = makeExpression(node->children.front()->as<ExpressionNode>());
-                std::optional<BuilderResult> resultConverted = convert(resultRaw, *function.type.returnType, node);
+                std::optional<BuilderResult> resultConverted = convert(resultRaw, *function.type.returnType);
 
                 if (!resultConverted.has_value()) {
                     throw VerifyError(node,

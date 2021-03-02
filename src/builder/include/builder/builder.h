@@ -85,17 +85,16 @@ struct BuilderScope {
 
     // Node for search scope.
     std::optional<BuilderResult> convert(
-        const BuilderResult &result, const Typename &type, const Node *node);
+        const BuilderResult &result, const Typename &type);
     static std::optional<std::pair<BuilderResult, BuilderResult>> convert(
         const BuilderResult &a, BuilderScope &aScope,
-        const BuilderResult &b, BuilderScope &bScope,
-        const Node *node);
+        const BuilderResult &b, BuilderScope &bScope);
 
     std::optional<std::pair<BuilderResult, BuilderResult>> convert(
-        const BuilderResult &a, const BuilderResult &b, const Node *node);
+        const BuilderResult &a, const BuilderResult &b);
 
     Value *get(const BuilderResult &result);
-    Value *ref(const BuilderResult &result, const Node *node);
+    Value *ref(const BuilderResult &result);
 
     BuilderResult makeExpressionNounContent(const Node *node);
     BuilderResult makeExpressionNounModifier(const Node *node, const BuilderResult &result);
@@ -186,13 +185,13 @@ struct Builder {
     BuilderFunction *makeFunction(const FunctionNode *node);
 
     static const Node *find(const ReferenceNode *node);
-    static const TypeNode *find(const StackTypename &type, const Node *node);
+    static const TypeNode *find(const StackTypename &type);
 
     [[nodiscard]] Type *makeBuiltinTypename(const StackTypename &type) const;
 
     // Node needs to be passed to get a sense of scope.
-    Type *makeStackTypename(const StackTypename &type, const Node *node);
-    Type *makeTypename(const Typename &type, const Node *node);
+    Type *makeStackTypename(const StackTypename &type);
+    Type *makeTypename(const Typename &type);
 
     Builder(RootNode *root, Options opts);
 };

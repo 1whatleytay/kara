@@ -47,7 +47,7 @@ void BuilderFunction::build() {
 
         BuilderResult result = scope.product.value();
 
-        std::optional<BuilderResult> resultConverted = scope.convert(result, *type.returnType, node);
+        std::optional<BuilderResult> resultConverted = scope.convert(result, *type.returnType);
 
         if (!resultConverted.has_value()) {
             throw VerifyError(bodyNode,
@@ -73,7 +73,7 @@ void BuilderFunction::build() {
 
 BuilderFunction::BuilderFunction(const FunctionNode *node, Builder &builder)
     : builder(builder), node(node), entry(*builder.context), exit(*builder.context) {
-    returnType = builder.makeTypename(node->returnType, node);
+    returnType = builder.makeTypename(node->returnType);
     std::vector<Type *> parameterTypes(node->parameterCount);
 
     for (size_t a = 0; a < node->parameterCount; a++) {
@@ -84,7 +84,7 @@ BuilderFunction::BuilderFunction(const FunctionNode *node, Builder &builder)
                 "Function parameter must have given type, default parameters are not implemented.");
         }
 
-        parameterTypes[a] = builder.makeTypename(parameterType.value(), node);
+        parameterTypes[a] = builder.makeTypename(parameterType.value());
     }
 
     FunctionType *valueType = FunctionType::get(returnType, parameterTypes, false);

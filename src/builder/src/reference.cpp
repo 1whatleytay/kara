@@ -1,7 +1,7 @@
 #include <builder/builder.h>
 
 #include <builder/error.h>
-#include <builder/search.h>
+#include <parser/search.h>
 
 #include <parser/type.h>
 #include <parser/function.h>
@@ -21,8 +21,10 @@ const Node *Builder::find(const ReferenceNode *node) {
 }
 
 
-const TypeNode *Builder::find(const StackTypename &type, const Node *node) {
-    return search::exclusive::scope(node, [&type](const Node *node) {
+const TypeNode *Builder::find(const StackTypename &type) {
+    assert(type.node);
+
+    return search::exclusive::scope(type.node, [&type](const Node *node) {
         return node->is(Kind::Type) && node->as<TypeNode>()->name == type.value;
     })->as<TypeNode>();
 }

@@ -16,6 +16,8 @@ using Typename = std::variant<ArrayTypename, StackTypename, FunctionTypename, Re
 struct StackTypename {
     std::string value;
 
+    const Node *node = nullptr;
+
     bool operator==(const StackTypename &other) const;
     bool operator!=(const StackTypename &other) const;
 };
@@ -38,7 +40,7 @@ struct FunctionTypename {
 struct ReferenceTypename {
     std::shared_ptr<Typename> value;
 
-    bool isMutable = false;
+    bool isMutable = true;
 
     bool operator==(const ReferenceTypename &other) const;
     bool operator!=(const ReferenceTypename &other) const;
