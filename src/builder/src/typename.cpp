@@ -74,6 +74,8 @@ Type *Builder::makeTypename(const Typename &type, const Node *node) {
 
         Type *operator()(const FunctionTypename &type) {
             assert(false);
+
+            return nullptr;
         }
     } visitor { *this, node };
 

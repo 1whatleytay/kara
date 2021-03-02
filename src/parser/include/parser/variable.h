@@ -4,6 +4,8 @@
 
 #include <parser/typename.h>
 
+#include <optional>
+
 struct VariableNode : public Node {
     std::string name;
 

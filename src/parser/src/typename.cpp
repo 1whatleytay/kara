@@ -5,6 +5,7 @@
 #include <fmt/format.h>
 
 #include <array>
+#include <cassert>
 
 namespace types {
     // Special

@@ -11,6 +11,8 @@
 #include <parser/reference.h>
 #include <parser/parentheses.h>
 
+#include <stdexcept>
+
 void ExpressionNoun::push(const Node *node) {
     if (content)
         modifiers.push_back(node);
