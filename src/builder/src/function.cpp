@@ -57,13 +57,13 @@ void BuilderFunction::build() {
 
         result = resultConverted.value();
 
-        scope.current.CreateStore(scope.get(result), returnValue);
+        scope.current.value().CreateStore(scope.get(result), returnValue);
     }
 
     entry.CreateBr(scope.openingBlock);
 
     if (!scope.currentBlock->getTerminator())
-        scope.current.CreateBr(exitBlock);
+        scope.current.value().CreateBr(exitBlock);
 
     if (node->returnType == types::nothing())
         exit.CreateRetVoid();

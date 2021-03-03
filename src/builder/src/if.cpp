@@ -6,6 +6,8 @@
 #include <parser/scope.h>
 
 void BuilderScope::makeIf(const IfNode *node) {
+    assert(current);
+
     while (node) {
         BuilderScope sub(node->children[1]->as<CodeNode>(), *this);
 
@@ -23,8 +25,8 @@ void BuilderScope::makeIf(const IfNode *node) {
 
         Value *condition = get(conditionResult);
 
-        current.CreateCondBr(condition, sub.openingBlock, currentBlock);
-        current.SetInsertPoint(currentBlock);
+        current->CreateCondBr(condition, sub.openingBlock, currentBlock);
+        current->SetInsertPoint(currentBlock);
 
         if (node->children.size() == 3) {
             // has else branch
@@ -36,11 +38,11 @@ void BuilderScope::makeIf(const IfNode *node) {
                 case Kind::Code: {
                     BuilderScope terminator(node->children[2]->as<CodeNode>(), *this);
 
-                    current.CreateBr(terminator.openingBlock);
+                    current->CreateBr(terminator.openingBlock);
 
                     currentBlock = BasicBlock::Create(
                         *function.builder.context, "", function.function, function.exitBlock);
-                    current.SetInsertPoint(currentBlock);
+                    current->SetInsertPoint(currentBlock);
 
                     node = nullptr;
 

@@ -19,5 +19,6 @@ struct Options {
     bool printIR = false;
     bool interpret = false;
 
+    Options() = default;
     Options(int count, const char **args);
 };

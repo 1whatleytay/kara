@@ -35,7 +35,7 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &result, 
     if (result.type == types::null() && typeRef) {
         return BuilderResult(
             BuilderResult::Kind::Raw,
-            current.CreatePointerCast(get(result), function.builder.makeTypename(type)),
+            current ? current->CreatePointerCast(get(result), function.builder.makeTypename(type)) : nullptr,
             type
         );
     }
@@ -43,7 +43,7 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &result, 
     if (type == types::boolean() && resultRef) {
         return BuilderResult(
             BuilderResult::Kind::Raw,
-            current.CreateIsNotNull(get(result)),
+            current ? current->CreateIsNotNull(get(result)) : nullptr,
             type
         );
     }
@@ -54,9 +54,11 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &result, 
         if (types::isInteger(result.type) && types::isFloat(type)) { // int -> float
             return BuilderResult(
                 BuilderResult::Kind::Raw,
-                types::isSigned(result.type)
-                    ? current.CreateSIToFP(get(result), dest)
-                    : current.CreateUIToFP(get(result), dest),
+                current
+                    ? types::isSigned(result.type)
+                    ? current->CreateSIToFP(get(result), dest)
+                    : current->CreateUIToFP(get(result), dest)
+                    : nullptr,
                 type
             );
         }
@@ -64,9 +66,11 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &result, 
         if (types::isFloat(result.type) && types::isInteger(type)) { // float -> int
             return BuilderResult(
                 BuilderResult::Kind::Raw,
-                types::isSigned(type)
-                    ? current.CreateFPToSI(get(result), dest)
-                    : current.CreateFPToUI(get(result), dest),
+                current
+                    ? types::isSigned(type)
+                    ? current->CreateFPToSI(get(result), dest)
+                    : current->CreateFPToUI(get(result), dest)
+                    : nullptr,
                 type
             );
         }
@@ -74,13 +78,15 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &result, 
         // promote or demote
         return BuilderResult(
             BuilderResult::Kind::Raw,
-            types::isFloat(type)
+            current
+                ? types::isFloat(type)
                 ? types::priority(result.type) > types::priority(type)
-                ? current.CreateFPTrunc(get(result), dest)
-                : current.CreateFPExt(get(result), dest)
+                ? current->CreateFPTrunc(get(result), dest)
+                : current->CreateFPExt(get(result), dest)
                 : types::isSigned(type)
-                ? current.CreateSExtOrTrunc(get(result), dest)
-                : current.CreateZExtOrTrunc(get(result), dest),
+                ? current->CreateSExtOrTrunc(get(result), dest)
+                : current->CreateZExtOrTrunc(get(result), dest)
+                : nullptr,
             type
         );
     }
@@ -132,5 +138,6 @@ void BuilderScope::makeAssign(const AssignNode *node) {
         throw VerifyError(node, "Left side of assign expression must be some variable or reference.");
     }
 
-    current.CreateStore(get(source), destination.value);
+    if (current)
+        current->CreateStore(get(source), destination.value);
 }

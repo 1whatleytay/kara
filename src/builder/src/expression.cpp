@@ -92,18 +92,22 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
 
             Type *arrayType = function.builder.makeTypename(type);
 
-            Value *value = function.entry.CreateAlloca(arrayType);
+            Value *value = nullptr;
 
-            for (size_t a = 0; a < results.size(); a++) {
-                const BuilderResult &result = results[a];
+            if (current) {
+                value = function.entry.CreateAlloca(arrayType);
 
-                Value *index = ConstantInt::get(Type::getInt64Ty(*function.builder.context), a);
-                Value *point = current.CreateInBoundsGEP(value, {
-                    ConstantInt::get(Type::getInt64Ty(*function.builder.context), 0),
-                    index
-                });
+                for (size_t a = 0; a < results.size(); a++) {
+                    const BuilderResult &result = results[a];
 
-                current.CreateStore(get(result), point);
+                    Value *index = ConstantInt::get(Type::getInt64Ty(*function.builder.context), a);
+                    Value *point = current->CreateInBoundsGEP(value, {
+                        ConstantInt::get(Type::getInt64Ty(*function.builder.context), 0),
+                        index
+                    });
+
+                    current->CreateStore(get(result), point);
+                }
             }
 
             return BuilderResult(
@@ -183,7 +187,7 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
 
             return BuilderResult(
                 BuilderResult::Kind::Raw,
-                current.CreateCall(reinterpret_cast<Function *>(result.value), parameters),
+                current ? current->CreateCall(reinterpret_cast<Function *>(result.value), parameters) : nullptr,
                 *type->returnType
             );
         }
@@ -234,14 +238,16 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
                     // I feel uneasy touching this...
                     Value *structRef = numReferences > 0 ? get(infer) : ref(infer);
 
-                    for (size_t a = 1; a < numReferences; a++)
-                        structRef = current.CreateLoad(structRef);
+                    if (current) {
+                        for (size_t a = 1; a < numReferences; a++)
+                            structRef = current->CreateLoad(structRef);
+                    }
 
                     return BuilderResult(
                         infer.kind == BuilderResult::Kind::Reference
                             ? BuilderResult::Kind::Reference
                             : BuilderResult::Kind::Literal,
-                        current.CreateStructGEP(structRef, index, refNode->name),
+                        current ? current->CreateStructGEP(structRef, index, refNode->name) : nullptr,
                         varNode->fixedType.value()
                     );
                 }
@@ -319,10 +325,10 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
                 infer.kind == BuilderResult::Kind::Reference
                     ? BuilderResult::Kind::Reference
                     : BuilderResult::Kind::Literal,
-                current.CreateGEP(ref(infer), {
+                current ? current->CreateGEP(ref(infer), {
                     ConstantInt::get(Type::getInt64Ty(*function.builder.context), 0),
                     get(index)
-                }),
+                }) : nullptr,
                 *arrayType->value
             );
         }
@@ -355,7 +361,7 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
 
                     return BuilderResult(
                         BuilderResult::Kind::Raw,
-                        current.CreateNot(get(converted.value())),
+                        current ? current->CreateNot(get(converted.value())) : nullptr,
                         types::boolean()
                     );
                 }
@@ -398,8 +404,8 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
 
             infer = inferConverted.value();
 
-            BuilderScope trueScope(operation.op->children[0]->as<ExpressionNode>(), *this);
-            BuilderScope falseScope(operation.op->children[1]->as<ExpressionNode>(), *this);
+            BuilderScope trueScope(operation.op->children[0]->as<ExpressionNode>(), *this, current.has_value());
+            BuilderScope falseScope(operation.op->children[1]->as<ExpressionNode>(), *this, current.has_value());
 
             assert(trueScope.product.has_value() && falseScope.product.has_value());
 
@@ -419,19 +425,23 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
 
             assert(onTrue.type == onFalse.type);
 
-            Value *literal = function.entry.CreateAlloca(function.builder.makeTypename(onTrue.type));
+            Value *literal = nullptr;
 
-            trueScope.current.CreateStore(trueScope.get(onTrue), literal);
-            falseScope.current.CreateStore(falseScope.get(onFalse), literal);
+            if (current) {
+                literal = function.entry.CreateAlloca(function.builder.makeTypename(onTrue.type));
 
-            current.CreateCondBr(get(infer), trueScope.openingBlock, falseScope.openingBlock);
+                trueScope.current->CreateStore(trueScope.get(onTrue), literal);
+                falseScope.current->CreateStore(falseScope.get(onFalse), literal);
 
-            currentBlock = BasicBlock::Create(
-                *function.builder.context, "", function.function, function.exitBlock);
-            current.SetInsertPoint(currentBlock);
+                current->CreateCondBr(get(infer), trueScope.openingBlock, falseScope.openingBlock);
 
-            trueScope.current.CreateBr(currentBlock);
-            falseScope.current.CreateBr(currentBlock);
+                currentBlock = BasicBlock::Create(
+                    *function.builder.context, "", function.function, function.exitBlock);
+                current->SetInsertPoint(currentBlock);
+
+                trueScope.current->CreateBr(currentBlock);
+                falseScope.current->CreateBr(currentBlock);
+            }
 
             return BuilderResult(
                 BuilderResult::Kind::Literal,
@@ -493,9 +503,11 @@ BuilderResult BuilderScope::makeExpressionCombinator(const ExpressionCombinator 
 
             return BuilderResult(
                 BuilderResult::Kind::Raw,
-                types::isFloat(a.type)
-                    ? current.CreateFAdd(get(a), get(b))
-                    : current.CreateAdd(get(a), get(b)),
+                current
+                    ? types::isFloat(a.type)
+                    ? current->CreateFAdd(get(a), get(b))
+                    : current->CreateAdd(get(a), get(b))
+                    : nullptr,
                 a.type
             );
 
@@ -504,9 +516,11 @@ BuilderResult BuilderScope::makeExpressionCombinator(const ExpressionCombinator 
 
             return BuilderResult(
                 BuilderResult::Kind::Raw,
-                types::isFloat(a.type)
-                    ? current.CreateFSub(get(a), get(b))
-                    : current.CreateSub(get(a), get(b)),
+                current
+                    ? types::isFloat(a.type)
+                    ? current->CreateFSub(get(a), get(b))
+                    : current->CreateSub(get(a), get(b))
+                    : nullptr,
                 types::i32()
             );
 
@@ -515,9 +529,11 @@ BuilderResult BuilderScope::makeExpressionCombinator(const ExpressionCombinator 
 
             return BuilderResult(
                 BuilderResult::Kind::Raw,
-                types::isFloat(a.type)
-                    ? current.CreateFMul(get(a), get(b))
-                    : current.CreateMul(get(a), get(b)),
+                current
+                    ? types::isFloat(a.type)
+                    ? current->CreateFMul(get(a), get(b))
+                    : current->CreateMul(get(a), get(b))
+                    : nullptr,
                 types::i32()
             );
 
@@ -526,11 +542,13 @@ BuilderResult BuilderScope::makeExpressionCombinator(const ExpressionCombinator 
 
             return BuilderResult(
                 BuilderResult::Kind::Raw,
-                types::isFloat(a.type)
-                    ? current.CreateFDiv(get(a), get(b))
+                current
+                    ? types::isFloat(a.type)
+                    ? current->CreateFDiv(get(a), get(b))
                     : types::isSigned(a.type)
-                    ? current.CreateSDiv(get(a), get(b))
-                    : current.CreateUDiv(get(a), get(b)),
+                    ? current->CreateSDiv(get(a), get(b))
+                    : current->CreateUDiv(get(a), get(b))
+                    : nullptr,
                 types::i32()
             );
 
@@ -539,9 +557,11 @@ BuilderResult BuilderScope::makeExpressionCombinator(const ExpressionCombinator 
 
             return BuilderResult(
                 BuilderResult::Kind::Raw,
-                asRef.first() || !types::isFloat(a.type)
-                    ? current.CreateICmpEQ(get(a), get(b))
-                    : current.CreateFCmpOEQ(get(a), get(b)),
+                current
+                    ? (asRef.first() || !types::isFloat(a.type))
+                    ? current->CreateICmpEQ(get(a), get(b))
+                    : current->CreateFCmpOEQ(get(a), get(b))
+                    : nullptr,
                 types::boolean()
             );
 
@@ -550,9 +570,11 @@ BuilderResult BuilderScope::makeExpressionCombinator(const ExpressionCombinator 
 
             return BuilderResult(
                 BuilderResult::Kind::Raw,
-                asRef.first() || !types::isFloat(a.type)
-                    ? current.CreateICmpNE(get(a), get(b))
-                    : current.CreateFCmpONE(get(a), get(b)),
+                current
+                    ? (asRef.first() || !types::isFloat(a.type))
+                    ? current->CreateICmpNE(get(a), get(b))
+                    : current->CreateFCmpONE(get(a), get(b))
+                    : nullptr,
                 types::boolean()
             );
 
@@ -561,11 +583,13 @@ BuilderResult BuilderScope::makeExpressionCombinator(const ExpressionCombinator 
 
             return BuilderResult(
                 BuilderResult::Kind::Raw,
-                types::isFloat(a.type)
-                    ? current.CreateFCmpOGT(get(a), get(b))
+                current
+                    ? types::isFloat(a.type)
+                    ? current->CreateFCmpOGT(get(a), get(b))
                     : types::isSigned(a.type)
-                    ? current.CreateICmpSGT(get(a), get(b))
-                    : current.CreateICmpUGT(get(a), get(b)),
+                    ? current->CreateICmpSGT(get(a), get(b))
+                    : current->CreateICmpUGT(get(a), get(b))
+                    : nullptr,
                 types::boolean()
             );
 
@@ -574,11 +598,13 @@ BuilderResult BuilderScope::makeExpressionCombinator(const ExpressionCombinator 
 
             return BuilderResult(
                 BuilderResult::Kind::Raw,
-                types::isFloat(a.type)
-                    ? current.CreateFCmpOGE(get(a), get(b))
+                current
+                    ? types::isFloat(a.type)
+                    ? current->CreateFCmpOGE(get(a), get(b))
                     : types::isSigned(a.type)
-                    ? current.CreateICmpSGE(get(a), get(b))
-                    : current.CreateICmpUGE(get(a), get(b)),
+                    ? current->CreateICmpSGE(get(a), get(b))
+                    : current->CreateICmpUGE(get(a), get(b))
+                    : nullptr,
                 types::boolean()
             );
 
@@ -587,11 +613,13 @@ BuilderResult BuilderScope::makeExpressionCombinator(const ExpressionCombinator 
 
             return BuilderResult(
                 BuilderResult::Kind::Raw,
-                types::isFloat(a.type)
-                    ? current.CreateFCmpOLT(get(a), get(b))
+                current
+                    ? types::isFloat(a.type)
+                    ? current->CreateFCmpOLT(get(a), get(b))
                     : types::isSigned(a.type)
-                    ? current.CreateICmpSLT(get(a), get(b))
-                    : current.CreateICmpULT(get(a), get(b)),
+                    ? current->CreateICmpSLT(get(a), get(b))
+                    : current->CreateICmpULT(get(a), get(b))
+                    : nullptr,
                 types::boolean()
             );
 
@@ -600,11 +628,13 @@ BuilderResult BuilderScope::makeExpressionCombinator(const ExpressionCombinator 
 
             return BuilderResult(
                 BuilderResult::Kind::Raw,
-                types::isFloat(a.type)
-                    ? current.CreateFCmpOLE(get(a), get(b))
+                current
+                    ? types::isFloat(a.type)
+                    ? current->CreateFCmpOLE(get(a), get(b))
                     : types::isSigned(a.type)
-                    ? current.CreateICmpSLE(get(a), get(b))
-                    : current.CreateICmpULE(get(a), get(b)),
+                    ? current->CreateICmpSLE(get(a), get(b))
+                    : current->CreateICmpULE(get(a), get(b))
+                    : nullptr,
                 types::boolean()
             );
 
@@ -642,15 +672,9 @@ BuilderResult BuilderScope::makeExpressionInferred(const BuilderResult &result) 
         if (result.implicit)
             params.push_back(get(*result.implicit));
 
-        auto *pointer = result.value->getType();
-        assert(pointer->isPointerTy());
-
-        auto *type = reinterpret_cast<FunctionType *>(pointer->getPointerElementType());
-        assert(type->isFunctionTy());
-
         return BuilderResult(
             BuilderResult::Kind::Raw,
-            current.CreateCall(FunctionCallee(type, result.value), params),
+            current ? current->CreateCall(reinterpret_cast<Function *>(result.value), params) : nullptr,
             *functionTypename->returnType
         );
     }

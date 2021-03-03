@@ -30,14 +30,20 @@ BuilderVariable *BuilderScope::findVariable(const VariableNode *node) const {
 }
 
 Value *BuilderScope::get(const BuilderResult &result) {
-    return result.kind != BuilderResult::Kind::Raw ? current.CreateLoad(result.value) : result.value;
+    if (!current)
+        return nullptr;
+
+    return result.kind != BuilderResult::Kind::Raw ? current->CreateLoad(result.value) : result.value;
 }
 
 Value *BuilderScope::ref(const BuilderResult &result) {
+    if (!current)
+        return nullptr;
+
     if (result.kind == BuilderResult::Kind::Raw) {
         Value *ref = function.entry.CreateAlloca(function.builder.makeTypename(result.type));
 
-        current.CreateStore(result.value, ref);
+        current->CreateStore(result.value, ref);
 
         return ref;
     } else {
@@ -47,25 +53,31 @@ Value *BuilderScope::ref(const BuilderResult &result) {
 
 void BuilderScope::makeParameters() {
     const FunctionNode *astFunction = function.node;
-    const Function *llvmFunction = function.function;
 
     // Create parameters within scope.
     for (size_t a = 0; a < astFunction->parameterCount; a++) {
         const auto *parameterNode = astFunction->children[a]->as<VariableNode>();
 
-        Argument *argument = llvmFunction->getArg(a);
-        argument->setName(parameterNode->name);
+        Argument *argument;
+
+        if (current.has_value()) {
+            argument = function.function->getArg(a);
+            argument->setName(parameterNode->name);
+        }
 
         variables[parameterNode] = std::make_shared<BuilderVariable>(parameterNode, argument, *this);
     }
 }
 
-BuilderScope::BuilderScope(const Node *node, BuilderFunction &function, BuilderScope *parent)
-    : parent(parent), function(function), current(*function.builder.context) {
-    openingBlock = BasicBlock::Create(*function.builder.context, "", function.function, function.exitBlock);
-    currentBlock = openingBlock;
+BuilderScope::BuilderScope(const Node *node, BuilderFunction &function, BuilderScope *parent, bool doCodeGen)
+    : parent(parent), function(function) {
+    if (doCodeGen) {
+        openingBlock = BasicBlock::Create(*function.builder.context, "", function.function, function.exitBlock);
+        currentBlock = openingBlock;
 
-    current.SetInsertPoint(currentBlock);
+        current.emplace(*function.builder.context);
+        current->SetInsertPoint(currentBlock);
+    }
 
     if (!parent)
         makeParameters();
@@ -73,6 +85,8 @@ BuilderScope::BuilderScope(const Node *node, BuilderFunction &function, BuilderS
     if (node->is(Kind::Expression)) {
         product = makeExpression(node->as<ExpressionNode>());
     } else if (node->is(Kind::Code)) {
+        assert(doCodeGen);
+
         for (const auto &child : node->children) {
             switch (child->is<Kind>()) {
                 case Kind::Variable:
@@ -118,7 +132,7 @@ BuilderScope::BuilderScope(const Node *node, BuilderFunction &function, BuilderS
     }
 }
 
-BuilderScope::BuilderScope(const Node *node, BuilderScope &parent)
-    : BuilderScope(node, parent.function, &parent) { }
-BuilderScope::BuilderScope(const Node *node, BuilderFunction &function)
-    : BuilderScope(node, function, nullptr) { }
+BuilderScope::BuilderScope(const Node *node, BuilderScope &parent, bool doCodeGen)
+    : BuilderScope(node, parent.function, &parent, doCodeGen) { }
+BuilderScope::BuilderScope(const Node *node, BuilderFunction &function, bool doCodeGen)
+    : BuilderScope(node, function, nullptr, doCodeGen) { }

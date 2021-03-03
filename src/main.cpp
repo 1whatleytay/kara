@@ -5,8 +5,6 @@
 #include <builder/error.h>
 #include <builder/builder.h>
 
-#include <fmt/printf.h>
-
 #include <fstream>
 #include <sstream>
 

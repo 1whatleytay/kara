@@ -34,10 +34,12 @@ BuilderVariable::BuilderVariable(const VariableNode *node, BuilderScope &scope)
         type = node->fixedType.value();
     }
 
-    value = function.entry.CreateAlloca(function.builder.makeTypename(type), nullptr, node->name);
+    if (scope.current) {
+        value = function.entry.CreateAlloca(function.builder.makeTypename(type), nullptr, node->name);
 
-    if (possibleDefault)
-        scope.current.CreateStore(scope.get(*possibleDefault), value);
+        if (possibleDefault)
+            scope.current->CreateStore(scope.get(*possibleDefault), value);
+    }
 }
 
 BuilderVariable::BuilderVariable(const VariableNode *node, Value *input, BuilderScope &scope)

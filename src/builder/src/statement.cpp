@@ -6,6 +6,8 @@
 #include <parser/expression.h>
 
 void BuilderScope::makeStatement(const StatementNode *node) {
+    assert(current);
+
     switch (node->op) {
         case StatementNode::Operation::Return: {
             if (node->children.empty()) {
@@ -33,10 +35,10 @@ void BuilderScope::makeStatement(const StatementNode *node) {
 
                 BuilderResult result = std::move(*resultConverted);
 
-                current.CreateStore(get(result), function.returnValue);
+                current->CreateStore(get(result), function.returnValue);
             }
 
-            current.CreateBr(function.exitBlock);
+            current->CreateBr(function.exitBlock);
 
             break;
         }

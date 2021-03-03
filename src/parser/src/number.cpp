@@ -17,7 +17,7 @@ NumberNode::NumberNode(Node *parent) : Node(parent, Kind::Number) {
                 hasCapturedDot = true;
         }
 
-        return *c != '.' && anyHard(c, s); // capture dot too
+        return *c != '.' && temp(c, s); // capture dot too
     };
     std::string full = token();
     tokenStoppable = temp;

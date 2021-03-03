@@ -4,13 +4,15 @@
 #include <parser/scope.h>
 
 void BuilderScope::makeBlock(const BlockNode *node) {
+    assert(current);
+
     BuilderScope sub(node->children.front()->as<CodeNode>(), *this);
 
     currentBlock = BasicBlock::Create(*function.builder.context, "", function.function, function.exitBlock);
 
-    current.CreateBr(sub.openingBlock);
-    current.SetInsertPoint(currentBlock);
+    current->CreateBr(sub.openingBlock);
+    current->SetInsertPoint(currentBlock);
 
     if (!sub.currentBlock->getTerminator())
-        sub.current.CreateBr(currentBlock);
+        sub.current->CreateBr(currentBlock);
 }
