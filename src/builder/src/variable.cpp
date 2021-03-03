@@ -49,7 +49,9 @@ BuilderVariable::BuilderVariable(const VariableNode *node, Value *input, Builder
 
     type = *node->fixedType;
 
-    value = function.entry.CreateAlloca(
-        function.builder.makeTypename(type), nullptr, fmt::format("{}_value", node->name));
-    function.entry.CreateStore(input, value);
+    if (scope.current) {
+        value = function.entry.CreateAlloca(
+            function.builder.makeTypename(type), nullptr, fmt::format("{}_value", node->name));
+        function.entry.CreateStore(input, value);
+    }
 }

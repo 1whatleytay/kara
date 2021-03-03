@@ -39,6 +39,9 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
 
                     BuilderFunction *callable = function.builder.makeFunction(functionNode);
 
+                    if (!callable->function)
+                        throw VerifyError(node, "Reference cannot resolve function. Try adding return types.");
+
                     return BuilderResult(
                         BuilderResult::Kind::Raw,
 
@@ -285,6 +288,9 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
                 throw VerifyError(node, "Could not find method or field with name {}.", refNode->name);
 
             BuilderFunction *callable = function.builder.makeFunction((*funcIterator)->as<FunctionNode>());
+
+            if (!callable->function)
+                throw VerifyError(node, "Reference cannot resolve function. Try adding return types.");
 
             assert(converted);
 

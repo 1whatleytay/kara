@@ -146,6 +146,8 @@ struct BuilderFunction {
     IRBuilder<> entry;
     IRBuilder<> exit;
 
+    Typename returnTypename;
+
     Type *returnType = nullptr;
     Value *returnValue = nullptr;
 

@@ -7,6 +7,8 @@
 NumberNode::NumberNode(Node *parent) : Node(parent, Kind::Number) {
     bool positive = select({ "-", "+" }, false, true) != 0;
 
+    size_t start = state.index;
+
     auto temp = tokenStoppable;
     bool hasCapturedDot = false; // only capture one dot
     tokenStoppable = [&](const char *c, size_t s) {
@@ -26,7 +28,7 @@ NumberNode::NumberNode(Node *parent) : Node(parent, Kind::Number) {
 
     size_t pos = full.rfind('.');
     if (pos != std::string::npos && !std::all_of(full.begin() + pos + 1, full.end(), std::isdigit)) {
-        state.index -= full.size() - pos + 1; // rollback
+        state.index = start + pos; // rollback
         full = full.substr(0, pos);
     }
 

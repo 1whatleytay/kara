@@ -58,9 +58,9 @@ void BuilderScope::makeParameters() {
     for (size_t a = 0; a < astFunction->parameterCount; a++) {
         const auto *parameterNode = astFunction->children[a]->as<VariableNode>();
 
-        Argument *argument;
+        Argument *argument = nullptr;
 
-        if (current.has_value()) {
+        if (current) {
             argument = function.function->getArg(a);
             argument->setName(parameterNode->name);
         }
