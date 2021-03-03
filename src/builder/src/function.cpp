@@ -9,6 +9,8 @@
 #include <parser/statement.h>
 
 void BuilderFunction::build() {
+    Typename returnTypename;
+
     const Node *body = node->children[node->parameterCount].get();
     // Check for inferred type from expression node maybe?
     if (node->returnType == types::nothing() && body->is(Kind::Expression)) {

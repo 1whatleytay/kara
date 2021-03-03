@@ -1,6 +1,6 @@
 add_library(parser STATIC
-	include/parser/kinds.h
-	include/parser/search.h
+    include/parser/kinds.h
+    include/parser/search.h
     include/parser/root.h
     include/parser/function.h
     include/parser/variable.h
@@ -26,9 +26,10 @@ add_library(parser STATIC
     include/parser/type.h
     include/parser/dot.h
     include/parser/ternary.h
+    include/parser/as.h
 
-	src/search.cpp
-	src/root.cpp
+    src/search.cpp
+    src/root.cpp
     src/function.cpp
     src/variable.cpp
     src/typename.cpp
@@ -52,7 +53,8 @@ add_library(parser STATIC
     src/index.cpp
     src/type.cpp
     src/dot.cpp
-    src/ternary.cpp)
+    src/ternary.cpp
+    src/as.cpp)
 
 target_include_directories(parser PUBLIC include)
 target_link_libraries(parser PUBLIC fmt hermes)

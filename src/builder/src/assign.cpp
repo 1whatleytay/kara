@@ -75,6 +75,11 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &result, 
             );
         }
 
+        bool x = current.has_value();
+        bool z = types::priority(result.type) > types::priority(type);
+        bool f = types::isFloat(type);
+        bool s = types::isSigned(type);
+
         // promote or demote
         return BuilderResult(
             BuilderResult::Kind::Raw,

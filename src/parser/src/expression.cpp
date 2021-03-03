@@ -1,5 +1,6 @@
 #include <parser/expression.h>
 
+#include <parser/as.h>
 #include <parser/dot.h>
 #include <parser/call.h>
 #include <parser/bool.h>
@@ -85,7 +86,7 @@ ExpressionNode::ExpressionNode(Node *parent) : Node(parent, Kind::Expression) {
         results.emplace_back(applyUnary(current, unary));
     }
 
-    postfix = pick<TernaryNode>(true);
+    postfix = pick<TernaryNode, AsNode>(true);
 
     std::vector<OperatorNode::Operation> operatorOrder = {
         OperatorNode::Operation::Mul,

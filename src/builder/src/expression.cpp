@@ -2,6 +2,7 @@
 
 #include <builder/error.h>
 
+#include <parser/as.h>
 #include <parser/bool.h>
 #include <parser/type.h>
 #include <parser/array.h>
@@ -354,7 +355,7 @@ BuilderResult BuilderScope::makeExpressionNoun(const ExpressionNoun &noun) {
 }
 
 BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &operation) {
-    BuilderResult value = makeExpressionResult(*operation.a);
+    BuilderResult value = makeExpressionInferred(makeExpressionResult(*operation.a));
 
     switch (operation.op->is<Kind>()) {
         case Kind::Unary:
@@ -398,17 +399,15 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
             }
 
         case Kind::Ternary: {
-            BuilderResult infer = makeExpressionInferred(value);
-
-            std::optional<BuilderResult> inferConverted = convert(infer, types::boolean());
+            std::optional<BuilderResult> inferConverted = convert(value, types::boolean());
 
             if (!inferConverted.has_value()) {
                 throw VerifyError(operation.op,
                     "Must be able to be converted to boolean type for ternary, instead type is {}.",
-                    toString(infer.type));
+                    toString(value.type));
             }
 
-            infer = inferConverted.value();
+            BuilderResult infer = inferConverted.value();
 
             BuilderScope trueScope(operation.op->children[0]->as<ExpressionNode>(), *this, current.has_value());
             BuilderScope falseScope(operation.op->children[1]->as<ExpressionNode>(), *this, current.has_value());
@@ -454,6 +453,20 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
                 literal,
                 onTrue.type
             );
+        }
+
+        case Kind::As: {
+            auto *e = operation.op->as<AsNode>();
+
+            std::optional<BuilderResult> converted = convert(value, e->type);
+
+            if (!converted) {
+                throw VerifyError(operation.op,
+                    "Cannot convert type {} to type {}.",
+                    toString(value.type), toString(e->type));
+            }
+
+            return *converted;
         }
 
         default:

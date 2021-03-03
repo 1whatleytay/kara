@@ -31,4 +31,5 @@ enum class Kind {
     Type,
     Dot,
     Ternary,
+    As,
 };
