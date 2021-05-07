@@ -45,5 +45,5 @@ struct ExpressionNode : public Node {
     // Just to keep it alive for result.
     std::unique_ptr<Node> postfix;
 
-    explicit ExpressionNode(Node *parent);
+    explicit ExpressionNode(Node *parent, bool placeholder = false);
 };

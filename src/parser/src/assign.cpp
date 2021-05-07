@@ -5,7 +5,8 @@
 AssignNode::AssignNode(Node *parent) : Node(parent, Kind::Assign) {
     push<ExpressionNode>();
 
-    match("=");
+    op = select<Operator>({ "=", "+=", "-=", "*=", "/=" });
+    match();
 
     push<ExpressionNode>();
 }

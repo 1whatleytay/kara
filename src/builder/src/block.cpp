@@ -8,7 +8,7 @@ void BuilderScope::makeBlock(const BlockNode *node) {
 
     BuilderScope sub(node->children.front()->as<CodeNode>(), *this);
 
-    currentBlock = BasicBlock::Create(*function.builder.context, "", function.function, function.exitBlock);
+    currentBlock = BasicBlock::Create(function.builder.context, "", function.function, function.exitBlock);
 
     current->CreateBr(sub.openingBlock);
     current->SetInsertPoint(currentBlock);

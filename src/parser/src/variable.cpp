@@ -2,9 +2,12 @@
 
 #include <parser/expression.h>
 
-VariableNode::VariableNode(Node *parent, bool isExplicit) : Node(parent, Kind::Variable) {
+VariableNode::VariableNode(Node *parent, bool isExplicit, bool external) : Node(parent, Kind::Variable) {
+    if (external)
+        return;
+
     std::vector<std::string> options = { "let", "var" };
-    int mutability = select(options, false, !isExplicit);
+    size_t mutability = select(options, false, !isExplicit);
 
     if (mutability != options.size()) {
         match();

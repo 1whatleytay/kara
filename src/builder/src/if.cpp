@@ -11,7 +11,7 @@ void BuilderScope::makeIf(const IfNode *node) {
     while (node) {
         BuilderScope sub(node->children[1]->as<CodeNode>(), *this);
 
-        currentBlock = BasicBlock::Create(*function.builder.context, "", function.function, function.exitBlock);
+        currentBlock = BasicBlock::Create(function.builder.context, "", function.function, function.exitBlock);
 
         BuilderResult conditionResult = makeExpression(node->children.front()->as<ExpressionNode>());
         std::optional<BuilderResult> conditionConverted = convert(conditionResult, types::boolean());
@@ -41,7 +41,7 @@ void BuilderScope::makeIf(const IfNode *node) {
                     current->CreateBr(terminator.openingBlock);
 
                     currentBlock = BasicBlock::Create(
-                        *function.builder.context, "", function.function, function.exitBlock);
+                        function.builder.context, "", function.function, function.exitBlock);
                     current->SetInsertPoint(currentBlock);
 
                     node = nullptr;

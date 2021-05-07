@@ -13,5 +13,5 @@ struct VariableNode : public Node {
 
     bool isMutable = false;
 
-    explicit VariableNode(Node *parent, bool isExplicit = true);
+    explicit VariableNode(Node *parent, bool isExplicit = true, bool external = false);
 };

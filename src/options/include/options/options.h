@@ -1,5 +1,6 @@
 #pragma once
 
+#include <set>
 #include <string>
 
 struct OptionsError : std::exception {
@@ -11,10 +12,12 @@ struct OptionsError : std::exception {
 };
 
 struct Options {
-    std::string inputFile;
-    std::string outputFile;
+    std::set<std::string> inputs;
+    std::string output;
 
     std::string triple;
+
+    std::set<std::string> libraries;
 
     bool printIR = false;
     bool interpret = false;

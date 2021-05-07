@@ -12,5 +12,7 @@
 CodeNode::CodeNode(Node *parent) : Node(parent, Kind::Code) {
     while (!end() && !peek("}")) {
         push<DebugNode, BlockNode, IfNode, ForNode, StatementNode, AssignNode, VariableNode, ExpressionNode>();
+
+        while (next(","));
     }
 }

@@ -10,5 +10,7 @@ struct FunctionNode : public Node {
     size_t parameterCount = 0;
     Typename returnType = types::nothing();
 
-    explicit FunctionNode(Node *parent);
+    bool isExtern = false;
+
+    explicit FunctionNode(Node *parent, bool external = false);
 };

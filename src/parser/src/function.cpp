@@ -5,7 +5,10 @@
 #include <parser/variable.h>
 #include <parser/expression.h>
 
-FunctionNode::FunctionNode(Node *parent) : Node(parent, Kind::Function) {
+FunctionNode::FunctionNode(Node *parent, bool external) : Node(parent, Kind::Function) {
+    if (external)
+        return;
+
     name = token();
 
     if (next("(")) {
@@ -19,11 +22,15 @@ FunctionNode::FunctionNode(Node *parent) : Node(parent, Kind::Function) {
         needs(")");
     }
 
-    if (!(peek("{") || peek("=>"))) {
+    if (!(peek("{") || peek("=>") || peek("external"))) {
         returnType = std::move(pick<TypenameNode>()->type);
     }
 
-    if (next("=>")) {
+    if (next("external")) {
+        match();
+        isExtern = true;
+    } else if (next("=>")) {
+        match();
         push<ExpressionNode>();
     } else {
         match("{");

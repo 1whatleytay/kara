@@ -7,6 +7,7 @@
 #include <parser/type.h>
 #include <parser/array.h>
 #include <parser/number.h>
+#include <parser/string.h>
 #include <parser/function.h>
 #include <parser/operator.h>
 #include <parser/variable.h>
@@ -18,7 +19,7 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
             return makeExpression(node->children.front()->as<ExpressionNode>());
 
         case Kind::Reference: {
-            const Node *e = Builder::find(node->as<ReferenceNode>());
+            const Node *e = function.builder.find(node->as<ReferenceNode>());
 
             switch (e->is<Kind>()) {
                 case Kind::Variable: {
@@ -59,7 +60,7 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
         case Kind::Null: {
             return BuilderResult(
                 BuilderResult::Kind::Raw,
-                ConstantPointerNull::get(Type::getInt8PtrTy(*function.builder.context)),
+                ConstantPointerNull::get(Type::getInt8PtrTy(function.builder.context)),
                 types::null()
             );
         }
@@ -67,9 +68,35 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
         case Kind::Bool:
             return BuilderResult(
                 BuilderResult::Kind::Raw,
-                ConstantInt::get(Type::getInt1Ty(*function.builder.context), node->as<BoolNode>()->value),
+                ConstantInt::get(Type::getInt1Ty(function.builder.context), node->as<BoolNode>()->value),
                 types::boolean()
             );
+
+        case Kind::String: {
+            auto *e = node->as<StringNode>();
+
+            assert(e->inserts.empty());
+
+            Value *ptr = nullptr;
+
+            if (current) {
+                Constant *initial = ConstantDataArray::getString(function.builder.context, e->text);
+
+                auto variable = new GlobalVariable(
+                    *function.builder.module, initial->getType(),
+                    true, GlobalVariable::LinkageTypes::PrivateLinkage,
+                    initial, fmt::format("str_{}", e->text)
+                );
+
+                ptr = current->CreateStructGEP(variable, 0);
+            }
+
+            return BuilderResult(
+                BuilderResult::Kind::Raw,
+                ptr,
+                types::string()
+            );
+        }
 
         case Kind::Array: {
             auto *e = node->as<ArrayNode>();
@@ -82,7 +109,7 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
 
             Typename subType = results.empty() ? types::any() : results.front().type;
 
-            if (!std::all_of(results.begin(), results.end(), [subType](const BuilderResult &result) {
+            if (!std::all_of(results.begin(), results.end(), [&subType](const BuilderResult &result) {
                 return result.type == subType;
             })) {
                 throw VerifyError(e, "Array elements must all be the same type ({}).", toString(subType));
@@ -104,9 +131,9 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
                 for (size_t a = 0; a < results.size(); a++) {
                     const BuilderResult &result = results[a];
 
-                    Value *index = ConstantInt::get(Type::getInt64Ty(*function.builder.context), a);
+                    Value *index = ConstantInt::get(Type::getInt64Ty(function.builder.context), a);
                     Value *point = current->CreateInBoundsGEP(value, {
-                        ConstantInt::get(Type::getInt64Ty(*function.builder.context), 0),
+                        ConstantInt::get(Type::getInt64Ty(function.builder.context), 0),
                         index
                     });
 
@@ -174,19 +201,20 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
             if (result.implicit)
                 parameters[0] = get(*result.implicit);
 
-            for (size_t a = extraParameter; a < node->children.size(); a++) {
+            for (size_t a = 0; a < node->children.size(); a++) {
                 auto *exp = node->children[a]->as<ExpressionNode>();
                 BuilderResult parameter = makeExpression(exp);
 
-                std::optional<BuilderResult> parameterConverted = convert(parameter, type->parameters[a]);
+                std::optional<BuilderResult> parameterConverted = convert(
+                    parameter, type->parameters[a + extraParameter]);
 
                 if (!parameterConverted)
                     throw VerifyError(exp,
                         "Expression is being passed to function that expects {} type but got {}.",
-                        toString(type->parameters[a]), toString(parameter.type));
+                        toString(type->parameters[a + extraParameter]), toString(parameter.type));
 
                 parameter = *parameterConverted;
-                parameters[a] = get(parameter);
+                parameters[a + extraParameter] = get(parameter);
             }
 
             return BuilderResult(
@@ -211,14 +239,10 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
                 numReferences++;
             }
 
-            const StackTypename *type = std::get_if<StackTypename>(subtype);
+            const StackTypename *type = nullptr;
 
-            if (!type)
-                throw VerifyError(node, "Dot operator must be applied on a stack typename.");
-
-            if (!function.builder.makeBuiltinTypename(*type)) {
-
-                const TypeNode *typeNode = Builder::find(*type);
+            if ((type = std::get_if<StackTypename>(subtype)) && !function.builder.makeBuiltinTypename(*type)) {
+                const TypeNode *typeNode = function.builder.find(*type);
 
                 if (!typeNode)
                     throw VerifyError(node, "Cannot find type node for stack typename {}.", type->value);
@@ -262,7 +286,7 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
             // Horrible workaround until I have scopes that don't generate code.
             std::unique_ptr<BuilderResult> converted;
 
-            auto matchFunction = [&](const std::unique_ptr<Node> &node) {
+            auto matchFunction = [&](const Node *node) {
                 if (!node->is(Kind::Function))
                     return false;
 
@@ -283,12 +307,12 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
                 return true;
             };
 
-            auto funcIterator = std::find_if(global.begin(), global.end(), matchFunction);
+            auto *n = function.builder.searchDependencies(matchFunction)->as<FunctionNode>();
 
-            if (funcIterator == global.end())
+            if (!n)
                 throw VerifyError(node, "Could not find method or field with name {}.", refNode->name);
 
-            BuilderFunction *callable = function.builder.makeFunction((*funcIterator)->as<FunctionNode>());
+            BuilderFunction *callable = function.builder.makeFunction(n);
 
             if (!callable->function)
                 throw VerifyError(node, "Reference cannot resolve function. Try adding return types.");
@@ -305,7 +329,7 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
         }
 
         case Kind::Index: {
-            BuilderResult infer = makeExpressionInferred(result);
+            BuilderResult infer = unpack(makeExpressionInferred(result));
 
             const ArrayTypename *arrayType = std::get_if<ArrayTypename>(&infer.type);
 
@@ -328,14 +352,30 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
 
             index = indexConverted.value();
 
+            auto indexArray = [&]() -> Value * {
+                if (!current)
+                    return nullptr;
+
+                switch (arrayType->kind) {
+                    case ArrayTypename::Kind::FixedSize:
+                        return current->CreateGEP(ref(infer), {
+                            ConstantInt::get(Type::getInt64Ty(function.builder.context), 0),
+                            get(index)
+                        });
+
+                    case ArrayTypename::Kind::Unbounded:
+                        return current->CreateGEP(ref(infer), get(index));
+
+                    default:
+                        throw std::exception();
+                }
+            };
+
             return BuilderResult(
                 infer.kind == BuilderResult::Kind::Reference
                     ? BuilderResult::Kind::Reference
                     : BuilderResult::Kind::Literal,
-                current ? current->CreateGEP(ref(infer), {
-                    ConstantInt::get(Type::getInt64Ty(*function.builder.context), 0),
-                    get(index)
-                }) : nullptr,
+                indexArray(),
                 *arrayType->value
             );
         }
@@ -441,7 +481,7 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
                 current->CreateCondBr(get(infer), trueScope.openingBlock, falseScope.openingBlock);
 
                 currentBlock = BasicBlock::Create(
-                    *function.builder.context, "", function.function, function.exitBlock);
+                    function.builder.context, "", function.function, function.exitBlock);
                 current->SetInsertPoint(currentBlock);
 
                 trueScope.current->CreateBr(currentBlock);
@@ -474,20 +514,18 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
     }
 }
 
-BuilderResult BuilderScope::makeExpressionCombinator(const ExpressionCombinator &combinator) {
-    BuilderResult a = makeExpressionInferred(makeExpressionResult(*combinator.a));
-    BuilderResult b = makeExpressionInferred(makeExpressionResult(*combinator.b));
+BuilderResult BuilderScope::combine(const BuilderResult &left, const BuilderResult &right, OperatorNode::Operation op) {
 
-    auto results = convert(a, b);
+    auto results = convert(left, right);
 
     if (!results.has_value()) {
-        throw VerifyError(combinator.op,
+        throw std::runtime_error(fmt::format(
             "Both sides of operator must be convertible to each other, but got ls type {}, and rs type {}.",
-            toString(a.type), toString(b.type));
+            toString(left.type), toString(right.type)));
     }
 
-    a = results.value().first;
-    b = results.value().second;
+    BuilderResult a = results.value().first;
+    BuilderResult b = results.value().second;
 
     using Requirement = std::function<bool()>;
 
@@ -510,13 +548,13 @@ BuilderResult BuilderScope::makeExpressionCombinator(const ExpressionCombinator 
             });
 
             // TODO: Converting to desired behavior will provide better everything.
-            throw VerifyError(combinator.op,
+            throw std::runtime_error(fmt::format(
                 "Both sides of operator must be {}, but decided type was {}.",
-                fmt::format("{}", fmt::join(options, " or ")), toString(a.type), toString(b.type));
+                fmt::join(options, " or "), toString(a.type), toString(b.type)));
         }
     };
 
-    switch (combinator.op->op) {
+    switch (op) {
         case OperatorNode::Operation::Add:
             needs({ asInt });
 
@@ -565,8 +603,8 @@ BuilderResult BuilderScope::makeExpressionCombinator(const ExpressionCombinator 
                     ? types::isFloat(a.type)
                     ? current->CreateFDiv(get(a), get(b))
                     : types::isSigned(a.type)
-                    ? current->CreateSDiv(get(a), get(b))
-                    : current->CreateUDiv(get(a), get(b))
+                        ? current->CreateSDiv(get(a), get(b))
+                        : current->CreateUDiv(get(a), get(b))
                     : nullptr,
                 types::i32()
             );
@@ -606,8 +644,8 @@ BuilderResult BuilderScope::makeExpressionCombinator(const ExpressionCombinator 
                     ? types::isFloat(a.type)
                     ? current->CreateFCmpOGT(get(a), get(b))
                     : types::isSigned(a.type)
-                    ? current->CreateICmpSGT(get(a), get(b))
-                    : current->CreateICmpUGT(get(a), get(b))
+                        ? current->CreateICmpSGT(get(a), get(b))
+                        : current->CreateICmpUGT(get(a), get(b))
                     : nullptr,
                 types::boolean()
             );
@@ -621,8 +659,8 @@ BuilderResult BuilderScope::makeExpressionCombinator(const ExpressionCombinator 
                     ? types::isFloat(a.type)
                     ? current->CreateFCmpOGE(get(a), get(b))
                     : types::isSigned(a.type)
-                    ? current->CreateICmpSGE(get(a), get(b))
-                    : current->CreateICmpUGE(get(a), get(b))
+                        ? current->CreateICmpSGE(get(a), get(b))
+                        : current->CreateICmpUGE(get(a), get(b))
                     : nullptr,
                 types::boolean()
             );
@@ -636,8 +674,8 @@ BuilderResult BuilderScope::makeExpressionCombinator(const ExpressionCombinator 
                     ? types::isFloat(a.type)
                     ? current->CreateFCmpOLT(get(a), get(b))
                     : types::isSigned(a.type)
-                    ? current->CreateICmpSLT(get(a), get(b))
-                    : current->CreateICmpULT(get(a), get(b))
+                        ? current->CreateICmpSLT(get(a), get(b))
+                        : current->CreateICmpULT(get(a), get(b))
                     : nullptr,
                 types::boolean()
             );
@@ -651,14 +689,25 @@ BuilderResult BuilderScope::makeExpressionCombinator(const ExpressionCombinator 
                     ? types::isFloat(a.type)
                     ? current->CreateFCmpOLE(get(a), get(b))
                     : types::isSigned(a.type)
-                    ? current->CreateICmpSLE(get(a), get(b))
-                    : current->CreateICmpULE(get(a), get(b))
+                        ? current->CreateICmpSLE(get(a), get(b))
+                        : current->CreateICmpULE(get(a), get(b))
                     : nullptr,
                 types::boolean()
             );
 
         default:
-            throw VerifyError(combinator.op, "Unimplemented combinator operator.");
+            throw std::runtime_error("Unimplemented combinator operator.");
+    }
+}
+
+BuilderResult BuilderScope::makeExpressionCombinator(const ExpressionCombinator &combinator) {
+    try {
+        return combine(
+            makeExpressionResult(*combinator.a),
+            makeExpressionResult(*combinator.b),
+            combinator.op->op);
+    } catch (const std::runtime_error &e) {
+        throw VerifyError(combinator.op, "{}", e.what());
     }
 }
 

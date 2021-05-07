@@ -32,6 +32,31 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &result, 
         );
     }
 
+    if (typeRef && resultRef) {
+        auto typeArray = std::get_if<ArrayTypename>(typeRef->value.get());
+
+        if (typeArray && typeArray->kind == ArrayTypename::Kind::Unbounded) {
+            if (*typeArray->value == *resultRef->value) {
+                return BuilderResult(
+                    BuilderResult::Kind::Raw,
+                    get(result),
+                    type
+                );
+            }
+
+            auto resultArray = std::get_if<ArrayTypename>(resultRef->value.get());
+
+            if (resultArray && *typeArray->value == *resultArray->value
+                && resultArray->kind == ArrayTypename::Kind::FixedSize) {
+                return BuilderResult(
+                    BuilderResult::Kind::Raw,
+                    current ? current->CreateStructGEP(get(result), 0) : nullptr,
+                    type
+                );
+            }
+        }
+    }
+
     if (result.type == types::null() && typeRef) {
         return BuilderResult(
             BuilderResult::Kind::Raw,
@@ -74,11 +99,6 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &result, 
                 type
             );
         }
-
-        bool x = current.has_value();
-        bool z = types::priority(result.type) > types::priority(type);
-        bool f = types::isFloat(type);
-        bool s = types::isSigned(type);
 
         // promote or demote
         return BuilderResult(
@@ -126,6 +146,38 @@ std::optional<std::pair<BuilderResult, BuilderResult>> BuilderScope::convert(
     return convert(a, *this, b, *this);
 }
 
+BuilderResult BuilderScope::convertOrThrow(const Node *node, const BuilderResult &result, const Typename &type) {
+    std::optional<BuilderResult> value = convert(result, type);
+
+    if (!value)
+        throw VerifyError(node, "Expected type {}, type is {}.", toString(type), toString(result.type));
+
+    return *value;
+}
+
+BuilderResult BuilderScope::unpack(const BuilderResult &result) {
+    BuilderResult value = result;
+
+    while (auto *r = std::get_if<ReferenceTypename>(&value.type)) {
+        value.implicit = nullptr;
+
+        switch (value.kind) {
+            case BuilderResult::Kind::Raw:
+                value.kind = BuilderResult::Kind::Reference;
+                break;
+            case BuilderResult::Kind::Literal:
+            case BuilderResult::Kind::Reference:
+                value.kind = BuilderResult::Kind::Reference;
+                value.value = current ? current->CreateLoad(value.value) : nullptr;
+                break;
+        }
+
+        value.type = *r->value;
+    }
+
+    return value;
+}
+
 void BuilderScope::makeAssign(const AssignNode *node) {
     BuilderResult destination = makeExpression(node->children.front()->as<ExpressionNode>());
 
@@ -143,6 +195,39 @@ void BuilderScope::makeAssign(const AssignNode *node) {
         throw VerifyError(node, "Left side of assign expression must be some variable or reference.");
     }
 
-    if (current)
-        current->CreateStore(get(source), destination.value);
+
+    if (current) {
+        Value *result = nullptr;
+
+        try {
+            switch (node->op) {
+                case AssignNode::Operator::Assign:
+                    result = get(source);
+                    break;
+
+                case AssignNode::Operator::Plus:
+                    result = get(combine(source, destination, OperatorNode::Operation::Add));
+                    break;
+
+                case AssignNode::Operator::Minus:
+                    result = get(combine(source, destination, OperatorNode::Operation::Sub));
+                    break;
+
+                case AssignNode::Operator::Multiply:
+                    result = get(combine(source, destination, OperatorNode::Operation::Mul));
+                    break;
+
+                case AssignNode::Operator::Divide:
+                    result = get(combine(source, destination, OperatorNode::Operation::Div));
+                    break;
+
+                default:
+                    throw std::exception();
+            }
+        } catch (const std::runtime_error &e) {
+            throw VerifyError(node, "{}", e.what());
+        }
+
+        current->CreateStore(result, destination.value);
+    }
 }

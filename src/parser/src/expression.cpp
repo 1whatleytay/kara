@@ -8,6 +8,7 @@
 #include <parser/array.h>
 #include <parser/index.h>
 #include <parser/number.h>
+#include <parser/string.h>
 #include <parser/ternary.h>
 #include <parser/reference.h>
 #include <parser/parentheses.h>
@@ -37,13 +38,16 @@ static ExpressionResult applyUnary(const ExpressionNoun &current, const std::vec
     return value;
 }
 
-ExpressionNode::ExpressionNode(Node *parent) : Node(parent, Kind::Expression) {
+ExpressionNode::ExpressionNode(Node *parent, bool placeholder) : Node(parent, Kind::Expression) {
+    if (placeholder)
+        return;
+
     bool exit = false;
 
     while(!end() && !exit) {
         while (push<UnaryNode>(true));
 
-        push<ParenthesesNode, ArrayNode, NullNode, BoolNode, NumberNode, ReferenceNode>();
+        push<ParenthesesNode, ArrayNode, StringNode, NullNode, BoolNode, NumberNode, ReferenceNode>();
 
         while (true) {
             if (!push<CallNode, IndexNode, DotNode, OperatorNode>(true)) {

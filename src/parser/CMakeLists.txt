@@ -27,6 +27,8 @@ add_library(parser STATIC
     include/parser/dot.h
     include/parser/ternary.h
     include/parser/as.h
+    include/parser/import.h
+    include/parser/string.h
 
     src/search.cpp
     src/root.cpp
@@ -54,7 +56,9 @@ add_library(parser STATIC
     src/type.cpp
     src/dot.cpp
     src/ternary.cpp
-    src/as.cpp)
+    src/as.cpp
+    src/import.cpp
+    src/string.cpp)
 
 target_include_directories(parser PUBLIC include)
 target_link_libraries(parser PUBLIC fmt hermes)

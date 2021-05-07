@@ -3,5 +3,5 @@
 #include <parser/kinds.h>
 
 struct RootNode : public Node {
-    explicit RootNode(State &state);
+    explicit RootNode(State &state, bool external = false);
 };

@@ -97,6 +97,8 @@ namespace types {
     Typename f32();
     Typename f64();
 
+    Typename string();
+
     bool isSigned(const Typename &type);
     bool isUnsigned(const Typename &type);
     bool isInteger(const Typename &type);

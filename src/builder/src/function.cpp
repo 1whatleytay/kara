@@ -1,8 +1,9 @@
 #include <builder/builder.h>
 
 #include <builder/error.h>
+#include <builder/manager.h>
 
-#include <parser/scope.h>
+#include <parser/search.h>
 #include <parser/assign.h>
 #include <parser/function.h>
 #include <parser/variable.h>
@@ -11,9 +12,13 @@
 void BuilderFunction::build() {
     Typename returnTypename;
 
-    const Node *body = node->children[node->parameterCount].get();
+    bool responsible = search::exclusive::parents(node, [this](const Node *n) {
+        return n == builder.file.root.get();
+    });
+
+    const Node *body = (!responsible || node->isExtern) ? nullptr : node->children[node->parameterCount].get();
     // Check for inferred type from expression node maybe?
-    if (node->returnType == types::nothing() && body->is(Kind::Expression)) {
+    if (body && body->is(Kind::Expression) && node->returnType == types::nothing()) {
         returnTypename = BuilderScope(body, *this, false).product.value().type;
     } else {
         returnTypename = node->returnType;
@@ -45,48 +50,48 @@ void BuilderFunction::build() {
     FunctionType *valueType = FunctionType::get(returnType, parameterTypes, false);
     function = Function::Create(valueType, GlobalVariable::ExternalLinkage, 0, node->name, builder.module.get());
 
-    entryBlock = BasicBlock::Create(*builder.context, "entry", function);
-    exitBlock = BasicBlock::Create(*builder.context, "exit", function);
+    if (body) {
+        entryBlock = BasicBlock::Create(builder.context, "entry", function);
+        exitBlock = BasicBlock::Create(builder.context, "exit", function);
 
-    entry.SetInsertPoint(entryBlock);
-    exit.SetInsertPoint(exitBlock);
+        entry.SetInsertPoint(entryBlock);
+        exit.SetInsertPoint(exitBlock);
 
-    if (returnTypename != types::nothing())
-        returnValue = entry.CreateAlloca(returnType, nullptr, "result");
+        if (returnTypename != types::nothing())
+            returnValue = entry.CreateAlloca(returnType, nullptr, "result");
 
-    const Node *bodyNode = node->children[node->parameterCount].get();
+        BuilderScope scope(body, *this);
 
-    BuilderScope scope(bodyNode, *this);
+        if (body->is(Kind::Expression)) {
+            if (!scope.product.has_value())
+                throw VerifyError(body, "Missing product for expression type function.");
 
-    if (bodyNode->is(Kind::Expression)) {
-        if (!scope.product.has_value())
-            throw VerifyError(bodyNode, "Missing product for expression type function.");
+            BuilderResult result = scope.product.value();
 
-        BuilderResult result = scope.product.value();
+            std::optional<BuilderResult> resultConverted = scope.convert(result, *type.returnType);
 
-        std::optional<BuilderResult> resultConverted = scope.convert(result, *type.returnType);
+            if (!resultConverted.has_value()) {
+                throw VerifyError(body,
+                    "Method returns type {} but expression is of type {}.",
+                    toString(*type.returnType), toString(result.type));
+            }
 
-        if (!resultConverted.has_value()) {
-            throw VerifyError(bodyNode,
-                "Method returns type {} but expression is of type {}.",
-                toString(*type.returnType), toString(result.type));
+            result = resultConverted.value();
+
+            scope.current.value().CreateStore(scope.get(result), returnValue);
         }
 
-        result = resultConverted.value();
+        entry.CreateBr(scope.openingBlock);
 
-        scope.current.value().CreateStore(scope.get(result), returnValue);
+        if (!scope.currentBlock->getTerminator())
+            scope.current.value().CreateBr(exitBlock);
+
+        if (returnTypename == types::nothing())
+            exit.CreateRetVoid();
+        else
+            exit.CreateRet(exit.CreateLoad(returnValue, "final"));
     }
-
-    entry.CreateBr(scope.openingBlock);
-
-    if (!scope.currentBlock->getTerminator())
-        scope.current.value().CreateBr(exitBlock);
-
-    if (returnTypename == types::nothing())
-        exit.CreateRetVoid();
-    else
-        exit.CreateRet(exit.CreateLoad(returnValue, "final"));
 }
 
 BuilderFunction::BuilderFunction(const FunctionNode *node, Builder &builder)
-    : builder(builder), node(node), entry(*builder.context), exit(*builder.context) { }
+    : builder(builder), node(node), entry(builder.context), exit(builder.context) { }

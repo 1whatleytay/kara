@@ -30,6 +30,15 @@ namespace types {
     Typename f32() { return StackTypename { "float" }; }
     Typename f64() { return StackTypename { "double" }; }
 
+    Typename string() {
+        return ReferenceTypename {
+            std::make_shared<Typename>(ArrayTypename {
+                ArrayTypename::Kind::Unbounded,
+                std::make_shared<Typename>(types::i8())
+            })
+        };
+    }
+
     bool isSigned(const Typename &type) {
         return type == i8() || type == i16() || type == i32() || type == i64();
     }
@@ -153,7 +162,7 @@ std::string toString(const StackTypename &type) {
 }
 
 std::string toString(const ReferenceTypename &type) {
-    return fmt::format("&{}", toString(*type.value));
+    return fmt::format("&{}{}", type.isMutable ? "var " : "", toString(*type.value));
 }
 
 std::string toString(const FunctionTypename &type) {

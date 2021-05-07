@@ -32,4 +32,6 @@ enum class Kind {
     Dot,
     Ternary,
     As,
+    Import,
+    String,
 };

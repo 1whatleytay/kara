@@ -1,7 +1,9 @@
 add_library(builder STATIC
+	include/builder/manager.h
 	include/builder/builder.h
     include/builder/error.h
 
+	src/manager.cpp
 	src/builder.cpp
     src/error.cpp
     src/function.cpp
@@ -19,4 +21,4 @@ add_library(builder STATIC
     src/block.cpp)
 
 target_include_directories(builder PUBLIC include)
-target_link_libraries(builder PUBLIC parser options llvm)
+target_link_libraries(builder PUBLIC parser options interfaces llvm rapidjson)

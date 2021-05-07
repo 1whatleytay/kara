@@ -13,12 +13,6 @@
 #include <optional>
 #include <unordered_map>
 
-namespace llvm {
-    struct Target;
-    struct DataLayout;
-    struct TargetMachine;
-}
-
 using namespace llvm;
 
 struct IfNode;
@@ -28,11 +22,15 @@ struct TypeNode;
 struct BlockNode;
 struct DebugNode;
 struct AssignNode;
+struct ImportNode;
 struct FunctionNode;
 struct VariableNode;
 struct ReferenceNode;
 struct StatementNode;
 struct ExpressionNode;
+
+struct Manager;
+struct ManagerFile;
 
 struct Builder;
 struct BuilderScope;
@@ -90,11 +88,18 @@ struct BuilderScope {
         const BuilderResult &a, BuilderScope &aScope,
         const BuilderResult &b, BuilderScope &bScope);
 
+    BuilderResult convertOrThrow(
+        const Node *node, const BuilderResult &result, const Typename &type);
+
+    BuilderResult unpack(const BuilderResult &result);
+
     std::optional<std::pair<BuilderResult, BuilderResult>> convert(
         const BuilderResult &a, const BuilderResult &b);
 
     Value *get(const BuilderResult &result);
     Value *ref(const BuilderResult &result);
+
+    BuilderResult combine(const BuilderResult &a, const BuilderResult &b, OperatorNode::Operation op);
 
     BuilderResult makeExpressionNounContent(const Node *node);
     BuilderResult makeExpressionNounModifier(const Node *node, const BuilderResult &result);
@@ -157,35 +162,29 @@ struct BuilderFunction {
     BuilderFunction(const FunctionNode *node, Builder &builder);
 };
 
-struct BuilderTarget {
-    std::string triple;
-    const Target *target;
-    TargetMachine *machine;
-    std::unique_ptr<DataLayout> layout;
-
-    [[nodiscard]] bool valid() const;
-
-    explicit BuilderTarget(const std::string &suggestedTriple);
-};
-
 struct Builder {
     const RootNode *root = nullptr;
 
-    Options options;
+    const ManagerFile &file;
+    const Options &options;
 
-    std::unique_ptr<LLVMContext> context;
+    std::set<const ManagerFile *> dependencies;
+
+    LLVMContext &context;
     std::unique_ptr<Module> module;
-
-    BuilderTarget target;
 
     std::unordered_map<const TypeNode *, std::unique_ptr<BuilderType>> types;
     std::unordered_map<const FunctionNode *, std::unique_ptr<BuilderFunction>> functions;
 
+//    std::vector<std::unique_ptr<GlobalVariable>> globals;
+
     BuilderType *makeType(const TypeNode *node);
     BuilderFunction *makeFunction(const FunctionNode *node);
 
-    static const Node *find(const ReferenceNode *node);
-    static const TypeNode *find(const StackTypename &type);
+    const Node *searchDependencies(const std::function<bool(Node *)> &match);
+
+    const Node *find(const ReferenceNode *node);
+    const TypeNode *find(const StackTypename &type);
 
     [[nodiscard]] Type *makeBuiltinTypename(const StackTypename &type) const;
 
@@ -193,5 +192,5 @@ struct Builder {
     Type *makeStackTypename(const StackTypename &type);
     Type *makeTypename(const Typename &type);
 
-    Builder(RootNode *root, Options opts);
+    Builder(const ManagerFile &file, const Options &opts);
 };

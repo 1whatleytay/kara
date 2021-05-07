@@ -22,5 +22,5 @@ void BuilderType::build() {
 }
 
 BuilderType::BuilderType(const TypeNode *node, Builder &builder) : node(node), builder(builder) {
-    type = StructType::create(*builder.context, { }, node->name);
+    type = StructType::create(builder.context, { }, node->name);
 }

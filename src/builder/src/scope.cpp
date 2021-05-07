@@ -72,15 +72,20 @@ void BuilderScope::makeParameters() {
 BuilderScope::BuilderScope(const Node *node, BuilderFunction &function, BuilderScope *parent, bool doCodeGen)
     : parent(parent), function(function) {
     if (doCodeGen) {
-        openingBlock = BasicBlock::Create(*function.builder.context, "", function.function, function.exitBlock);
+        openingBlock = BasicBlock::Create(function.builder.context, "", function.function, function.exitBlock);
         currentBlock = openingBlock;
 
-        current.emplace(*function.builder.context);
+        current.emplace(function.builder.context);
         current->SetInsertPoint(currentBlock);
     }
 
     if (!parent)
         makeParameters();
+
+    if (!node) {
+        assert(!doCodeGen);
+        return;
+    }
 
     if (node->is(Kind::Expression)) {
         product = makeExpression(node->as<ExpressionNode>());
