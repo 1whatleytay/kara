@@ -24,7 +24,7 @@ namespace interfaces::header {
         return ptr;
     }
 
-    std::optional<Typename> make(const clang::ASTContext &context, const clang::QualType &wrapper) {
+    std::unique_ptr<Node> make(Node *parent, const clang::ASTContext &context, const clang::QualType &wrapper) {
         const clang::Type &type = *wrapper;
 
         if (type.isPointerType()) {
@@ -32,16 +32,35 @@ namespace interfaces::header {
 
             auto pointee = type.getPointeeType();
 
-            std::optional<Typename> subtype = make(context, pointee);
+            auto ref = std::make_unique<ReferenceTypenameNode>(parent, true);
 
-            if (subtype.has_value()) {
-                return ReferenceTypename {
-                    std::make_shared<Typename>(ArrayTypename {
-                        ArrayTypename::Kind::Unbounded,
-                        std::make_shared<Typename>(std::move(subtype.value()))
-                    }),
-                    !pointee.isConstQualified()
-                };
+            ArrayTypenameNode *arr = nullptr;
+
+            {
+                auto arrPtr = std::make_unique<ArrayTypenameNode>(ref.get(), true);
+                arr = arrPtr.get();
+
+                ref->children.push_back(std::move(arrPtr));
+            }
+
+            arr->type = ArrayKind::Unbounded;
+            ref->isMutable = !pointee.isConstQualified();
+
+            if (type.isVoidPointerType()) {
+                auto prim = std::make_unique<PrimitiveTypenameNode>(arr, true);
+
+                prim->type = PrimitiveType::Any;
+                arr->children.push_back(std::move(prim));
+
+                return ref;
+            }
+
+            auto subtype = make(arr, context, pointee);
+
+            if (subtype) {
+                arr->children.push_back(std::move(subtype));
+
+                return ref;
             }
         }
 
@@ -51,68 +70,81 @@ namespace interfaces::header {
             BuiltinType::Kind kind = e.getKind();
             size_t size = context.getTypeSize(wrapper);
 
-            if (kind == BuiltinType::Kind::Void)
-                return types::nothing();
+            auto prim = std::make_unique<PrimitiveTypenameNode>(parent, true);
 
-            if (kind == BuiltinType::Kind::Bool)
-                return types::boolean();
-
-            if (type.isIntegerType()) {
+            if (kind == BuiltinType::Kind::Void) {
+                prim->type = PrimitiveType::Nothing;
+            } else if (kind == BuiltinType::Kind::Bool) {
+                prim->type = PrimitiveType::Bool;
+            } if (type.isIntegerType()) {
                 if (type.isSignedIntegerType()) {
                     switch (size) {
-                        case 8: return types::i8();
-                        case 16: return types::i16();
-                        case 32: return types::i32();
-                        case 64: return types::i64();
-                        default: break;
+                        case 8: prim->type = PrimitiveType::Byte; break;
+                        case 16: prim->type = PrimitiveType::Short; break;
+                        case 32: prim->type = PrimitiveType::Int; break;
+                        case 64: prim->type = PrimitiveType::Long; break;
+                        default: assert(false);
                     }
                 } else {
                     switch (size) {
-                        case 8: return types::u8();
-                        case 16: return types::u16();
-                        case 32: return types::u32();
-                        case 64: return types::u64();
-                        default: break;
+                        case 8: prim->type = PrimitiveType::UByte; break;
+                        case 16: prim->type = PrimitiveType::UShort; break;
+                        case 32: prim->type = PrimitiveType::UInt; break;
+                        case 64: prim->type = PrimitiveType::ULong; break;
+                        default: assert(false);
                     }
                 }
+            } else if (type.isRealFloatingType()) {
+                switch (size) {
+                    case 32: prim->type = PrimitiveType::Float; break;
+                    case 64: prim->type = PrimitiveType::Double; break;
+                    default: assert(false);
+                }
+            } else {
+                prim = nullptr;
             }
+
+            if (prim)
+                return prim;
         }
 
         fmt::print("Cannot translate type {}.\n", wrapper.getAsString());
 
-        return std::nullopt;
+        return nullptr;
     }
 
 #pragma clang diagnostic push
+#pragma ide diagnostic ignored "ConstantFunctionResult"
 #pragma ide diagnostic ignored "HidingNonVirtualFunction"
-
     [[maybe_unused]] bool TranslateVisitor::VisitFunctionDecl(FunctionDecl *decl) const {
         auto name = decl->getNameAsString();
         auto parameters = decl->parameters();
-        auto returnType = make(context, decl->getReturnType());
 
-        if (!returnType.has_value()) {
+        auto function = std::make_unique<FunctionNode>(factory->node, true);
+
+        auto returnType = make(function.get(), context, decl->getReturnType());
+
+        if (!returnType) {
             fmt::print("Skipping translating function {}.\n", name);
             return true;
         }
 
-        auto function = std::make_unique<FunctionNode>(factory->node, true);
-
         function->name = name;
         function->isExtern = true;
+        function->hasFixedType = true;
         function->parameterCount = parameters.size();
-        function->returnType = *returnType;
 
         size_t id = 0;
 
         for (ParmVarDecl *param : parameters) {
             auto paramName = param->getNameAsString();
 
+            // huh, useless function
             auto *var = grab<VariableNode>(function.get(), true, true);
 
-            auto optional = make(context, param->getType());
+            auto optional = make(var, context, param->getType());
 
-            if (!optional.has_value()) {
+            if (!optional) {
                 fmt::print("Skipping translating function {}.\n", name);
                 return true;
             }
@@ -122,9 +154,11 @@ namespace interfaces::header {
 
             var->name = paramName;
             var->isMutable = true;
-            var->fixedType = make(context, param->getType());
+            var->hasFixedType = true;
+            var->children.push_back(std::move(optional));
         }
 
+        function->children.push_back(std::move(returnType));
         factory->node->children.push_back(std::move(function));
 
         return true;

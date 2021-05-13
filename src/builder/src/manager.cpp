@@ -3,8 +3,8 @@
 #include <builder/error.h>
 #include <builder/builder.h>
 
-#include <parser/string.h>
 #include <parser/import.h>
+#include <parser/literals.h>
 
 #include <interfaces/interfaces.h>
 
@@ -119,12 +119,13 @@ ManagerFile::ManagerFile(Manager &manager, fs::path path, std::string type, cons
         if (!e->is(Kind::Import))
             continue;
 
-        auto *string = e->children.front()->as<StringNode>();
+        auto import = e->as<ImportNode>();
+        auto *string = import->body();
 
         if (!string->inserts.empty())
             throw VerifyError(string, "Imported string node cannot have any inserts.");
 
-        dependencies.insert({ string->text, e->as<ImportNode>()->type });
+        dependencies.insert({ string->text, import->type });
     }
 }
 

@@ -2,21 +2,16 @@
 
 #include <builder/error.h>
 
-#include <parser/as.h>
-#include <parser/bool.h>
 #include <parser/type.h>
-#include <parser/array.h>
-#include <parser/number.h>
-#include <parser/string.h>
 #include <parser/function.h>
+#include <parser/literals.h>
 #include <parser/operator.h>
 #include <parser/variable.h>
-#include <parser/reference.h>
 
 BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
     switch (node->is<Kind>()) {
         case Kind::Parentheses:
-            return makeExpression(node->children.front()->as<ExpressionNode>());
+            return makeExpression(node->as<ParenthesesNode>()->body());
 
         case Kind::Reference: {
             const Node *e = function.builder.find(node->as<ReferenceNode>());
@@ -57,11 +52,13 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
             }
         }
 
-        case Kind::Null: {
+        case Kind::Special: {
+            assert(node->as<SpecialNode>()->type == SpecialNode::Type::Null);
+
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 ConstantPointerNull::get(Type::getInt8PtrTy(function.builder.context)),
-                types::null()
+                PrimitiveTypename { PrimitiveType::Null }
             );
         }
 
@@ -69,7 +66,7 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 ConstantInt::get(Type::getInt1Ty(function.builder.context), node->as<BoolNode>()->value),
-                types::boolean()
+                PrimitiveTypename { PrimitiveType::Bool }
             );
 
         case Kind::String: {
@@ -94,20 +91,28 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 ptr,
-                types::string()
+
+                ReferenceTypename {
+                    std::make_shared<Typename>(ArrayTypename {
+                        ArrayKind::Unbounded,
+
+                        std::make_shared<Typename>(PrimitiveTypename { PrimitiveType::Byte })
+                    })
+                }
             );
         }
 
         case Kind::Array: {
             auto *e = node->as<ArrayNode>();
 
+            auto elements = e->elements();
             std::vector<BuilderResult> results;
-            results.reserve(e->children.size());
+            results.reserve(elements.size());
 
-            std::transform(e->children.begin(), e->children.end(), std::back_inserter(results),
-                [this](const std::unique_ptr<Node> &x) { return makeExpression(x->as<ExpressionNode>()); });
+            std::transform(elements.begin(), elements.end(), std::back_inserter(results),
+                [this](auto x) { return makeExpression(x); });
 
-            Typename subType = results.empty() ? types::any() : results.front().type;
+            Typename subType = results.empty() ? PrimitiveTypename::from(PrimitiveType::Any) : results.front().type;
 
             if (!std::all_of(results.begin(), results.end(), [&subType](const BuilderResult &result) {
                 return result.type == subType;
@@ -116,7 +121,7 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
             }
 
             ArrayTypename type = {
-                ArrayTypename::Kind::FixedSize,
+                ArrayKind::FixedSize,
                 std::make_shared<Typename>(subType),
                 results.size()
             };
@@ -151,23 +156,35 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
         case Kind::Number: {
             auto *e = node->as<NumberNode>();
 
-            Type *type = function.builder.makeBuiltinTypename(std::get<StackTypename>(e->type));
+            struct {
+                LLVMContext &context;
 
-            assert(types::isNumber(e->type));
+                BuilderResult operator()(int64_t s) {
+                    return BuilderResult {
+                        BuilderResult::Kind::Raw,
+                        ConstantInt::getSigned(Type::getInt64Ty(context), s),
+                        PrimitiveTypename { PrimitiveType::Long }
+                    };
+                }
 
-            Value *value;
-            if (types::isSigned(e->type))
-                value = ConstantInt::getSigned(type, e->value.i);
-            if (types::isUnsigned(e->type))
-                value = ConstantInt::get(type, e->value.u);
-            if (types::isFloat(e->type))
-                value = ConstantFP::get(type, e->value.f);
+                BuilderResult operator()(uint64_t u) {
+                    return BuilderResult {
+                        BuilderResult::Kind::Raw,
+                        ConstantInt::get(Type::getInt64Ty(context), u),
+                        PrimitiveTypename { PrimitiveType::ULong }
+                    };
+                }
 
-            return BuilderResult(
-                BuilderResult::Kind::Raw,
-                value,
-                e->type
-            );
+                BuilderResult operator()(double f) {
+                    return BuilderResult {
+                        BuilderResult::Kind::Raw,
+                        ConstantFP::get(Type::getDoubleTy(context), f),
+                        PrimitiveTypename { PrimitiveType::Double }
+                    };
+                }
+            } visitor { function.builder.context };
+
+            return std::visit(visitor, e->value);
         }
 
         default:
@@ -239,26 +256,18 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
                 numReferences++;
             }
 
-            const StackTypename *type = nullptr;
+            if (auto *type = std::get_if<NamedTypename>(subtype)) {
+                BuilderType *builderType = function.builder.makeType(type->type);
 
-            if ((type = std::get_if<StackTypename>(subtype)) && !function.builder.makeBuiltinTypename(*type)) {
-                const TypeNode *typeNode = function.builder.find(*type);
+                auto match = [refNode](auto var) { return var->name == refNode->name; };
 
-                if (!typeNode)
-                    throw VerifyError(node, "Cannot find type node for stack typename {}.", type->value);
+                auto fields = type->type->fields();
+                auto iterator = std::find_if(fields.begin(), fields.end(), match);
 
-                BuilderType *builderType = function.builder.makeType(typeNode);
+                if (iterator != fields.end()) {
+                    auto *varNode = *iterator;
 
-                auto match = [refNode](const std::unique_ptr<Node> &node) {
-                    return node->is(Kind::Variable) && node->as<VariableNode>()->name == refNode->name;
-                };
-
-                auto iterator = std::find_if(typeNode->children.begin(), typeNode->children.end(), match);
-
-                if (iterator != typeNode->children.end()) {
-                    const VariableNode *varNode = (*iterator)->as<VariableNode>();
-
-                    if (!varNode->fixedType.has_value())
+                    if (!varNode->hasFixedType)
                         throw VerifyError(varNode, "All struct variables must have fixed type.");
 
                     size_t index = builderType->indices.at(varNode);
@@ -276,7 +285,7 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
                             ? BuilderResult::Kind::Reference
                             : BuilderResult::Kind::Literal,
                         current ? current->CreateStructGEP(structRef, index, refNode->name) : nullptr,
-                        varNode->fixedType.value()
+                        function.builder.resolveTypename(varNode->fixedType())
                     );
                 }
             }
@@ -295,10 +304,11 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
                     return false;
 
                 auto *var = e->children.front()->as<VariableNode>();
-                if (!var->fixedType.has_value())
+                if (!var->hasFixedType)
                     return false;
 
-                std::optional<BuilderResult> result = convert(infer, var->fixedType.value());
+                std::optional<BuilderResult> result =
+                    convert(infer, function.builder.resolveTypename(var->fixedType()));
                 if (!result.has_value())
                     return false;
 
@@ -342,7 +352,7 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
             auto *indexExpression = node->children.front()->as<ExpressionNode>();
 
             BuilderResult index = makeExpression(indexExpression);
-            std::optional<BuilderResult> indexConverted = convert(index, types::i32());
+            std::optional<BuilderResult> indexConverted = convert(index, PrimitiveTypename { PrimitiveType::ULong });
 
             if (!indexConverted.has_value()) {
                 throw VerifyError(indexExpression,
@@ -357,13 +367,13 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
                     return nullptr;
 
                 switch (arrayType->kind) {
-                    case ArrayTypename::Kind::FixedSize:
+                    case ArrayKind::FixedSize:
                         return current->CreateGEP(ref(infer), {
                             ConstantInt::get(Type::getInt64Ty(function.builder.context), 0),
                             get(index)
                         });
 
-                    case ArrayTypename::Kind::Unbounded:
+                    case ArrayKind::Unbounded:
                         return current->CreateGEP(ref(infer), get(index));
 
                     default:
@@ -401,7 +411,7 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
         case Kind::Unary:
             switch (operation.op->as<UnaryNode>()->op) {
                 case UnaryNode::Operation::Not: {
-                    std::optional<BuilderResult> converted = convert(value, types::boolean());
+                    std::optional<BuilderResult> converted = convert(value, PrimitiveTypename { PrimitiveType::Bool });
 
                     if (!converted.has_value())
                         throw VerifyError(operation.op, "Source type for not expression must be convertible to bool.");
@@ -409,7 +419,7 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
                     return BuilderResult(
                         BuilderResult::Kind::Raw,
                         current ? current->CreateNot(get(converted.value())) : nullptr,
-                        types::boolean()
+                        PrimitiveTypename { PrimitiveType::Bool }
                     );
                 }
 
@@ -439,7 +449,7 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
             }
 
         case Kind::Ternary: {
-            std::optional<BuilderResult> inferConverted = convert(value, types::boolean());
+            std::optional<BuilderResult> inferConverted = convert(value, PrimitiveTypename { PrimitiveType::Bool });
 
             if (!inferConverted.has_value()) {
                 throw VerifyError(operation.op,
@@ -498,12 +508,14 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
         case Kind::As: {
             auto *e = operation.op->as<AsNode>();
 
-            std::optional<BuilderResult> converted = convert(value, e->type);
+            auto destination = function.builder.resolveTypename(e->type());
+
+            std::optional<BuilderResult> converted = convert(value, destination);
 
             if (!converted) {
                 throw VerifyError(operation.op,
                     "Cannot convert type {} to type {}.",
-                    toString(value.type), toString(e->type));
+                    toString(value.type), toString(destination));
             }
 
             return *converted;
@@ -515,7 +527,6 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
 }
 
 BuilderResult BuilderScope::combine(const BuilderResult &left, const BuilderResult &right, OperatorNode::Operation op) {
-
     auto results = convert(left, right);
 
     if (!results.has_value()) {
@@ -529,8 +540,11 @@ BuilderResult BuilderScope::combine(const BuilderResult &left, const BuilderResu
 
     using Requirement = std::function<bool()>;
 
+    auto aPrim = std::get_if<PrimitiveTypename>(&a.type);
+    auto bPrim = std::get_if<PrimitiveTypename>(&b.type);
+
     auto asInt = std::make_pair([&]() {
-        return types::isNumber(a.type) && types::isNumber(b.type);
+        return aPrim && bPrim && aPrim->isNumber() && bPrim->isNumber();
     }, "int");
 
     auto asRef = std::make_pair([&]() {
@@ -561,7 +575,7 @@ BuilderResult BuilderScope::combine(const BuilderResult &left, const BuilderResu
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 current
-                    ? types::isFloat(a.type)
+                    ? aPrim->isFloat()
                     ? current->CreateFAdd(get(a), get(b))
                     : current->CreateAdd(get(a), get(b))
                     : nullptr,
@@ -574,11 +588,11 @@ BuilderResult BuilderScope::combine(const BuilderResult &left, const BuilderResu
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 current
-                    ? types::isFloat(a.type)
+                    ? aPrim->isFloat()
                     ? current->CreateFSub(get(a), get(b))
                     : current->CreateSub(get(a), get(b))
                     : nullptr,
-                types::i32()
+                a.type
             );
 
         case OperatorNode::Operation::Mul:
@@ -587,11 +601,11 @@ BuilderResult BuilderScope::combine(const BuilderResult &left, const BuilderResu
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 current
-                    ? types::isFloat(a.type)
+                    ? aPrim->isFloat()
                     ? current->CreateFMul(get(a), get(b))
                     : current->CreateMul(get(a), get(b))
                     : nullptr,
-                types::i32()
+                a.type
             );
 
         case OperatorNode::Operation::Div:
@@ -600,13 +614,13 @@ BuilderResult BuilderScope::combine(const BuilderResult &left, const BuilderResu
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 current
-                    ? types::isFloat(a.type)
+                    ? aPrim->isFloat()
                     ? current->CreateFDiv(get(a), get(b))
-                    : types::isSigned(a.type)
+                    : aPrim->isSigned()
                         ? current->CreateSDiv(get(a), get(b))
                         : current->CreateUDiv(get(a), get(b))
                     : nullptr,
-                types::i32()
+                a.type
             );
 
         case OperatorNode::Operation::Equals:
@@ -615,11 +629,11 @@ BuilderResult BuilderScope::combine(const BuilderResult &left, const BuilderResu
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 current
-                    ? (asRef.first() || !types::isFloat(a.type))
+                    ? (asRef.first() || !aPrim->isFloat())
                     ? current->CreateICmpEQ(get(a), get(b))
                     : current->CreateFCmpOEQ(get(a), get(b))
                     : nullptr,
-                types::boolean()
+                PrimitiveTypename { PrimitiveType::Bool }
             );
 
         case OperatorNode::Operation::NotEquals:
@@ -628,11 +642,11 @@ BuilderResult BuilderScope::combine(const BuilderResult &left, const BuilderResu
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 current
-                    ? (asRef.first() || !types::isFloat(a.type))
+                    ? (asRef.first() || !aPrim->isFloat())
                     ? current->CreateICmpNE(get(a), get(b))
                     : current->CreateFCmpONE(get(a), get(b))
                     : nullptr,
-                types::boolean()
+                PrimitiveTypename { PrimitiveType::Bool }
             );
 
         case OperatorNode::Operation::Greater:
@@ -641,13 +655,13 @@ BuilderResult BuilderScope::combine(const BuilderResult &left, const BuilderResu
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 current
-                    ? types::isFloat(a.type)
+                    ? aPrim->isFloat()
                     ? current->CreateFCmpOGT(get(a), get(b))
-                    : types::isSigned(a.type)
+                    : aPrim->isSigned()
                         ? current->CreateICmpSGT(get(a), get(b))
                         : current->CreateICmpUGT(get(a), get(b))
                     : nullptr,
-                types::boolean()
+                PrimitiveTypename { PrimitiveType::Bool }
             );
 
         case OperatorNode::Operation::GreaterEqual:
@@ -656,13 +670,13 @@ BuilderResult BuilderScope::combine(const BuilderResult &left, const BuilderResu
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 current
-                    ? types::isFloat(a.type)
+                    ? aPrim->isFloat()
                     ? current->CreateFCmpOGE(get(a), get(b))
-                    : types::isSigned(a.type)
+                    : aPrim->isSigned()
                         ? current->CreateICmpSGE(get(a), get(b))
                         : current->CreateICmpUGE(get(a), get(b))
                     : nullptr,
-                types::boolean()
+                PrimitiveTypename { PrimitiveType::Bool }
             );
 
         case OperatorNode::Operation::Lesser:
@@ -671,13 +685,13 @@ BuilderResult BuilderScope::combine(const BuilderResult &left, const BuilderResu
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 current
-                    ? types::isFloat(a.type)
+                    ? aPrim->isFloat()
                     ? current->CreateFCmpOLT(get(a), get(b))
-                    : types::isSigned(a.type)
+                    : aPrim->isSigned()
                         ? current->CreateICmpSLT(get(a), get(b))
                         : current->CreateICmpULT(get(a), get(b))
                     : nullptr,
-                types::boolean()
+                PrimitiveTypename { PrimitiveType::Bool }
             );
 
         case OperatorNode::Operation::LesserEqual:
@@ -686,13 +700,13 @@ BuilderResult BuilderScope::combine(const BuilderResult &left, const BuilderResu
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 current
-                    ? types::isFloat(a.type)
+                    ? aPrim->isFloat()
                     ? current->CreateFCmpOLE(get(a), get(b))
-                    : types::isSigned(a.type)
+                    : aPrim->isSigned()
                         ? current->CreateICmpSLE(get(a), get(b))
                         : current->CreateICmpULE(get(a), get(b))
                     : nullptr,
-                types::boolean()
+                PrimitiveTypename { PrimitiveType::Bool }
             );
 
         default:

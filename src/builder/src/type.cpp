@@ -8,19 +8,21 @@
 void BuilderType::build() {
     std::vector<Type *> types;
 
-    for (const auto &child : node->children) {
-        const auto *e = child->as<VariableNode>();
+    auto fields = node->fields();
 
-        if (!e->fixedType)
-            throw VerifyError(child.get(), "Every variable in type must have fixed type.");
+    for (auto child : fields) {
+        if (!child->hasFixedType)
+            throw VerifyError(child, "Every variable in type must have fixed type.");
 
-        indices[e] = types.size();
-        types.push_back(builder.makeTypename(e->fixedType.value()));
+        indices[child] = types.size();
+        types.push_back(builder.makeTypename(builder.resolveTypename(child->fixedType())));
     }
 
     type->setBody(types);
 }
 
 BuilderType::BuilderType(const TypeNode *node, Builder &builder) : node(node), builder(builder) {
+    assert(!node->isAlias);
+
     type = StructType::create(builder.context, { }, node->name);
 }

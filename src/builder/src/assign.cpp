@@ -4,7 +4,7 @@
 
 #include <parser/assign.h>
 #include <parser/variable.h>
-#include <parser/reference.h>
+#include <parser/literals.h>
 
 // this copies :flushed:
 std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &result, const Typename &type) {
@@ -35,7 +35,7 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &result, 
     if (typeRef && resultRef) {
         auto typeArray = std::get_if<ArrayTypename>(typeRef->value.get());
 
-        if (typeArray && typeArray->kind == ArrayTypename::Kind::Unbounded) {
+        if (typeArray && typeArray->kind == ArrayKind::Unbounded) {
             if (*typeArray->value == *resultRef->value) {
                 return BuilderResult(
                     BuilderResult::Kind::Raw,
@@ -47,7 +47,7 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &result, 
             auto resultArray = std::get_if<ArrayTypename>(resultRef->value.get());
 
             if (resultArray && *typeArray->value == *resultArray->value
-                && resultArray->kind == ArrayTypename::Kind::FixedSize) {
+                && resultArray->kind == ArrayKind::FixedSize) {
                 return BuilderResult(
                     BuilderResult::Kind::Raw,
                     current ? current->CreateStructGEP(get(result), 0) : nullptr,
@@ -57,7 +57,7 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &result, 
         }
     }
 
-    if (result.type == types::null() && typeRef) {
+    if (result.type == PrimitiveTypename::from(PrimitiveType::Null) && typeRef) {
         return BuilderResult(
             BuilderResult::Kind::Raw,
             current ? current->CreatePointerCast(get(result), function.builder.makeTypename(type)) : nullptr,
@@ -65,7 +65,7 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &result, 
         );
     }
 
-    if (type == types::boolean() && resultRef) {
+    if (type == PrimitiveTypename::from(PrimitiveType::Bool) && resultRef) {
         return BuilderResult(
             BuilderResult::Kind::Raw,
             current ? current->CreateIsNotNull(get(result)) : nullptr,
@@ -73,47 +73,52 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &result, 
         );
     }
 
-    if (types::isNumber(result.type) && types::isNumber(type)) {
-        Type *dest = function.builder.makeBuiltinTypename(std::get<StackTypename>(type));
+    auto otherPrim = std::get_if<PrimitiveTypename>(&type);
+    auto resultPrim = std::get_if<PrimitiveTypename>(&result.type);
 
-        if (types::isInteger(result.type) && types::isFloat(type)) { // int -> float
+    if (otherPrim && resultPrim) {
+        if (otherPrim->isNumber() && resultPrim->isNumber()) {
+            Type *dest = function.builder.makePrimitiveType(otherPrim->type);
+
+            if (resultPrim->isInteger() && otherPrim->isFloat()) { // int -> float
+                return BuilderResult(
+                    BuilderResult::Kind::Raw,
+                    current
+                        ? resultPrim->isSigned()
+                        ? current->CreateSIToFP(get(result), dest)
+                        : current->CreateUIToFP(get(result), dest)
+                        : nullptr,
+                    type
+                );
+            }
+
+            if (resultPrim->isFloat() && otherPrim->isInteger()) { // float -> int
+                return BuilderResult(
+                    BuilderResult::Kind::Raw,
+                    current
+                        ? otherPrim->isSigned()
+                        ? current->CreateFPToSI(get(result), dest)
+                        : current->CreateFPToUI(get(result), dest)
+                        : nullptr,
+                    type
+                );
+            }
+
+            // promote or demote
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 current
-                    ? types::isSigned(result.type)
-                    ? current->CreateSIToFP(get(result), dest)
-                    : current->CreateUIToFP(get(result), dest)
+                    ? otherPrim->isFloat()
+                    ? resultPrim->priority() > otherPrim->priority()
+                        ? current->CreateFPTrunc(get(result), dest)
+                        : current->CreateFPExt(get(result), dest)
+                    : otherPrim->isSigned()
+                        ? current->CreateSExtOrTrunc(get(result), dest)
+                        : current->CreateZExtOrTrunc(get(result), dest)
                     : nullptr,
                 type
             );
         }
-
-        if (types::isFloat(result.type) && types::isInteger(type)) { // float -> int
-            return BuilderResult(
-                BuilderResult::Kind::Raw,
-                current
-                    ? types::isSigned(type)
-                    ? current->CreateFPToSI(get(result), dest)
-                    : current->CreateFPToUI(get(result), dest)
-                    : nullptr,
-                type
-            );
-        }
-
-        // promote or demote
-        return BuilderResult(
-            BuilderResult::Kind::Raw,
-            current
-                ? types::isFloat(type)
-                ? types::priority(result.type) > types::priority(type)
-                ? current->CreateFPTrunc(get(result), dest)
-                : current->CreateFPExt(get(result), dest)
-                : types::isSigned(type)
-                ? current->CreateSExtOrTrunc(get(result), dest)
-                : current->CreateZExtOrTrunc(get(result), dest)
-                : nullptr,
-            type
-        );
     }
 
     // look through conversion operators...
@@ -197,7 +202,7 @@ void BuilderScope::makeAssign(const AssignNode *node) {
 
 
     if (current) {
-        Value *result = nullptr;
+        Value *result;
 
         try {
             switch (node->op) {

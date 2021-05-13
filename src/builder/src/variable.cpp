@@ -8,22 +8,24 @@
 
 BuilderVariable::BuilderVariable(const VariableNode *node, BuilderScope &scope)
     : function(scope.function), node(node) {
-    assert(node->fixedType || !node->children.empty());
+    assert(node->hasFixedType || node->value());
 
     std::optional<BuilderResult> possibleDefault;
 
-    if (!node->children.empty()) {
-        BuilderResult result = scope.makeExpression(node->children.front()->as<ExpressionNode>());
+    if (node->value()) {
+        BuilderResult result = scope.makeExpression(node->value());
         possibleDefault = result; // copy :|
 
-        if (node->fixedType) {
-            std::optional<BuilderResult> resultConverted = scope.convert(result, *node->fixedType);
+        if (node->hasFixedType) {
+            auto fixedType = function.builder.resolveTypename(node->fixedType());
+
+            std::optional<BuilderResult> resultConverted = scope.convert(result, fixedType);
 
             if (!resultConverted) {
-                throw VerifyError(node->children.front().get(),
+                throw VerifyError(node->value(),
                     "Cannot convert from type {} to variable fixed type {}.",
                     toString(result.type),
-                    toString(node->fixedType.value()));
+                    toString(fixedType));
             }
 
             result = *resultConverted;
@@ -31,7 +33,7 @@ BuilderVariable::BuilderVariable(const VariableNode *node, BuilderScope &scope)
 
         type = result.type;
     } else {
-        type = node->fixedType.value();
+        type = function.builder.resolveTypename(node->fixedType());
     }
 
     if (scope.current) {
@@ -44,10 +46,10 @@ BuilderVariable::BuilderVariable(const VariableNode *node, BuilderScope &scope)
 
 BuilderVariable::BuilderVariable(const VariableNode *node, Value *input, BuilderScope &scope)
     : function(scope.function), node(node) {
-    if (!node->fixedType || !node->children.empty())
+    if (!node->hasFixedType || node->value())
         throw VerifyError(node, "A function parameter must have fixed type and no default value, unimplemented.");
 
-    type = *node->fixedType;
+    type = function.builder.resolveTypename(node->fixedType());
 
     if (scope.current) {
         value = function.entry.CreateAlloca(

@@ -10,18 +10,21 @@
 #include <parser/statement.h>
 
 void BuilderFunction::build() {
-    Typename returnTypename;
-
     bool responsible = search::exclusive::parents(node, [this](const Node *n) {
         return n == builder.file.root.get();
     });
 
-    const Node *body = (!responsible || node->isExtern) ? nullptr : node->children[node->parameterCount].get();
+    Typename returnTypename = PrimitiveTypename::from(PrimitiveType::Nothing);
+
+    if (auto fixed = node->fixedType())
+        returnTypename = builder.resolveTypename(fixed);
+
+    const Node *body = responsible ? node->body() : nullptr;
     // Check for inferred type from expression node maybe?
-    if (body && body->is(Kind::Expression) && node->returnType == types::nothing()) {
+    if (body && body->is(Kind::Expression) && !node->hasFixedType
+        && returnTypename == PrimitiveTypename::from(PrimitiveType::Nothing)) {
+
         returnTypename = BuilderScope(body, *this, false).product.value().type;
-    } else {
-        returnTypename = node->returnType;
     }
 
     returnType = builder.makeTypename(returnTypename);
@@ -29,16 +32,18 @@ void BuilderFunction::build() {
     std::vector<Typename> parameters(node->parameterCount);
     std::vector<Type *> parameterTypes(node->parameterCount);
 
+    auto parameterVariables = node->parameters();
+
     for (size_t a = 0; a < node->parameterCount; a++) {
-        const auto &fixed = node->children[a]->as<VariableNode>()->fixedType;
+        auto fixed = parameterVariables[a]->fixedType();
 
         if (!fixed) {
             throw VerifyError(node->children[a].get(),
                 "Function parameter must have given type, default parameters are not implemented.");
         }
 
-        parameters[a] = *fixed;
-        parameterTypes[a] = builder.makeTypename(*fixed);
+        parameters[a] = builder.resolveTypename(fixed);
+        parameterTypes[a] = builder.makeTypename(parameters[a]);
     }
 
     type = {
@@ -57,7 +62,7 @@ void BuilderFunction::build() {
         entry.SetInsertPoint(entryBlock);
         exit.SetInsertPoint(exitBlock);
 
-        if (returnTypename != types::nothing())
+        if (returnTypename != PrimitiveTypename::from(PrimitiveType::Nothing))
             returnValue = entry.CreateAlloca(returnType, nullptr, "result");
 
         BuilderScope scope(body, *this);
@@ -86,7 +91,7 @@ void BuilderFunction::build() {
         if (!scope.currentBlock->getTerminator())
             scope.current.value().CreateBr(exitBlock);
 
-        if (returnTypename == types::nothing())
+        if (returnTypename == PrimitiveTypename::from(PrimitiveType::Nothing))
             exit.CreateRetVoid();
         else
             exit.CreateRet(exit.CreateLoad(returnValue, "final"));

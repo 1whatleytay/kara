@@ -6,7 +6,8 @@ struct StatementNode : public Node {
     enum class Operation {
         Return,
         Break,
-        Continue
+        Continue,
+        // Skip
     };
 
     Operation op = Operation::Break;

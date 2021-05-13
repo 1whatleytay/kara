@@ -1,6 +1,10 @@
 #include <parser/import.h>
 
-#include <parser/string.h>
+#include <parser/literals.h>
+
+const StringNode *ImportNode::body() const {
+    return children.front()->as<StringNode>();
+}
 
 ImportNode::ImportNode(Node *parent) : Node(parent, Kind::Import) {
     match("import", true);

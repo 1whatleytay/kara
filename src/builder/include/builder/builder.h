@@ -176,21 +176,16 @@ struct Builder {
     std::unordered_map<const TypeNode *, std::unique_ptr<BuilderType>> types;
     std::unordered_map<const FunctionNode *, std::unique_ptr<BuilderFunction>> functions;
 
-//    std::vector<std::unique_ptr<GlobalVariable>> globals;
-
     BuilderType *makeType(const TypeNode *node);
     BuilderFunction *makeFunction(const FunctionNode *node);
 
+    const Node *find(const ReferenceNode *node);
     const Node *searchDependencies(const std::function<bool(Node *)> &match);
 
-    const Node *find(const ReferenceNode *node);
-    const TypeNode *find(const StackTypename &type);
+    Typename resolveTypename(const Node *node);
 
-    [[nodiscard]] Type *makeBuiltinTypename(const StackTypename &type) const;
-
-    // Node needs to be passed to get a sense of scope.
-    Type *makeStackTypename(const StackTypename &type);
     Type *makeTypename(const Typename &type);
+    [[nodiscard]] Type *makePrimitiveType(PrimitiveType type) const;
 
     Builder(const ManagerFile &file, const Options &opts);
 };

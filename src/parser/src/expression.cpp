@@ -1,17 +1,7 @@
 #include <parser/expression.h>
 
-#include <parser/as.h>
-#include <parser/dot.h>
-#include <parser/call.h>
-#include <parser/bool.h>
-#include <parser/null.h>
-#include <parser/array.h>
-#include <parser/index.h>
-#include <parser/number.h>
-#include <parser/string.h>
-#include <parser/ternary.h>
-#include <parser/reference.h>
-#include <parser/parentheses.h>
+#include <parser/literals.h>
+#include <parser/operator.h>
 
 #include <stdexcept>
 
@@ -47,7 +37,7 @@ ExpressionNode::ExpressionNode(Node *parent, bool placeholder) : Node(parent, Ki
     while(!end() && !exit) {
         while (push<UnaryNode>(true));
 
-        push<ParenthesesNode, ArrayNode, StringNode, NullNode, BoolNode, NumberNode, ReferenceNode>();
+        push<ParenthesesNode, ArrayNode, StringNode, SpecialNode, BoolNode, NumberNode, ReferenceNode>();
 
         while (true) {
             if (!push<CallNode, IndexNode, DotNode, OperatorNode>(true)) {
@@ -111,7 +101,7 @@ ExpressionNode::ExpressionNode(Node *parent, bool placeholder) : Node(parent, Ki
 
     while (!operators.empty()) {
         for (auto order : operatorOrder) {
-            for (size_t i = 0; i < operators.size(); i++) {
+            for (int64_t i = 0; i < operators.size(); i++) {
                 OperatorNode *op = operators[i];
 
                 if (op->op != order)

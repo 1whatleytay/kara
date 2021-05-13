@@ -1,0 +1,26 @@
+import (c) 'stdio.h'
+
+type Z {
+	a int
+	b int
+}
+
+type FILE {
+	f &Z
+}
+
+type V = FILE
+
+main int {
+    let z Z
+	let v V
+
+	v.f = z
+	v.f.a = 4
+
+	puts('hello')
+	puts('hello')
+	puts('hello')
+
+	return v.f.a
+}

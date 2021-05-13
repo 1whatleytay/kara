@@ -1,16 +1,12 @@
 #include <builder/builder.h>
 
+#include <builder/error.h>
 #include <builder/manager.h>
 
 #include <parser/type.h>
 #include <parser/function.h>
 
 #include <llvm/Support/Host.h>
-#include <llvm/Support/raw_ostream.h>
-
-#include <filesystem>
-
-namespace fs = std::filesystem;
 
 BuilderResult::BuilderResult(Kind kind, Value *value, Typename type, std::unique_ptr<BuilderResult> implicit)
     : kind(kind), value(value), type(std::move(type)), implicit(std::move(implicit)) { }
@@ -64,16 +60,20 @@ Builder::Builder(const ManagerFile &file, const Options &opts)
                 // Handled by ManagerFile
                 break;
 
-            case Kind::Type:
-                makeType(node->as<TypeNode>());
+            case Kind::Type: {
+                auto e = node->as<TypeNode>();
+
+                if (!e->isAlias)
+                    makeType(e);
                 break;
+            }
 
             case Kind::Function:
                 makeFunction(node->as<FunctionNode>());
                 break;
 
             default:
-                assert(false);
+                throw VerifyError(node.get(), "Cannot build this node in root.");
         }
     }
 }

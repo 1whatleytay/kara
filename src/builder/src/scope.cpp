@@ -3,15 +3,12 @@
 #include <builder/error.h>
 #include <parser/search.h>
 
-#include <parser/if.h>
-#include <parser/for.h>
-#include <parser/block.h>
-#include <parser/debug.h>
+#include <parser/scope.h>
 #include <parser/assign.h>
 #include <parser/function.h>
+#include <parser/literals.h>
 #include <parser/variable.h>
 #include <parser/statement.h>
-#include <parser/reference.h>
 
 BuilderVariable *BuilderScope::findVariable(const VariableNode *node) const {
     const BuilderScope *scope = this;
@@ -54,9 +51,11 @@ Value *BuilderScope::ref(const BuilderResult &result) {
 void BuilderScope::makeParameters() {
     const FunctionNode *astFunction = function.node;
 
+    auto parameters = astFunction->parameters();
+
     // Create parameters within scope.
-    for (size_t a = 0; a < astFunction->parameterCount; a++) {
-        const auto *parameterNode = astFunction->children[a]->as<VariableNode>();
+    for (size_t a = 0; a < parameters.size(); a++) {
+        const auto *parameterNode = parameters[a];
 
         Argument *argument = nullptr;
 
@@ -122,10 +121,6 @@ BuilderScope::BuilderScope(const Node *node, BuilderFunction &function, BuilderS
 
                 case Kind::Expression:
                     makeExpression(child->as<ExpressionNode>());
-                    break;
-
-                case Kind::Debug:
-                    makeDebug(child->as<DebugNode>());
                     break;
 
                 default:

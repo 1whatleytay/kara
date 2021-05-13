@@ -5,6 +5,23 @@
 #include <parser/variable.h>
 #include <parser/expression.h>
 
+std::vector<const VariableNode *> FunctionNode::parameters() const {
+    std::vector<const VariableNode *> result(parameterCount);
+
+    for (size_t a = 0; a < parameterCount; a++)
+        result[a] = children[a]->as<VariableNode>();
+
+    return result;
+}
+
+const Node *FunctionNode::fixedType() const {
+    return hasFixedType ? children[parameterCount].get() : nullptr;
+}
+
+const Node *FunctionNode::body() const {
+    return isExtern ? nullptr : children[parameterCount + hasFixedType].get();
+}
+
 FunctionNode::FunctionNode(Node *parent, bool external) : Node(parent, Kind::Function) {
     if (external)
         return;
@@ -23,7 +40,8 @@ FunctionNode::FunctionNode(Node *parent, bool external) : Node(parent, Kind::Fun
     }
 
     if (!(peek("{") || peek("=>") || peek("external"))) {
-        returnType = std::move(pick<TypenameNode>()->type);
+        pushTypename(this);
+        hasFixedType = true;
     }
 
     if (next("external")) {

@@ -8,16 +8,18 @@
 void BuilderScope::makeStatement(const StatementNode *node) {
     assert(current);
 
+    auto nothing = PrimitiveTypename::from(PrimitiveType::Nothing);
+
     switch (node->op) {
         case StatementNode::Operation::Return: {
             if (node->children.empty()) {
-                if (*function.type.returnType != types::nothing()) {
+                if (*function.type.returnType != nothing) {
                     throw VerifyError(node,
                         "Method is of type {} but return statement does not return anything",
                         toString(*function.type.returnType));
                 }
             } else {
-                if (!node->children.empty() && *function.type.returnType == types::nothing()) {
+                if (!node->children.empty() && *function.type.returnType == nothing) {
                     throw VerifyError(node,
                         "Method does not have a return type but return statement returns value.");
                 }

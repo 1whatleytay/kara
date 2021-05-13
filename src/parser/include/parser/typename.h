@@ -2,30 +2,111 @@
 
 #include <parser/kinds.h>
 
-#include <set>
 #include <variant>
 
-struct VariableNode;
+struct NumberNode;
 
+enum class PrimitiveType {
+    Any, Null, Nothing,
+    Bool,
+    Byte, Short, Int, Long,
+    UByte, UShort, UInt, ULong,
+    Float, Double
+};
+
+enum class ArrayKind {
+    VariableSize, // [MyType]
+    FixedSize, // [MyType:40]
+    Unbounded, // [MyType:]
+    Iterable, // [MyType::]
+};
+
+struct NamedTypenameNode : public Node {
+    std::string name;
+
+    explicit NamedTypenameNode(Node *parent, bool external = false);
+};
+
+struct PrimitiveTypenameNode : public Node {
+    PrimitiveType type = PrimitiveType::Any;
+
+    explicit PrimitiveTypenameNode(Node *parent, bool external = false);
+};
+
+struct ReferenceTypenameNode : public Node {
+    bool isMutable = false;
+
+    [[nodiscard]] const Node *body() const;
+
+    explicit ReferenceTypenameNode(Node *parent, bool external = false);
+};
+
+struct OptionalTypenameNode : public Node {
+    bool bubbles = false;
+
+    [[nodiscard]] const Node *body() const;
+
+    explicit OptionalTypenameNode(Node *parent, bool external = false);
+};
+
+struct ArrayTypenameNode : public Node {
+    ArrayKind type = ArrayKind::VariableSize;
+
+    [[nodiscard]] const Node *body() const;
+    [[nodiscard]] const NumberNode *fixedSize() const;
+
+    explicit ArrayTypenameNode(Node *parent, bool external = false);
+};
+
+void pushTypename(Node *parent);
+
+// Builder Typename
+struct NamedTypename;
 struct ArrayTypename;
-struct StackTypename;
 struct FunctionTypename;
+struct OptionalTypename;
+struct PrimitiveTypename;
 struct ReferenceTypename;
-using Typename = std::variant<ArrayTypename, StackTypename, FunctionTypename, ReferenceTypename>;
+using Typename = std::variant<
+    NamedTypename,
+    ArrayTypename,
+    FunctionTypename,
+    OptionalTypename,
+    PrimitiveTypename,
+    ReferenceTypename
+>;
 
-struct StackTypename {
-    std::string value;
+struct TypeNode;
 
-    const Node *node = nullptr;
+struct PrimitiveTypename {
+    PrimitiveType type = PrimitiveType::Any;
 
-    bool operator==(const StackTypename &other) const;
-    bool operator!=(const StackTypename &other) const;
+    [[nodiscard]] bool isSigned() const;
+    [[nodiscard]] bool isUnsigned() const;
+    [[nodiscard]] bool isInteger() const;
+    [[nodiscard]] bool isFloat() const;
+
+    [[nodiscard]] bool isNumber() const;
+
+    [[nodiscard]] int32_t priority() const;
+
+    static Typename from(PrimitiveType type);
+
+    bool operator==(const PrimitiveTypename &other) const;
+    bool operator!=(const PrimitiveTypename &other) const;
+};
+
+struct NamedTypename {
+    const TypeNode *type = nullptr;
+
+    bool operator==(const NamedTypename &other) const;
+    bool operator!=(const NamedTypename &other) const;
 };
 
 struct FunctionTypename {
     enum class Kind {
-        Regular,
-        Pure,
+//        Regular,
+//        Pure,
         Pointer
     };
 
@@ -46,15 +127,17 @@ struct ReferenceTypename {
     bool operator!=(const ReferenceTypename &other) const;
 };
 
-struct ArrayTypename {
-    enum class Kind {
-        VariableSize, // [MyType]
-        FixedSize, // [MyType:40]
-        Unbounded, // [MyType:]
-        Iterable, // [MyType::]
-    };
+struct OptionalTypename {
+    std::shared_ptr<Typename> value;
 
-    Kind kind = Kind::VariableSize;
+    bool bubbles = true;
+
+    bool operator==(const OptionalTypename &other) const;
+    bool operator!=(const OptionalTypename &other) const;
+};
+
+struct ArrayTypename {
+    ArrayKind kind = ArrayKind::VariableSize;
 
     std::shared_ptr<Typename> value;
 
@@ -64,47 +147,10 @@ struct ArrayTypename {
     bool operator!=(const ArrayTypename &other) const;
 };
 
-struct TypenameNode : public Node {
-    Typename type;
-
-    explicit TypenameNode(Node *parent);
-};
-
+std::string toString(const NamedTypename &type);
 std::string toString(const ArrayTypename &type);
-std::string toString(const StackTypename &type);
 std::string toString(const FunctionTypename &type);
+std::string toString(const PrimitiveTypename &type);
 std::string toString(const ReferenceTypename &type);
 
 std::string toString(const Typename &type);
-
-namespace types {
-    Typename any();
-    Typename null();
-    Typename nothing();
-
-    Typename boolean();
-
-    Typename i8();
-    Typename i16();
-    Typename i32();
-    Typename i64();
-
-    Typename u8();
-    Typename u16();
-    Typename u32();
-    Typename u64();
-
-    Typename f32();
-    Typename f64();
-
-    Typename string();
-
-    bool isSigned(const Typename &type);
-    bool isUnsigned(const Typename &type);
-    bool isInteger(const Typename &type);
-    bool isFloat(const Typename &type);
-
-    bool isNumber(const Typename &type);
-
-    int32_t priority(const Typename &type);
-}

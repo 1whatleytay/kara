@@ -14,10 +14,7 @@ add_library(builder STATIC
     src/expression.cpp
     src/statement.cpp
     src/scope.cpp
-	src/debug.cpp
 	src/type.cpp
-    src/if.cpp
-    src/for.cpp
     src/block.cpp)
 
 target_include_directories(builder PUBLIC include)

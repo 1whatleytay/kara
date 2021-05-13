@@ -3,11 +3,11 @@
 #include <builder/error.h>
 #include <builder/manager.h>
 
-#include <parser/search.h>
 #include <parser/type.h>
+#include <parser/search.h>
 #include <parser/function.h>
+#include <parser/literals.h>
 #include <parser/variable.h>
-#include <parser/reference.h>
 
 const Node *Builder::searchDependencies(const std::function<bool(Node *)> &match) {
     for (const ManagerFile *f : dependencies) {
@@ -34,22 +34,6 @@ const Node *Builder::find(const ReferenceNode *node) {
 
     if (!result)
         throw VerifyError(node, "Reference does not evaluate to anything.");
-
-    return result;
-}
-
-
-const TypeNode *Builder::find(const StackTypename &type) {
-    assert(type.node);
-
-    auto match = [&type](const Node *node) {
-        return node->is(Kind::Type) && node->as<TypeNode>()->name == type.value;
-    };
-
-    auto *result = search::exclusive::scope(type.node, match)->as<TypeNode>();
-
-    if (!result)
-        result = searchDependencies(match)->as<TypeNode>();
 
     return result;
 }

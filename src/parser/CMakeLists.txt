@@ -10,25 +10,9 @@ add_library(parser STATIC
     include/parser/operator.h
     include/parser/statement.h
     include/parser/scope.h
-    include/parser/reference.h
-    include/parser/number.h
-    include/parser/parentheses.h
-    include/parser/block.h
-    include/parser/unary.h
-    include/parser/call.h
-    include/parser/debug.h
-    include/parser/if.h
-    include/parser/for.h
-    include/parser/bool.h
-    include/parser/null.h
-    include/parser/array.h
-    include/parser/index.h
+    include/parser/literals.h
     include/parser/type.h
-    include/parser/dot.h
-    include/parser/ternary.h
-    include/parser/as.h
     include/parser/import.h
-    include/parser/string.h
 
     src/search.cpp
     src/root.cpp
@@ -36,29 +20,14 @@ add_library(parser STATIC
     src/variable.cpp
     src/typename.cpp
     src/assign.cpp
+    src/literals.cpp
     src/expression.cpp
     src/operator.cpp
+    src/scope.cpp
     src/statement.cpp
-    src/code.cpp
-    src/reference.cpp
-    src/number.cpp
-    src/parentheses.cpp
-    src/block.cpp
-    src/unary.cpp
-    src/call.cpp
-    src/debug.cpp
-    src/if.cpp
-    src/for.cpp
-    src/bool.cpp
-    src/null.cpp
-    src/array.cpp
-    src/index.cpp
+
     src/type.cpp
-    src/dot.cpp
-    src/ternary.cpp
-    src/as.cpp
-    src/import.cpp
-    src/string.cpp)
+    src/import.cpp)
 
 target_include_directories(parser PUBLIC include)
 target_link_libraries(parser PUBLIC fmt hermes)

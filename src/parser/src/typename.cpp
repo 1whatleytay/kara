@@ -1,78 +1,120 @@
 #include <parser/typename.h>
 
-#include <parser/number.h>
-#include <parser/search.h>
+#include <parser/type.h>
+#include <parser/literals.h>
 
 #include <fmt/format.h>
 
-#include <array>
-#include <cassert>
+NamedTypenameNode::NamedTypenameNode(Node *parent, bool external) : Node(parent, Kind::NamedTypename) {
+    if (external)
+        return;
 
-namespace types {
-    // Special
-    Typename any() { return StackTypename { "any" }; }
-    Typename null() { return StackTypename { "null" }; }
-    Typename nothing() { return StackTypename { "nothing" }; }
-
-    // Numbers
-    Typename boolean() { return StackTypename { "bool" }; }
-
-    Typename i8() { return StackTypename { "byte" }; }
-    Typename i16() { return StackTypename { "short" }; }
-    Typename i32() { return StackTypename { "int" }; }
-    Typename i64() { return StackTypename { "long" }; }
-
-    Typename u8() { return StackTypename { "ubyte" }; }
-    Typename u16() { return StackTypename { "ushort" }; }
-    Typename u32() { return StackTypename { "uint" }; }
-    Typename u64() { return StackTypename { "ulong" }; }
-
-    Typename f32() { return StackTypename { "float" }; }
-    Typename f64() { return StackTypename { "double" }; }
-
-    Typename string() {
-        return ReferenceTypename {
-            std::make_shared<Typename>(ArrayTypename {
-                ArrayTypename::Kind::Unbounded,
-                std::make_shared<Typename>(types::i8())
-            })
-        };
-    }
-
-    bool isSigned(const Typename &type) {
-        return type == i8() || type == i16() || type == i32() || type == i64();
-    }
-    bool isUnsigned(const Typename &type) {
-        return type == u8() || type == u16() || type == u32() || type == u64();
-    }
-    bool isInteger(const Typename &type) {
-        return isSigned(type) || isUnsigned(type);
-    }
-    bool isFloat(const Typename &type) {
-        return type == f32() || type == f64();
-    }
-
-    bool isNumber(const Typename &type) {
-        return isSigned(type) || isUnsigned(type) || isFloat(type);
-    }
-
-    int32_t priority(const Typename &type) {
-        std::array<Typename, 10> types = {
-            f64(), u64(), i64(),
-            f32(), u32(), i32(),
-            u16(), i16(),
-            u8(), i8()
-        };
-
-        return types.size() - std::distance(types.begin(), std::find(types.begin(), types.end(), type));
-    }
+    name = token();
 }
 
-bool StackTypename::operator==(const StackTypename &other) const {
-    return value == other.value;
+PrimitiveTypenameNode::PrimitiveTypenameNode(Node *parent, bool external) : Node(parent, Kind::PrimitiveTypename) {
+    if (external)
+        return;
+
+    /*
+     * Any, Null, Nothing,
+     * Bool,
+     * Byte, Short, Int, Long,
+     * UByte, UShort, UInt, ULong,
+     * Float, Double
+     */
+
+    type = select<PrimitiveType>({
+        "any", "null", "nothing",
+        "bool",
+        "byte", "short", "int", "long",
+        "ubyte", "ushort", "uint", "ulong",
+        "float", "double"
+    });
 }
 
-bool StackTypename::operator!=(const StackTypename &other) const {
+const Node *ReferenceTypenameNode::body() const {
+    return children.front().get();
+}
+
+ReferenceTypenameNode::ReferenceTypenameNode(Node *parent, bool external) : Node(parent, Kind::ReferenceTypename) {
+    if (external)
+        return;
+
+    match("&");
+
+    isMutable = select({ "let", "var" }, true, true) == 1;
+
+    pushTypename(this);
+}
+
+const Node *OptionalTypenameNode::body() const {
+    return children.front().get();
+}
+
+OptionalTypenameNode::OptionalTypenameNode(Node *parent, bool external) : Node(parent, Kind::OptionalTypename) {
+    if (external)
+        return;
+
+    bubbles = select<bool>({ "?", "!" });
+
+    pushTypename(this);
+}
+
+const Node *ArrayTypenameNode::body() const {
+    return children.front().get();
+}
+
+const NumberNode *ArrayTypenameNode::fixedSize() const {
+    return type == ArrayKind::FixedSize ? children[1]->as<NumberNode>() : nullptr;
+}
+
+ArrayTypenameNode::ArrayTypenameNode(Node *parent, bool external) : Node(parent, Kind::ArrayTypename) {
+    if (external)
+        return;
+
+    match("[");
+
+    pushTypename(this);
+
+    if (next(":")) {
+        type = ArrayKind::Unbounded;
+
+        if (next(":")) {
+            type = ArrayKind::Iterable;
+        } else {
+            type = ArrayKind::FixedSize;
+
+            push<NumberNode>(true);
+        }
+    }
+
+    needs("]");
+}
+
+void pushTypename(Node *parent) {
+    parent->push<
+        ReferenceTypenameNode,
+        OptionalTypenameNode,
+        ArrayTypenameNode,
+        PrimitiveTypenameNode,
+        NamedTypenameNode
+    >();
+}
+
+bool PrimitiveTypename::operator==(const PrimitiveTypename &other) const {
+    return type == other.type;
+}
+
+bool PrimitiveTypename::operator!=(const PrimitiveTypename &other) const {
+    return !operator==(other);
+}
+
+bool NamedTypename::operator==(const NamedTypename &other) const {
+    return type == other.type;
+}
+
+bool NamedTypename::operator!=(const NamedTypename &other) const {
     return !operator==(other);
 }
 
@@ -90,6 +132,14 @@ bool ReferenceTypename::operator==(const ReferenceTypename &other) const {
     return *value == *other.value;
 }
 
+bool OptionalTypename::operator==(const OptionalTypename &other) const {
+    return *value == *other.value && bubbles == other.bubbles;
+}
+
+bool OptionalTypename::operator!=(const OptionalTypename &other) const {
+    return !operator==(other);
+}
+
 bool ReferenceTypename::operator!=(const ReferenceTypename &other) const {
     return !operator==(other);
 }
@@ -104,61 +154,42 @@ bool ArrayTypename::operator!=(const ArrayTypename &other) const {
     return !operator==(other);
 }
 
-TypenameNode::TypenameNode(Node *parent) : Node(parent, Kind::Typename) {
-    if (next("&")) {
-        std::vector<std::string> options = { "let", "var" };
-        size_t index = select(options, true, true);
-
-        type = ReferenceTypename {
-            std::make_unique<Typename>(std::move(pick<TypenameNode>()->type)),
-
-            index != options.size() && index // isMutable?
-        };
-    } else if (next("[")) {
-        Typename valueType = pick<TypenameNode>()->type;
-
-        ArrayTypename::Kind kind = ArrayTypename::Kind::VariableSize;
-        size_t fixedSize = 0;
-
-        if (next(":")) {
-            kind = ArrayTypename::Kind::Unbounded;
-
-            if (next(":")) {
-                kind = ArrayTypename::Kind::Iterable;
-            } else if (std::unique_ptr<NumberNode> n = pick<NumberNode>(true)) {
-                kind = ArrayTypename::Kind::FixedSize;
-                assert(types::isSigned(n->type));
-
-                fixedSize = n->value.i;
-            }
-        }
-
-        type = ArrayTypename {
-            kind,
-            std::make_unique<Typename>(std::move(valueType)),
-            fixedSize
-        };
-
-        needs("]");
-    } else {
-        type = StackTypename {
-            token(),
-
-            search::exclusive::parents(this, [](const Node *node) { return !node->is(Kind::Typename); })
-        };
-    }
-}
 
 std::string toString(const ArrayTypename &type) {
     return fmt::format("[{}{}]", toString(*type.value),
-        type.kind == ArrayTypename::Kind::Unbounded ? ":" :
-        type.kind == ArrayTypename::Kind::Iterable ? "::" :
-        type.kind == ArrayTypename::Kind::FixedSize ? fmt::format(":{}", type.size) :
-        "");
+        type.kind == ArrayKind::Unbounded ? ":" :
+            type.kind == ArrayKind::Iterable ? "::" :
+                type.kind == ArrayKind::FixedSize ? fmt::format(":{}", type.size) :
+                    "");
 }
 
-std::string toString(const StackTypename &type) {
-    return type.value;
+std::string toString(const PrimitiveTypename &type) {
+    switch (type.type) {
+        case PrimitiveType::Any: return "any";
+        case PrimitiveType::Null: return "null";
+        case PrimitiveType::Nothing: return "nothing";
+        case PrimitiveType::Bool: return "bool";
+        case PrimitiveType::Byte: return "byte";
+        case PrimitiveType::Short: return "short";
+        case PrimitiveType::Int: return "int";
+        case PrimitiveType::Long: return "long";
+        case PrimitiveType::UByte: return "ubyte";
+        case PrimitiveType::UShort: return "ushort";
+        case PrimitiveType::UInt: return "uint";
+        case PrimitiveType::ULong: return "ulong";
+        case PrimitiveType::Float: return "float";
+        case PrimitiveType::Double: return "double";
+        default:
+            assert(false);
+    }
+}
+
+std::string toString(const NamedTypename &type) {
+    return type.type->name;
+}
+
+std::string toString(const OptionalTypename &type) {
+    return fmt::format("{}{}", type.bubbles ? "!" : "?", toString(*type.value));
 }
 
 std::string toString(const ReferenceTypename &type) {
@@ -171,4 +202,49 @@ std::string toString(const FunctionTypename &type) {
 
 std::string toString(const Typename &type) {
     return std::visit([](auto &type) { return toString(type); }, type);
+}
+
+bool PrimitiveTypename::isSigned() const {
+    return type == PrimitiveType::Byte
+        || type == PrimitiveType::Short
+        || type == PrimitiveType::Int
+        || type == PrimitiveType::Long;
+}
+bool PrimitiveTypename::isUnsigned() const {
+    return type == PrimitiveType::UByte
+        || type == PrimitiveType::UShort
+        || type == PrimitiveType::UInt
+        || type == PrimitiveType::ULong;
+}
+
+bool PrimitiveTypename::isInteger() const {
+    return isSigned() || isUnsigned();
+}
+
+bool PrimitiveTypename::isFloat() const {
+    return type == PrimitiveType::Float || type == PrimitiveType::Double;
+}
+
+bool PrimitiveTypename::isNumber() const {
+    return isInteger() || isFloat();
+}
+
+int32_t PrimitiveTypename::priority() const {
+    std::array<PrimitiveType, 10> types = {
+        PrimitiveType::Double, PrimitiveType::ULong, PrimitiveType::Long,
+        PrimitiveType::Float, PrimitiveType::UInt, PrimitiveType::Int,
+        PrimitiveType::UShort, PrimitiveType::Short,
+        PrimitiveType::UByte, PrimitiveType::Byte
+    };
+
+    auto iterator = std::find(types.begin(), types.end(), type);
+
+    if (iterator == types.end())
+        return -1;
+
+    return static_cast<int32_t>(types.size() - std::distance(types.begin(), iterator));
+}
+
+Typename PrimitiveTypename::from(PrimitiveType type) {
+    return Typename { PrimitiveTypename { type } };
 }

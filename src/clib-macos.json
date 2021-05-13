@@ -1,0 +1,15 @@
+{
+	"language": "c",
+
+	"includes": [
+		"/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX11.3.sdk/usr/include/"
+	],
+
+	"arguments": [
+		"--",
+		"-I/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX11.3.sdk/usr/include/",
+		
+		"-DTARGET_OS_IPHONE=0",
+		"-Wno-nullability-completeness"
+	]
+}

@@ -1,77 +1,134 @@
 #include <builder/builder.h>
 
-#include <parser/type.h>
-
-#include <fmt/format.h>
 #include <builder/error.h>
 
-Type *Builder::makeBuiltinTypename(const StackTypename &stack) const {
-    Typename type(stack);
+#include <parser/type.h>
+#include <parser/search.h>
+#include <parser/literals.h>
 
-    std::vector<std::pair<Typename, Type *>> typeMap = {
-        { types::nothing(), Type::getVoidTy(context) },
-        { types::i8(), Type::getInt8Ty(context) },
-        { types::i16(), Type::getInt16Ty(context) },
-        { types::i32(), Type::getInt32Ty(context) },
-        { types::i64(), Type::getInt64Ty(context) },
-        { types::u8(), Type::getInt8Ty(context) },
-        { types::u16(), Type::getInt16Ty(context) },
-        { types::u32(), Type::getInt32Ty(context) },
-        { types::u64(), Type::getInt64Ty(context) },
-        { types::f32(), Type::getFloatTy(context) },
-        { types::f64(), Type::getDoubleTy(context) },
-        { types::boolean(), Type::getInt1Ty(context) },
-        { types::null(), Type::getInt8PtrTy(context) },
-    };
+#include <fmt/format.h>
 
-    if (type == types::any())
-        throw std::runtime_error("Any type is unsupported.");
+Typename Builder::resolveTypename(const Node *node) {
+    switch (node->is<Kind>()) {
+        case Kind::NamedTypename: {
+            auto e = node->as<NamedTypenameNode>();
 
-    auto iterator = std::find_if(typeMap.begin(), typeMap.end(), [&type](const auto &e) {
-        return e.first == type;
-    });
+            auto match = [e](const Node *node) {
+                if (!node->is(Kind::Type))
+                    return false;
 
-    return iterator == typeMap.end() ? nullptr : iterator->second;
+                return node->as<TypeNode>()->name == e->name;
+            };
+
+            auto *type = search::exclusive::scope(node, match)->as<TypeNode>();
+
+            if (!type)
+                type = searchDependencies(match)->as<TypeNode>();
+
+            if (auto alias = type->alias())
+                return resolveTypename(alias);
+
+            return NamedTypename { type };
+        }
+
+        case Kind::PrimitiveTypename:
+            return PrimitiveTypename { node->as<PrimitiveTypenameNode>()->type };
+
+        case Kind::OptionalTypename: {
+            auto e = node->as<OptionalTypenameNode>();
+
+            return OptionalTypename {
+                std::make_shared<Typename>(resolveTypename(e->body())), e->bubbles
+            };
+        }
+
+        case Kind::ReferenceTypename: {
+            auto e = node->as<ReferenceTypenameNode>();
+
+            return ReferenceTypename {
+                std::make_shared<Typename>(resolveTypename(e->body())), e->isMutable
+            };
+        }
+
+        case Kind::ArrayTypename: {
+            auto e = node->as<ArrayTypenameNode>();
+
+            return ArrayTypename {
+                e->type,
+
+                std::make_shared<Typename>(resolveTypename(e->body())),
+
+                e->type == ArrayKind::FixedSize ? std::get<uint64_t>(e->fixedSize()->value) : 0
+            };
+        }
+
+        default:
+            throw VerifyError(node, "Expected typename node, but got something else.");
+    }
 }
 
-Type *Builder::makeStackTypename(const StackTypename &type) {
-    Type *builtin = makeBuiltinTypename(type);
+Type *Builder::makePrimitiveType(PrimitiveType type) const {
+    switch (type) {
+        case PrimitiveType::Any: throw std::runtime_error("Any type is unsupported.");
+        case PrimitiveType::Null: return Type::getInt8PtrTy(context);
+        case PrimitiveType::Nothing: return Type::getVoidTy(context);
+        case PrimitiveType::Bool: return Type::getInt1Ty(context);
 
-    if (builtin)
-        return builtin;
+        case PrimitiveType::Byte:
+        case PrimitiveType::UByte:
+            return Type::getInt8Ty(context);
 
-    const auto *found = Builder::find(type);
+        case PrimitiveType::Short:
+        case PrimitiveType::UShort:
+            return Type::getInt16Ty(context);
 
-    if (!found)
-        throw VerifyError(type.node, "Failed to find type matching {}.", type.value);
+        case PrimitiveType::Int:
+        case PrimitiveType::UInt:
+            return Type::getInt32Ty(context);
 
-    return makeType(found)->type;
+        case PrimitiveType::Long:
+        case PrimitiveType::ULong:
+            return Type::getInt64Ty(context);
+
+        case PrimitiveType::Float: return Type::getFloatTy(context);
+        case PrimitiveType::Double: return Type::getDoubleTy(context);
+
+        default: return nullptr;
+    }
 }
 
 Type *Builder::makeTypename(const Typename &type) {
     struct {
         Builder &builder;
 
-        Type *operator()(const StackTypename &type) {
-            return builder.makeStackTypename(type);
+        Type *operator()(const PrimitiveTypename &type) const {
+            return builder.makePrimitiveType(type.type);
         }
 
-        Type *operator()(const ReferenceTypename &type) {
+        Type *operator()(const NamedTypename &type) const {
+            return builder.makeType(type.type)->type;
+        }
+
+        Type *operator()(const OptionalTypename &type) const {
+            throw std::exception();
+        }
+
+        Type *operator()(const ReferenceTypename &type) const {
             return PointerType::get(builder.makeTypename(*type.value), 0);
         }
 
-        Type *operator()(const ArrayTypename &type) {
+        Type *operator()(const ArrayTypename &type) const {
             switch (type.kind) {
-                case ArrayTypename::Kind::FixedSize:
+                case ArrayKind::FixedSize:
                     return ArrayType::get(builder.makeTypename(*type.value), type.size);
-                case ArrayTypename::Kind::Unbounded:
+                case ArrayKind::Unbounded:
                     return builder.makeTypename(*type.value);
                 default:
                     throw std::runtime_error(fmt::format("Type {} is unimplemented.", toString(type)));
             }
         }
 
-        Type *operator()(const FunctionTypename &type) {
+        Type *operator()(const FunctionTypename &type) const {
             throw std::exception();
         }
     } visitor { *this };
