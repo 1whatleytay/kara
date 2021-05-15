@@ -16,5 +16,5 @@ struct TypeNode : public Node {
     [[nodiscard]] const Node *alias() const;
     [[nodiscard]] std::vector<const VariableNode *> fields() const;
 
-    explicit TypeNode(Node *parent);
+    explicit TypeNode(Node *parent, bool external = false);
 };

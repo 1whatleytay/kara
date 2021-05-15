@@ -5,6 +5,7 @@
 
 #include <parser/type.h>
 #include <parser/function.h>
+#include <parser/variable.h>
 
 #include <llvm/Support/Host.h>
 
@@ -21,6 +22,21 @@ BuilderType *Builder::makeType(const TypeNode *node) {
         types[node] = std::move(ptr);
 
         result->build(); // needed to avoid recursive problems
+
+        return result;
+    } else {
+        return iterator->second.get();
+    }
+}
+
+BuilderVariable *Builder::makeGlobal(const VariableNode *node) {
+    auto iterator = globals.find(node);
+
+    if (iterator == globals.end()) {
+        auto ptr = std::make_unique<BuilderVariable>(node, *this);
+
+        BuilderVariable *result = ptr.get();
+        globals[node] = std::move(ptr);
 
         return result;
     } else {
@@ -58,6 +74,10 @@ Builder::Builder(const ManagerFile &file, const Options &opts)
         switch (node->is<Kind>()) {
             case Kind::Import:
                 // Handled by ManagerFile
+                break;
+
+            case Kind::Variable:
+                makeGlobal(node->as<VariableNode>());
                 break;
 
             case Kind::Type: {

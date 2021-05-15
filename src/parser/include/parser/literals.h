@@ -32,7 +32,7 @@ struct BoolNode : public Node {
 struct NumberNode : public Node {
     std::variant<int64_t, uint64_t, double> value;
 
-    explicit NumberNode(Node *parent);
+    explicit NumberNode(Node *parent, bool external = false);
 };
 
 struct StringNode : public Node {

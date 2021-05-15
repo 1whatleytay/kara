@@ -6,8 +6,28 @@
 
 #include <fmt/format.h>
 
-BuilderVariable::BuilderVariable(const VariableNode *node, BuilderScope &scope)
-    : function(scope.function), node(node) {
+BuilderVariable::BuilderVariable(const VariableNode *node, Builder &builder) : node(node) {
+//    if (node->isMutable)
+//        throw VerifyError(node, "Global variables cannot be mutable.");
+
+    if (!node->hasFixedType)
+        throw VerifyError(node, "Global variables must have a fixed type.");
+
+    if (node->value())
+        throw VerifyError(node, "Global variables cannot be initialized.");
+
+    type = builder.resolveTypename(node->fixedType());
+
+    using L = GlobalVariable::LinkageTypes;
+
+    value = new GlobalVariable(
+        *builder.module, builder.makeTypename(type), node->isMutable,
+        node->isExternal ? L::ExternalLinkage : L::PrivateLinkage, nullptr, node->name);
+}
+
+BuilderVariable::BuilderVariable(const VariableNode *node, BuilderScope &scope) : node(node) {
+    BuilderFunction &function = scope.function;
+
     assert(node->hasFixedType || node->value());
 
     std::optional<BuilderResult> possibleDefault;
@@ -44,8 +64,9 @@ BuilderVariable::BuilderVariable(const VariableNode *node, BuilderScope &scope)
     }
 }
 
-BuilderVariable::BuilderVariable(const VariableNode *node, Value *input, BuilderScope &scope)
-    : function(scope.function), node(node) {
+BuilderVariable::BuilderVariable(const VariableNode *node, Value *input, BuilderScope &scope) : node(node) {
+    BuilderFunction &function = scope.function;
+
     if (!node->hasFixedType || node->value())
         throw VerifyError(node, "A function parameter must have fixed type and no default value, unimplemented.");
 

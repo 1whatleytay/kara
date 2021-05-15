@@ -83,9 +83,8 @@ ArrayTypenameNode::ArrayTypenameNode(Node *parent, bool external) : Node(parent,
         if (next(":")) {
             type = ArrayKind::Iterable;
         } else {
-            type = ArrayKind::FixedSize;
-
-            push<NumberNode>(true);
+            if (push<NumberNode>(true))
+                type = ArrayKind::FixedSize;
         }
     }
 

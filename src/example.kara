@@ -1,26 +1,19 @@
 import (c) 'stdio.h'
+import (c) 'string.h'
 
-type Z {
-	a int
-	b int
-}
+var __stdinp &FILE external
+stdin => __stdinp
 
-type FILE {
-	f &Z
-}
+type String = &[byte:]
 
-type V = FILE
+char(s String) => s[0]
 
-main int {
-    let z Z
-	let v V
+main {
+    var buffer [byte:100],
 
-	v.f = z
-	v.f.a = 4
+    buffer.fgets(100, stdin)
+    buffer[buffer.strlen - 1] = '\0'.char
 
-	puts('hello')
-	puts('hello')
-	puts('hello')
-
-	return v.f.a
+    buffer.strcat(' World!')
+    buffer.puts
 }

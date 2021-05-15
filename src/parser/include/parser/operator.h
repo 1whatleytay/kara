@@ -6,32 +6,34 @@ struct ReferenceNode;
 struct ExpressionNode;
 
 struct AsNode : public Node {
-    const Node *type() const;
+    bool force = false;
+
+    [[nodiscard]] const Node *type() const;
 
     explicit AsNode(Node *parent);
 };
 
 struct CallNode : public Node {
-    std::vector<const ExpressionNode *> parameters() const;
+    [[nodiscard]] std::vector<const ExpressionNode *> parameters() const;
 
     explicit CallNode(Node *parent);
 };
 
 struct DotNode : public Node {
-    const ReferenceNode *reference() const;
+    [[nodiscard]] const ReferenceNode *reference() const;
 
     explicit DotNode(Node *parent);
 };
 
 struct IndexNode : public Node {
-    const ExpressionNode *index() const;
+    [[nodiscard]] const ExpressionNode *index() const;
 
     explicit IndexNode(Node *parent);
 };
 
 struct TernaryNode : public Node {
-    const ExpressionNode *onTrue() const;
-    const ExpressionNode *onFalse() const;
+    [[nodiscard]] const ExpressionNode *onTrue() const;
+    [[nodiscard]] const ExpressionNode *onFalse() const;
 
     explicit TernaryNode(Node *parent);
 };

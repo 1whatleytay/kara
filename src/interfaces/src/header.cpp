@@ -3,7 +3,9 @@
 #include <interfaces/interfaces.h>
 
 #include <parser/root.h>
+#include <parser/type.h>
 #include <parser/function.h>
+#include <parser/literals.h>
 #include <parser/variable.h>
 
 #include <clang/Frontend/FrontendAction.h>
@@ -24,13 +26,90 @@ namespace interfaces::header {
         return ptr;
     }
 
-    std::unique_ptr<Node> make(Node *parent, const clang::ASTContext &context, const clang::QualType &wrapper) {
+    std::unique_ptr<Node> TranslateVisitor::make(Node *parent, const clang::QualType &wrapper, bool inStruct) const {
         const clang::Type &type = *wrapper;
 
-        if (type.isPointerType()) {
-            const auto &e = reinterpret_cast<const PointerType &>(type);
+        std::string z = wrapper.getAsString();
 
-            auto pointee = type.getPointeeType();
+        auto die = [&wrapper]() {
+            fmt::print("Cannot translate type {}.\n", wrapper.getAsString());
+
+            return nullptr;
+        };
+
+        if (type.isRecordType()) {
+            auto record = type.castAs<RecordType>()->getDecl();
+
+            auto iterator = factory->prebuiltTypes.find(record);
+
+            std::string typeName;
+
+            if (iterator != factory->prebuiltTypes.end()) {
+                typeName = iterator->second;
+            } else {
+                auto fields = record->fields();
+
+                auto typeNode = std::make_unique<TypeNode>(factory->node, true);
+
+                typeNode->name = record->getNameAsString();
+                if (typeNode->name.empty())
+                    typeNode->name = fmt::format("_HeaderGen{}", factory->id++);
+
+                factory->prebuiltTypes[record] = typeNode->name;
+
+                for (auto field : fields) {
+                    auto varNode = std::make_unique<VariableNode>(typeNode.get(), false, true);
+
+                    varNode->name = field->getNameAsString();
+                    varNode->isMutable = true;
+                    varNode->hasFixedType = true;
+
+                    auto val = make(varNode.get(), field->getType(), true);
+
+                    if (!val)
+                        return die();
+
+                    varNode->children.push_back(std::move(val));
+
+                    typeNode->children.push_back(std::move(varNode));
+                }
+
+                typeName = typeNode->name;
+                factory->node->children.push_back(std::move(typeNode));
+            }
+
+            auto named = std::make_unique<NamedTypenameNode>(parent, true);
+            named->name = typeName;
+
+            return named;
+        }
+
+        if (type.isArrayType()) {
+            auto e = type.castAsArrayTypeUnsafe();
+
+            assert(e->isConstantArrayType());
+
+            auto constant = reinterpret_cast<const ConstantArrayType *>(e);
+            auto size = constant->getSize().getZExtValue();
+
+            assert(inStruct);
+
+            auto arr = std::make_unique<ArrayTypenameNode>(parent, true);
+            arr->type = ArrayKind::FixedSize;
+
+            auto num = std::make_unique<NumberNode>(arr.get(), true);
+            num->value = size;
+
+            arr->children.push_back(make(arr.get(), constant->getElementType(), true));
+            arr->children.push_back(std::move(num));
+
+            return arr;
+        }
+
+        if (type.isPointerType()) {
+            auto e = type.castAs<PointerType>();
+
+            auto pointee = e->getPointeeType();
 
             auto ref = std::make_unique<ReferenceTypenameNode>(parent, true);
 
@@ -55,19 +134,24 @@ namespace interfaces::header {
                 return ref;
             }
 
-            auto subtype = make(arr, context, pointee);
+            auto subtype = make(arr, pointee);
 
             if (subtype) {
                 arr->children.push_back(std::move(subtype));
+            } else {
+                auto prim = std::make_unique<PrimitiveTypenameNode>(arr, true);
+                prim->type = PrimitiveType::Nothing;
 
-                return ref;
+                arr->children.push_back(std::move(prim));
             }
+
+            return ref;
         }
 
         if (type.isBuiltinType()) {
-            const auto &e = reinterpret_cast<const BuiltinType &>(type);
+            auto e = type.castAs<BuiltinType>();
 
-            BuiltinType::Kind kind = e.getKind();
+            BuiltinType::Kind kind = e->getKind();
             size_t size = context.getTypeSize(wrapper);
 
             auto prim = std::make_unique<PrimitiveTypenameNode>(parent, true);
@@ -76,14 +160,14 @@ namespace interfaces::header {
                 prim->type = PrimitiveType::Nothing;
             } else if (kind == BuiltinType::Kind::Bool) {
                 prim->type = PrimitiveType::Bool;
-            } if (type.isIntegerType()) {
+            } else if (type.isIntegerType()) {
                 if (type.isSignedIntegerType()) {
                     switch (size) {
                         case 8: prim->type = PrimitiveType::Byte; break;
                         case 16: prim->type = PrimitiveType::Short; break;
                         case 32: prim->type = PrimitiveType::Int; break;
                         case 64: prim->type = PrimitiveType::Long; break;
-                        default: assert(false);
+                        default: return die();
                     }
                 } else {
                     switch (size) {
@@ -91,14 +175,14 @@ namespace interfaces::header {
                         case 16: prim->type = PrimitiveType::UShort; break;
                         case 32: prim->type = PrimitiveType::UInt; break;
                         case 64: prim->type = PrimitiveType::ULong; break;
-                        default: assert(false);
+                        default: return die();
                     }
                 }
             } else if (type.isRealFloatingType()) {
                 switch (size) {
                     case 32: prim->type = PrimitiveType::Float; break;
                     case 64: prim->type = PrimitiveType::Double; break;
-                    default: assert(false);
+                    default: return die();
                 }
             } else {
                 prim = nullptr;
@@ -108,21 +192,38 @@ namespace interfaces::header {
                 return prim;
         }
 
-        fmt::print("Cannot translate type {}.\n", wrapper.getAsString());
-
-        return nullptr;
+        return die();
     }
 
 #pragma clang diagnostic push
 #pragma ide diagnostic ignored "ConstantFunctionResult"
 #pragma ide diagnostic ignored "HidingNonVirtualFunction"
+    [[maybe_unused]] bool TranslateVisitor::VisitTypedefDecl(TypedefDecl *decl) const {
+        auto type = std::make_unique<TypeNode>(factory->node, true);
+
+        type->name = decl->getNameAsString();
+        type->isAlias = true;
+
+        auto underlyingType = make(type.get(), decl->getUnderlyingType(), true);
+
+        if (!underlyingType) {
+            fmt::print("Cannot construct typedef {}.\n", decl->getNameAsString());
+            return true;
+        }
+
+        type->children.push_back(std::move(underlyingType));
+        factory->node->children.push_back(std::move(type));
+
+        return true;
+    }
+
     [[maybe_unused]] bool TranslateVisitor::VisitFunctionDecl(FunctionDecl *decl) const {
         auto name = decl->getNameAsString();
         auto parameters = decl->parameters();
 
         auto function = std::make_unique<FunctionNode>(factory->node, true);
 
-        auto returnType = make(function.get(), context, decl->getReturnType());
+        auto returnType = make(function.get(), decl->getReturnType());
 
         if (!returnType) {
             fmt::print("Skipping translating function {}.\n", name);
@@ -142,7 +243,7 @@ namespace interfaces::header {
             // huh, useless function
             auto *var = grab<VariableNode>(function.get(), true, true);
 
-            auto optional = make(var, context, param->getType());
+            auto optional = make(var, param->getType());
 
             if (!optional) {
                 fmt::print("Skipping translating function {}.\n", name);
@@ -164,6 +265,31 @@ namespace interfaces::header {
         return true;
     }
 #pragma clang diagnostic pop
+
+    TranslateVisitor::TranslateVisitor(clang::ASTContext &context, TranslateFactory *factory)
+        : context(context), factory(factory) { }
+
+    void TranslateConsumer::HandleTranslationUnit(clang::ASTContext &context) {
+        TranslateVisitor visitor(context, factory); // if this is expensive :shrug:
+
+        visitor.TraverseDecl(context.getTranslationUnitDecl());
+    }
+
+    TranslateConsumer::TranslateConsumer(TranslateFactory *factory) : factory(factory) { }
+
+    std::unique_ptr<clang::ASTConsumer> TranslateAction::CreateASTConsumer(
+        clang::CompilerInstance &compiler, llvm::StringRef file) {
+
+        return std::make_unique<TranslateConsumer>(factory);
+    }
+
+    TranslateAction::TranslateAction(TranslateFactory *factory) : factory(factory) { }
+
+    std::unique_ptr<clang::FrontendAction> TranslateFactory::create() {
+        return std::make_unique<TranslateAction>(this);
+    }
+
+    TranslateFactory::TranslateFactory(RootNode *node) : node(node) { }
 
     InterfaceResult create(int count, const char **args) {
         auto parser = clang::tooling::CommonOptionsParser::create(

@@ -30,7 +30,9 @@ VariableNode::VariableNode(Node *parent, bool isExplicit, bool external) : Node(
         hasFixedType = true;
         pushTypename(this);
 
-        if (next("=")) {
+        if (next("external", true)) {
+            isExternal = true;
+        } else if (next("=")) {
             push<ExpressionNode>();
         }
     }

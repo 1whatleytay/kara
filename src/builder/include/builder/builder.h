@@ -53,13 +53,12 @@ struct BuilderResult {
 };
 
 struct BuilderVariable {
-    BuilderFunction &function;
-
     const VariableNode *node = nullptr;
     Typename type;
 
     Value *value = nullptr;
 
+    BuilderVariable(const VariableNode *node, Builder &builder); // global variable
     BuilderVariable(const VariableNode *node, BuilderScope &scope); // regular variable
     BuilderVariable(const VariableNode *node, Value *input, BuilderScope &scope); // function parameter
 };
@@ -83,7 +82,7 @@ struct BuilderScope {
 
     // Node for search scope.
     std::optional<BuilderResult> convert(
-        const BuilderResult &result, const Typename &type);
+        const BuilderResult &result, const Typename &type, bool force = false);
     static std::optional<std::pair<BuilderResult, BuilderResult>> convert(
         const BuilderResult &a, BuilderScope &aScope,
         const BuilderResult &b, BuilderScope &bScope);
@@ -174,9 +173,11 @@ struct Builder {
     std::unique_ptr<Module> module;
 
     std::unordered_map<const TypeNode *, std::unique_ptr<BuilderType>> types;
+    std::unordered_map<const VariableNode *, std::unique_ptr<BuilderVariable>> globals;
     std::unordered_map<const FunctionNode *, std::unique_ptr<BuilderFunction>> functions;
 
     BuilderType *makeType(const TypeNode *node);
+    BuilderVariable *makeGlobal(const VariableNode *node);
     BuilderFunction *makeFunction(const FunctionNode *node);
 
     const Node *find(const ReferenceNode *node);

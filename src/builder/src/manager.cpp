@@ -107,10 +107,10 @@ ManagerFile::ManagerFile(Manager &manager, fs::path path, std::string type, cons
         auto cString = [](const auto &s) { return s.c_str(); };
         std::transform(library->arguments.begin(), library->arguments.end(), std::back_inserter(arguments), cString);
 
-        auto tuple = interfaces::header::create(static_cast<int>(arguments.size()), arguments.data());
+        auto [tupleState, tupleRoot] = interfaces::header::create(static_cast<int>(arguments.size()), arguments.data());
 
-        state = std::move(std::get<0>(tuple));
-        root = std::move(std::get<1>(tuple));
+        state = std::move(tupleState);
+        root = std::move(tupleRoot);
     } else {
         throw std::exception();
     }
@@ -156,6 +156,8 @@ ManagerTarget::ManagerTarget(const std::string &suggestedTriple) {
 }
 
 Builder Manager::create(const ManagerFile &file) {
+#pragma clang diagnostic push
+#pragma ide diagnostic ignored "UnreachableCode"
     try {
         return Builder(file, options);
     } catch (const VerifyError &error) {
@@ -165,6 +167,7 @@ Builder Manager::create(const ManagerFile &file) {
 
         throw;
     }
+#pragma clang diagnostic pop
 }
 
 const ManagerFile &Manager::get(const fs::path &path, const fs::path &root, const std::string &type) {

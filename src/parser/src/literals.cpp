@@ -27,7 +27,10 @@ SpecialNode::SpecialNode(Node *parent) : Node(parent, Kind::Special) {
     type = select<Type>({ "any", "nothing", "null" }, true);
 }
 
-NumberNode::NumberNode(Node *parent) : Node(parent, Kind::Number) {
+NumberNode::NumberNode(Node *parent, bool external) : Node(parent, Kind::Number) {
+    if (external)
+        return;
+
     bool positive = select({ "-", "+" }, false, true) != 0;
 
     size_t start = state.index;
@@ -67,13 +70,10 @@ NumberNode::NumberNode(Node *parent) : Node(parent, Kind::Number) {
         if (full.find('.') == std::string::npos) {
             uint64_t v = std::stoull(full);
 
-            if (v > INT64_MAX) {
-                if (!positive)
-                    error(fmt::format("Token {} cannot be represented by an integer.", full));
-
+            if (positive) {
                 value = v;
             } else {
-                value = static_cast<int64_t>(v) * (positive ? +1 : -1);
+                value = -static_cast<int64_t>(v);
             }
         } else {
             double v = std::stod(full);
@@ -133,12 +133,13 @@ StringNode::StringNode(Node *parent) : Node(parent, Kind::String) {
                     NewLine,
                     Tab,
                     DollarSign,
+                    Null,
                     SingleQuote,
                     DoubleQuote,
                     Backslash,
                 };
 
-                switch (select<SpecialChars>({ "n", "t", "$", "\'", "\"", "\\" })) {
+                switch (select<SpecialChars>({ "n", "t", "$", "0", "\'", "\"", "\\" })) {
                     case SpecialChars::NewLine:
                         stream << '\n';
                         break;
@@ -147,6 +148,9 @@ StringNode::StringNode(Node *parent) : Node(parent, Kind::String) {
                         break;
                     case SpecialChars::DollarSign:
                         stream << '$';
+                        break;
+                    case SpecialChars::Null:
+                        stream << '\0';
                         break;
                     case SpecialChars::SingleQuote:
                         stream << '\'';

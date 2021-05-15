@@ -7,12 +7,35 @@
 #include <parser/literals.h>
 
 // this copies :flushed:
-std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &result, const Typename &type) {
+std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const Typename &type, bool force) {
+    BuilderResult result = r;
+
     if (result.type == type)
         return result;
 
-    auto *typeRef = std::get_if<ReferenceTypename>(&type);
-    auto *resultRef = std::get_if<ReferenceTypename>(&result.type);
+    auto typeRef = std::get_if<ReferenceTypename>(&type);
+    auto resultRef = std::get_if<ReferenceTypename>(&result.type);
+
+    auto otherPrim = std::get_if<PrimitiveTypename>(&type);
+    auto resultPrim = std::get_if<PrimitiveTypename>(&result.type);
+
+    if (force) {
+        if (typeRef && resultRef) {
+            return BuilderResult(
+                BuilderResult::Kind::Raw,
+                current ? current->CreateBitCast(get(result), function.builder.makeTypename(type)) : nullptr,
+                type
+            );
+        }
+
+        if (typeRef && resultPrim && resultPrim->type == PrimitiveType::ULong) {
+            return BuilderResult(
+                BuilderResult::Kind::Raw,
+                current ? current->CreateIntToPtr(get(result), function.builder.makeTypename(type)) : nullptr,
+                type
+            );
+        }
+    }
 
     // Demote reference
     if (resultRef && *resultRef->value == type) {
@@ -30,6 +53,20 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &result, 
             ref(result),
             type
         );
+    }
+
+    if (typeRef && !resultRef && result.kind != BuilderResult::Kind::Raw) {
+        result = BuilderResult(
+            BuilderResult::Kind::Raw,
+            result.value,
+            ReferenceTypename {
+                std::make_shared<Typename>(result.type),
+                result.kind == BuilderResult::Kind::Reference
+            }
+        );
+
+        resultRef = std::get_if<ReferenceTypename>(&result.type);
+        resultPrim = nullptr;
     }
 
     if (typeRef && resultRef) {
@@ -72,9 +109,6 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &result, 
             type
         );
     }
-
-    auto otherPrim = std::get_if<PrimitiveTypename>(&type);
-    auto resultPrim = std::get_if<PrimitiveTypename>(&result.type);
 
     if (otherPrim && resultPrim) {
         if (otherPrim->isNumber() && resultPrim->isNumber()) {

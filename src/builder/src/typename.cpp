@@ -69,7 +69,7 @@ Typename Builder::resolveTypename(const Node *node) {
 
 Type *Builder::makePrimitiveType(PrimitiveType type) const {
     switch (type) {
-        case PrimitiveType::Any: throw std::runtime_error("Any type is unsupported.");
+        case PrimitiveType::Any: return Type::getInt64Ty(context);
         case PrimitiveType::Null: return Type::getInt8PtrTy(context);
         case PrimitiveType::Nothing: return Type::getVoidTy(context);
         case PrimitiveType::Bool: return Type::getInt1Ty(context);

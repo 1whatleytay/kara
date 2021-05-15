@@ -18,7 +18,14 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
 
             switch (e->is<Kind>()) {
                 case Kind::Variable: {
-                    BuilderVariable *info = findVariable(e->as<VariableNode>());
+                    auto var = e->as<VariableNode>();
+
+                    BuilderVariable *info;
+
+                    if (var->parent->is(Kind::Root))
+                        info = function.builder.makeGlobal(var); // AHHH THIS WONT WORK FOR EXTERNALss
+                    else
+                        info = findVariable(var);
 
                     if (!info)
                         throw VerifyError(node, "Cannot find variable reference.");
@@ -510,7 +517,7 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
 
             auto destination = function.builder.resolveTypename(e->type());
 
-            std::optional<BuilderResult> converted = convert(value, destination);
+            std::optional<BuilderResult> converted = convert(value, destination, e->force);
 
             if (!converted) {
                 throw VerifyError(operation.op,
@@ -527,7 +534,8 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
 }
 
 BuilderResult BuilderScope::combine(const BuilderResult &left, const BuilderResult &right, OperatorNode::Operation op) {
-    auto results = convert(left, right);
+    auto results = convert(makeExpressionInferred(left), makeExpressionInferred(right))
+        ;
 
     if (!results.has_value()) {
         throw std::runtime_error(fmt::format(
@@ -535,8 +543,8 @@ BuilderResult BuilderScope::combine(const BuilderResult &left, const BuilderResu
             toString(left.type), toString(right.type)));
     }
 
-    BuilderResult a = results.value().first;
-    BuilderResult b = results.value().second;
+    BuilderResult a = results->first;
+    BuilderResult b = results->second;
 
     using Requirement = std::function<bool()>;
 

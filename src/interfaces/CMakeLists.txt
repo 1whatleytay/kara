@@ -7,3 +7,6 @@ add_library(interfaces
 target_include_directories(interfaces PUBLIC include)
 target_link_libraries(interfaces PRIVATE clang-global fmt)
 target_link_libraries(interfaces PUBLIC parser)
+
+add_executable(try src/try.cpp)
+target_link_libraries(try PRIVATE interfaces)

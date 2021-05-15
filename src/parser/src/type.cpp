@@ -15,7 +15,10 @@ std::vector<const VariableNode *> TypeNode::fields() const {
     return result;
 }
 
-TypeNode::TypeNode(Node *parent) : Node(parent, Kind::Type) {
+TypeNode::TypeNode(Node *parent, bool external) : Node(parent, Kind::Type) {
+    if (external)
+        return;
+
     match("type", true);
 
     name = token();
