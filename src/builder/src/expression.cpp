@@ -517,7 +517,7 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
 
             auto destination = function.builder.resolveTypename(e->type());
 
-            std::optional<BuilderResult> converted = convert(value, destination, e->force);
+            std::optional<BuilderResult> converted = convert(value, destination, true);
 
             if (!converted) {
                 throw VerifyError(operation.op,

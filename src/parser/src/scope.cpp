@@ -82,7 +82,7 @@ const Node *ForNode::condition() const {
 }
 
 const CodeNode *ForNode::body() const {
-    return children[infinite]->as<CodeNode>();
+    return children[!infinite]->as<CodeNode>();
 }
 
 ForNode::ForNode(Node *parent) : Node(parent, Kind::For) {

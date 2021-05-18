@@ -23,6 +23,7 @@ namespace interfaces::header {
 
 #pragma clang diagnostic push
 #pragma ide diagnostic ignored "HidingNonVirtualFunction"
+        [[maybe_unused]] bool VisitVarDecl(clang::VarDecl *decl) const;
         [[maybe_unused]] bool VisitTypedefDecl(clang::TypedefDecl *decl) const;
         [[maybe_unused]] bool VisitFunctionDecl(clang::FunctionDecl *decl) const;
 #pragma clang diagnostic pop

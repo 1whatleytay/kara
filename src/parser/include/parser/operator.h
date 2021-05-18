@@ -6,8 +6,6 @@ struct ReferenceNode;
 struct ExpressionNode;
 
 struct AsNode : public Node {
-    bool force = false;
-
     [[nodiscard]] const Node *type() const;
 
     explicit AsNode(Node *parent);

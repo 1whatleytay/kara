@@ -93,7 +93,17 @@ int main(int count, const char **args) {
                     text.push_back(fmt::format("{} {}", v->name, toTypeString(v->fixedType())));
                 }
 
-                fmt::print("{}({}) {} extern\n", f->name, fmt::join(text, ", "), toTypeString(f->fixedType()));
+                fmt::print("{}({}) {} external\n", f->name, fmt::join(text, ", "), toTypeString(f->fixedType()));
+
+                break;
+            }
+
+            case Kind::Variable: {
+                auto v = e->as<VariableNode>();
+
+                fmt::print("{} {} {}{}\n",
+                    v->isMutable ? "var" : "let", v->name,
+                    toTypeString(v->fixedType()), v->isExternal ? " external" : "");
 
                 break;
             }

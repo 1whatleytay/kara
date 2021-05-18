@@ -1,19 +1,18 @@
 import (c) 'stdio.h'
-import (c) 'string.h'
+import (c) 'GLFW/glfw3.h'
 
-var __stdinp &FILE external
-stdin => __stdinp
+main int {
+    glfwInit
 
-type String = &[byte:]
+    let window = glfwCreateWindow(800, 600, 'Hello World', null, null)
 
-char(s String) => s[0]
+    for window.glfwWindowShouldClose != 1 {
+        window.glfwSwapBuffers
 
-main {
-    var buffer [byte:100],
+        glfwPollEvents
+    }
 
-    buffer.fgets(100, stdin)
-    buffer[buffer.strlen - 1] = '\0'.char
+    window.glfwDestroyWindow
 
-    buffer.strcat(' World!')
-    buffer.puts
+    glfwTerminate
 }

@@ -9,8 +9,7 @@ const Node *AsNode::type() const {
 }
 
 AsNode::AsNode(Node *parent) : Node(parent, Kind::As) {
-    force = !select<bool>({ "as!", "as" }, true);
-    match();
+    match("as");
 
     pushTypename(this);
 }

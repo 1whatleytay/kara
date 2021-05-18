@@ -87,7 +87,8 @@ namespace interfaces::header {
         if (type.isArrayType()) {
             auto e = type.castAsArrayTypeUnsafe();
 
-            assert(e->isConstantArrayType());
+            if (!e->isConstantArrayType())
+                return die();
 
             auto constant = reinterpret_cast<const ConstantArrayType *>(e);
             auto size = constant->getSize().getZExtValue();
@@ -198,6 +199,38 @@ namespace interfaces::header {
 #pragma clang diagnostic push
 #pragma ide diagnostic ignored "ConstantFunctionResult"
 #pragma ide diagnostic ignored "HidingNonVirtualFunction"
+    bool TranslateVisitor::VisitVarDecl(VarDecl *decl) const {
+        if (!decl->hasGlobalStorage())
+            return true;
+
+        if (!decl->hasExternalStorage()) {
+            fmt::print("Skipping constructing variable {}, must be external.\n", decl->getNameAsString());
+            return true;
+        }
+
+        auto var = std::make_unique<VariableNode>(factory->node, false, true);
+
+        var->name = decl->getNameAsString();
+        assert(!var->name.empty());
+
+        var->isMutable = true;
+        var->isExternal = true;
+        var->hasFixedType = true;
+
+        auto type = make(var.get(), decl->getType(), true);
+
+        if (!type) {
+            fmt::print("Skipping constructing variable {}.\n", decl->getNameAsString());
+            return true;
+        }
+
+        var->children.push_back(std::move(type));
+
+        factory->node->children.push_back(std::move(var));
+
+        return true;
+    }
+
     [[maybe_unused]] bool TranslateVisitor::VisitTypedefDecl(TypedefDecl *decl) const {
         auto type = std::make_unique<TypeNode>(factory->node, true);
 

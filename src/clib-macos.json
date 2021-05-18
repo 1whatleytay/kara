@@ -1,14 +1,16 @@
 {
 	"language": "c",
 
-	"includes": [
-		"/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX11.3.sdk/usr/include/"
-	],
+	"includes": [ "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX11.3.sdk/usr/include/" ],
+	"libraries": [],
+
+
+	"dynamic-libraries": [ "/usr/lib/libSystem.dylib" ],
 
 	"arguments": [
 		"--",
 		"-I/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX11.3.sdk/usr/include/",
-		
+
 		"-DTARGET_OS_IPHONE=0",
 		"-Wno-nullability-completeness"
 	]

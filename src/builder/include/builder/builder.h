@@ -49,6 +49,10 @@ struct BuilderResult {
 
     std::shared_ptr<BuilderResult> implicit;
 
+    std::vector<Node *> references;
+
+    Node *first(::Kind nodeKind);
+
     BuilderResult(Kind kind, Value *value, Typename type, std::unique_ptr<BuilderResult> implicit = nullptr);
 };
 
@@ -181,7 +185,10 @@ struct Builder {
     BuilderFunction *makeFunction(const FunctionNode *node);
 
     const Node *find(const ReferenceNode *node);
+    std::vector<const Node *> findAll(const ReferenceNode *node);
+
     const Node *searchDependencies(const std::function<bool(Node *)> &match);
+    std::vector<const Node *> searchAllDependencies(const std::function<bool(Node *)> &match);
 
     Typename resolveTypename(const Node *node);
 

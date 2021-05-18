@@ -50,6 +50,24 @@ LibraryDocument::LibraryDocument(const std::string &json, const fs::path &root) 
             includes.push_back(root / k);
     }
 
+    for (const auto &i : doc["libraries"].GetArray()) {
+        fs::path k = i.GetString();
+
+        if (k.is_absolute())
+            libraries.push_back(k);
+        else
+            libraries.push_back(root / k);
+    }
+
+    for (const auto &i : doc["dynamic-libraries"].GetArray()) {
+        fs::path k = i.GetString();
+
+        if (k.is_absolute())
+            dynamicLibraries.push_back(k);
+        else
+            dynamicLibraries.push_back(root / k);
+    }
+
     for (const auto &k : doc["arguments"].GetArray())
         arguments.emplace_back(k.GetString());
 }
@@ -271,18 +289,42 @@ Manager::Manager(const Options &options)
         if (jit->addIRModule(orc::ThreadSafeModule(std::move(base), std::move(context))))
             throw std::runtime_error("Could not add module to jit instance.");
 
-#ifdef __APPLE__
-        auto loader = llvm::orc::DynamicLibrarySearchGenerator::Load(
-            "/usr/lib/libSystem.dylib", target.layout->getGlobalPrefix());
+        for (const auto &library : libraries) {
+            for (const auto &lib : library.libraries) {
+                auto bufferOrError = MemoryBuffer::getFileAsStream(lib.string());
 
-        if (loader.takeError()) {
-            fmt::print("Failed to load CLIB.\n");
-        } else {
-            jit->getMainJITDylib().addGenerator(std::move(loader.get()));
+                if (!bufferOrError) {
+                    fmt::print("Failed to load library {}.\n", lib.string());
+                } else {
+                    auto loader = llvm::orc::StaticLibraryDefinitionGenerator::Load(
+                        jit->getObjLinkingLayer(), lib.c_str());
+
+                    if (!loader) {
+                        fmt::print("Error: {}\n", toString(loader.takeError()));
+                        fmt::print("Failed to load library {}.\n", lib.string());
+                    } else {
+                        jit->getMainJITDylib().addGenerator(std::move(loader.get()));
+                    }
+                }
+
+//                if (bufferOrEr)
+
+//                llvm::orc::StaticLibraryDefinitionGenerator();
+//
+//                jit->addObjectFile();
+            }
+
+            for (const auto &lib : library.dynamicLibraries) {
+                auto loader = llvm::orc::DynamicLibrarySearchGenerator::Load(
+                    lib.c_str(), target.layout->getGlobalPrefix());
+
+                if (!loader) {
+                    fmt::print("Failed to load dynamic library {}.\n", lib.string());
+                } else {
+                    jit->getMainJITDylib().addGenerator(std::move(loader.get()));
+                }
+            }
         }
-#else
-        fmt::print("Skipping to load CLIB, not supported on this platform.\n");
-#endif
 
         auto expectedMain = jit->lookup("main");
         if (!expectedMain)

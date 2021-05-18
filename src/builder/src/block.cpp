@@ -21,8 +21,11 @@ void BuilderScope::makeBlock(const BlockNode *node) {
 void BuilderScope::makeIf(const IfNode *node) {
     assert(current);
 
+    std::vector<std::unique_ptr<BuilderScope>> scopes;
+
     while (node) {
-        BuilderScope sub(node->children[1]->as<CodeNode>(), *this);
+        scopes.push_back(std::make_unique<BuilderScope>(node->children[1]->as<CodeNode>(), *this));
+        BuilderScope &sub = *scopes.back();
 
         currentBlock = BasicBlock::Create(function.builder.context, "", function.function, function.exitBlock);
 
@@ -50,7 +53,8 @@ void BuilderScope::makeIf(const IfNode *node) {
                     break;
 
                 case Kind::Code: {
-                    BuilderScope terminator(node->children[2]->as<CodeNode>(), *this);
+                    scopes.push_back(std::make_unique<BuilderScope>(node->children[2]->as<CodeNode>(), *this));
+                    BuilderScope &terminator = *scopes.back();
 
                     current->CreateBr(terminator.openingBlock);
 
@@ -71,6 +75,12 @@ void BuilderScope::makeIf(const IfNode *node) {
             node = nullptr;
         }
     }
+
+    for (const auto &scope : scopes) {
+        if (scope->current) {
+            scope->current->CreateBr(currentBlock);
+        }
+    }
 }
 
 void BuilderScope::makeFor(const ForNode *node) {
@@ -80,15 +90,32 @@ void BuilderScope::makeFor(const ForNode *node) {
     if (!condition) {
         BuilderScope scope(code, *this);
 
-        scope.current->CreateBr(scope.openingBlock);
+        if (current) {
+            currentBlock = BasicBlock::Create(
+                function.builder.context, "", function.function, function.exitBlock);
 
-        current->CreateBr(scope.openingBlock);
+            current->CreateBr(scope.openingBlock);
+            scope.current->CreateBr(scope.openingBlock);
 
-        currentBlock = BasicBlock::Create(
-            function.builder.context, "", function.function, function.exitBlock);
-        current->SetInsertPoint(currentBlock);
+            current->SetInsertPoint(currentBlock);
+        }
     } else if (condition->is(Kind::Expression)) {
-        assert(false);
+        BuilderScope check(condition, *this);
+
+        assert(check.product && check.product->type == PrimitiveTypename::from(PrimitiveType::Bool));
+
+        BuilderScope scope(code, *this);
+
+        if (current) {
+            currentBlock = BasicBlock::Create(
+                function.builder.context, "", function.function, function.exitBlock);
+
+            current->CreateBr(check.openingBlock);
+            check.current->CreateCondBr(check.get(*check.product), scope.openingBlock, currentBlock);
+            scope.current->CreateBr(check.openingBlock);
+
+            current->SetInsertPoint(currentBlock);
+        }
     } else if (condition->is(Kind::ForIn)) {
         assert(false);
     }

@@ -24,9 +24,11 @@ struct LibraryDocument {
     std::string language;
 
     std::vector<fs::path> includes;
+    std::vector<fs::path> libraries;
+    std::vector<fs::path> dynamicLibraries;
     std::vector<std::string> arguments;
 
-    std::optional<std::string> match(const std::string &header) const;
+    [[nodiscard]] std::optional<std::string> match(const std::string &header) const;
 
     explicit LibraryDocument(const std::string &json, const fs::path &root);
 };
