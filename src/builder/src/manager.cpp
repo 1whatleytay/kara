@@ -306,12 +306,6 @@ Manager::Manager(const Options &options)
                         jit->getMainJITDylib().addGenerator(std::move(loader.get()));
                     }
                 }
-
-//                if (bufferOrEr)
-
-//                llvm::orc::StaticLibraryDefinitionGenerator();
-//
-//                jit->addObjectFile();
             }
 
             for (const auto &lib : library.dynamicLibraries) {

@@ -14,50 +14,52 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
             return makeExpression(node->as<ParenthesesNode>()->body());
 
         case Kind::Reference: {
-            const Node *e = function.builder.find(node->as<ReferenceNode>());
+            auto e = node->as<ReferenceNode>();
 
-            switch (e->is<Kind>()) {
-                case Kind::Variable: {
-                    auto var = e->as<VariableNode>();
-
-                    BuilderVariable *info;
-
-                    if (var->parent->is(Kind::Root))
-                        info = function.builder.makeGlobal(var); // AHHH THIS WONT WORK FOR EXTERNALss
-                    else
-                        info = findVariable(var);
-
-                    if (!info)
-                        throw VerifyError(node, "Cannot find variable reference.");
-
-                    return BuilderResult(
-                        BuilderResult::Kind::Reference,
-
-                        info->value,
-                        info->type
-                    );
-                }
-
-                case Kind::Function: {
-                    const auto *functionNode = e->as<FunctionNode>();
-
-                    BuilderFunction *callable = function.builder.makeFunction(functionNode);
-
-                    if (!callable->function)
-                        throw VerifyError(node, "Reference cannot resolve function. Try adding return types.");
-
-                    return BuilderResult(
-                        BuilderResult::Kind::Raw,
-
-                        callable->function,
-                        callable->type
-                    );
-                }
-
-                default:
-                    assert(false);
-            }
+            return BuilderResult(e, function.builder.findAll(e));
         }
+
+//            switch (e->is<Kind>()) {
+//                case Kind::Variable: {
+//                    auto var = e->as<VariableNode>();
+//
+//                    BuilderVariable *info;
+//
+//                    if (var->parent->is(Kind::Root))
+//                        info = function.builder.makeGlobal(var); // AHHH THIS WONT WORK FOR EXTERNALss
+//                    else
+//                        info = findVariable(var);
+//
+//                    if (!info)
+//                        throw VerifyError(node, "Cannot find variable reference.");
+//
+//                    return BuilderResult(
+//                        BuilderResult::Kind::Reference,
+//
+//                        info->value,
+//                        info->type
+//                    );
+//                }
+//
+//                case Kind::Function: {
+//                    const auto *functionNode = e->as<FunctionNode>();
+//
+//                    BuilderFunction *callable = function.builder.makeFunction(functionNode);
+//
+//                    if (!callable->function)
+//                        throw VerifyError(node, "Reference cannot resolve function. Try adding return types.");
+//
+//                    return BuilderResult(
+//                        BuilderResult::Kind::Raw,
+//
+//                        callable->function,
+//                        callable->type
+//                    );
+//                }
+//
+//                default:
+//                    assert(false);
+//            }
 
         case Kind::Special: {
             assert(node->as<SpecialNode>()->type == SpecialNode::Type::Null);
@@ -202,59 +204,58 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
 BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const BuilderResult &result) {
     switch (node->is<Kind>()) {
         case Kind::Call: {
-            const FunctionTypename *type = std::get_if<FunctionTypename>(&result.type);
+            const CallNode *callNode = node->as<CallNode>();
+            auto callParameters = callNode->parameters();
 
-            if (!type)
-                throw VerifyError(node,
-                    "Must call a function pointer object, instead called {}.",
-                    toString(result.type));
-
-            if (result.kind != BuilderResult::Kind::Raw)
-                throw VerifyError(node,
-                    "Internal strangeness with function pointer object.");
+            assert(result.kind == BuilderResult::Kind::Unresolved);
 
             size_t extraParameter = result.implicit ? 1 : 0;
 
-            if (type->parameters.size() != node->children.size() + extraParameter)
-                throw VerifyError(node,
-                    "Function takes {} arguments, but {} passed.",
-                    type->parameters.size(), node->children.size());
-
-            std::vector<Value *> parameters(node->children.size() + extraParameter);
+            std::vector<BuilderResult *> parameters(node->children.size() + extraParameter);
 
             if (result.implicit)
-                parameters[0] = get(*result.implicit);
+                parameters[0] = result.implicit.get();
 
-            for (size_t a = 0; a < node->children.size(); a++) {
-                auto *exp = node->children[a]->as<ExpressionNode>();
-                BuilderResult parameter = makeExpression(exp);
+            std::vector<BuilderResult> resultLifetimes;
+            resultLifetimes.reserve(callParameters.size());
 
-                std::optional<BuilderResult> parameterConverted = convert(
-                    parameter, type->parameters[a + extraParameter]);
+            for (auto c : callParameters)
+                resultLifetimes.push_back(makeExpression(c));
 
-                if (!parameterConverted)
-                    throw VerifyError(exp,
-                        "Expression is being passed to function that expects {} type but got {}.",
-                        toString(type->parameters[a + extraParameter]), toString(parameter.type));
+//                std::optional<BuilderResult> parameterConverted = convert(
+//                    parameter, type->parameters[a + extraParameter]);
+//
+//                if (!parameterConverted)
+//                    throw VerifyError(exp,
+//                        "Expression is being passed to function that expects {} type but got {}.",
+//                        toString(type->parameters[a + extraParameter]), toString(parameter.type));
 
-                parameter = *parameterConverted;
-                parameters[a + extraParameter] = get(parameter);
+            for (size_t a = 0; a < resultLifetimes.size(); a++)
+                parameters[a + extraParameter] = &resultLifetimes[a];
+
+            try {
+                std::vector<const FunctionNode *> functions;
+
+                for (auto e : result.references) {
+                    if (!e->is(Kind::Function))
+                        continue;
+
+                    functions.push_back(e->as<FunctionNode>());
+                }
+
+                return call(functions, parameters);
+            } catch (const std::runtime_error &e) {
+                throw VerifyError(result.from, "{}", e.what());
             }
-
-            return BuilderResult(
-                BuilderResult::Kind::Raw,
-                current ? current->CreateCall(reinterpret_cast<Function *>(result.value), parameters) : nullptr,
-                *type->returnType
-            );
         }
 
         case Kind::Dot: {
-            BuilderResult infer = makeExpressionInferred(result);
+            BuilderResult sub = infer(result);
 
             const ReferenceNode *refNode = node->children.front()->as<ReferenceNode>();
 
             // Set up to check if property exists, dereference if needed
-            Typename *subtype = &infer.type;
+            Typename *subtype = &sub.type;
 
             size_t numReferences = 0;
 
@@ -280,7 +281,7 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
                     size_t index = builderType->indices.at(varNode);
 
                     // I feel uneasy touching this...
-                    Value *structRef = numReferences > 0 ? get(infer) : ref(infer);
+                    Value *structRef = numReferences > 0 ? get(sub) : ref(sub);
 
                     if (current) {
                         for (size_t a = 1; a < numReferences; a++)
@@ -288,7 +289,7 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
                     }
 
                     return BuilderResult(
-                        infer.kind == BuilderResult::Kind::Reference
+                        sub.kind == BuilderResult::Kind::Reference
                             ? BuilderResult::Kind::Reference
                             : BuilderResult::Kind::Literal,
                         current ? current->CreateStructGEP(structRef, index, refNode->name) : nullptr,
@@ -299,9 +300,6 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
 
             const auto &global = function.builder.root->children;
 
-            // Horrible workaround until I have scopes that don't generate code.
-            std::unique_ptr<BuilderResult> converted;
-
             auto matchFunction = [&](const Node *node) {
                 if (!node->is(Kind::Function))
                     return false;
@@ -310,50 +308,26 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
                 if (e->name != refNode->name || e->parameterCount == 0)
                     return false;
 
-                auto *var = e->children.front()->as<VariableNode>();
-                if (!var->hasFixedType)
-                    return false;
-
-                std::optional<BuilderResult> result =
-                    convert(infer, function.builder.resolveTypename(var->fixedType()));
-                if (!result.has_value())
-                    return false;
-
-                converted = std::make_unique<BuilderResult>(result.value());
-
                 return true;
             };
 
-            auto *n = function.builder.searchDependencies(matchFunction)->as<FunctionNode>();
+            auto n = function.builder.searchAllDependencies(matchFunction);
 
-            if (!n)
+            if (n.empty())
                 throw VerifyError(node, "Could not find method or field with name {}.", refNode->name);
 
-            BuilderFunction *callable = function.builder.makeFunction(n);
-
-            if (!callable->function)
-                throw VerifyError(node, "Reference cannot resolve function. Try adding return types.");
-
-            assert(converted);
-
-            return BuilderResult(
-                BuilderResult::Kind::Raw,
-                callable->function,
-                callable->type,
-
-                std::move(converted)
-            );
+            return BuilderResult(node, n, std::make_unique<BuilderResult>(sub));
         }
 
         case Kind::Index: {
-            BuilderResult infer = unpack(makeExpressionInferred(result));
+            BuilderResult sub = unpack(infer(result));
 
-            const ArrayTypename *arrayType = std::get_if<ArrayTypename>(&infer.type);
+            const ArrayTypename *arrayType = std::get_if<ArrayTypename>(&sub.type);
 
             if (!arrayType) {
                 throw VerifyError(node,
                     "Indexing must only be applied on array types, type is {}.",
-                    toString(infer.type));
+                    toString(sub.type));
             }
 
             auto *indexExpression = node->children.front()->as<ExpressionNode>();
@@ -375,13 +349,13 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
 
                 switch (arrayType->kind) {
                     case ArrayKind::FixedSize:
-                        return current->CreateGEP(ref(infer), {
+                        return current->CreateGEP(ref(sub), {
                             ConstantInt::get(Type::getInt64Ty(function.builder.context), 0),
                             get(index)
                         });
 
                     case ArrayKind::Unbounded:
-                        return current->CreateGEP(ref(infer), get(index));
+                        return current->CreateGEP(ref(sub), get(index));
 
                     default:
                         throw std::exception();
@@ -389,7 +363,7 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
             };
 
             return BuilderResult(
-                infer.kind == BuilderResult::Kind::Reference
+                sub.kind == BuilderResult::Kind::Reference
                     ? BuilderResult::Kind::Reference
                     : BuilderResult::Kind::Literal,
                 indexArray(),
@@ -412,7 +386,7 @@ BuilderResult BuilderScope::makeExpressionNoun(const ExpressionNoun &noun) {
 }
 
 BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &operation) {
-    BuilderResult value = makeExpressionInferred(makeExpressionResult(*operation.a));
+    BuilderResult value = infer(makeExpressionResult(*operation.a));
 
     switch (operation.op->is<Kind>()) {
         case Kind::Unary:
@@ -464,7 +438,7 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
                     toString(value.type));
             }
 
-            BuilderResult infer = inferConverted.value();
+            BuilderResult sub = inferConverted.value();
 
             BuilderScope trueScope(operation.op->children[0]->as<ExpressionNode>(), *this, current.has_value());
             BuilderScope falseScope(operation.op->children[1]->as<ExpressionNode>(), *this, current.has_value());
@@ -495,7 +469,7 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
                 trueScope.current->CreateStore(trueScope.get(onTrue), literal);
                 falseScope.current->CreateStore(falseScope.get(onFalse), literal);
 
-                current->CreateCondBr(get(infer), trueScope.openingBlock, falseScope.openingBlock);
+                current->CreateCondBr(get(sub), trueScope.openingBlock, falseScope.openingBlock);
 
                 currentBlock = BasicBlock::Create(
                     function.builder.context, "", function.function, function.exitBlock);
@@ -534,7 +508,7 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
 }
 
 BuilderResult BuilderScope::combine(const BuilderResult &left, const BuilderResult &right, OperatorNode::Operation op) {
-    auto results = convert(makeExpressionInferred(left), makeExpressionInferred(right))
+    auto results = convert(infer(left), infer(right))
         ;
 
     if (!results.has_value()) {
@@ -753,25 +727,6 @@ BuilderResult BuilderScope::makeExpressionResult(const ExpressionResult &result)
     return std::visit(visitor, result);
 }
 
-BuilderResult BuilderScope::makeExpressionInferred(const BuilderResult &result) {
-    const FunctionTypename *functionTypename = std::get_if<FunctionTypename>(&result.type);
-
-    if (functionTypename && functionTypename->kind == FunctionTypename::Kind::Pointer) {
-        std::vector<Value *> params;
-
-        if (result.implicit)
-            params.push_back(get(*result.implicit));
-
-        return BuilderResult(
-            BuilderResult::Kind::Raw,
-            current ? current->CreateCall(reinterpret_cast<Function *>(result.value), params) : nullptr,
-            *functionTypename->returnType
-        );
-    }
-
-    return result;
-}
-
 BuilderResult BuilderScope::makeExpression(const ExpressionNode *node) {
-    return makeExpressionInferred(makeExpressionResult(node->result));
+    return infer(makeExpressionResult(node->result));
 }

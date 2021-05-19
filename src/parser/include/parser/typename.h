@@ -11,7 +11,9 @@ enum class PrimitiveType {
     Bool,
     Byte, Short, Int, Long,
     UByte, UShort, UInt, ULong,
-    Float, Double
+    Float, Double,
+
+    Unresolved
 };
 
 enum class ArrayKind {

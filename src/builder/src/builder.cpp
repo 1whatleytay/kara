@@ -9,16 +9,22 @@
 
 #include <llvm/Support/Host.h>
 
-Node *BuilderResult::first(::Kind nodeKind) {
-    auto iterator = std::find_if(references.begin(), references.end(), [nodeKind](Node *node) {
+const Node *BuilderResult::first(::Kind nodeKind) {
+    auto iterator = std::find_if(references.begin(), references.end(), [nodeKind](const Node *node) {
         return node->is(nodeKind);
     });
 
     return iterator == references.end() ? nullptr : *iterator;
 }
 
-BuilderResult::BuilderResult(Kind kind, Value *value, Typename type, std::unique_ptr<BuilderResult> implicit)
+BuilderResult::BuilderResult(Kind kind, Value *value, Typename type,
+    std::unique_ptr<BuilderResult> implicit)
     : kind(kind), value(value), type(std::move(type)), implicit(std::move(implicit)) { }
+
+BuilderResult::BuilderResult(const Node *from, std::vector<const Node *> references,
+    std::unique_ptr<BuilderResult> implicit)
+    : kind(BuilderResult::Kind::Unresolved), value(nullptr), from(from), references(std::move(references)),
+    type(PrimitiveTypename { PrimitiveType::Unresolved }), implicit(std::move(implicit)) { }
 
 BuilderType *Builder::makeType(const TypeNode *node) {
     auto iterator = types.find(node);

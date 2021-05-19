@@ -40,7 +40,9 @@ struct BuilderResult {
     enum class Kind {
         Raw,
         Reference,
-        Literal
+        Literal,
+
+        Unresolved
     };
 
     Kind kind = Kind::Raw;
@@ -49,11 +51,15 @@ struct BuilderResult {
 
     std::shared_ptr<BuilderResult> implicit;
 
-    std::vector<Node *> references;
+    const Node *from = nullptr;
+    std::vector<const Node *> references;
 
-    Node *first(::Kind nodeKind);
+    const Node *first(::Kind nodeKind);
 
-    BuilderResult(Kind kind, Value *value, Typename type, std::unique_ptr<BuilderResult> implicit = nullptr);
+    BuilderResult(Kind kind, Value *value, Typename type,
+        std::unique_ptr<BuilderResult> implicit = nullptr);
+    BuilderResult(const Node *from, std::vector<const Node *> references,
+        std::unique_ptr<BuilderResult> implicit = nullptr);
 };
 
 struct BuilderVariable {
@@ -65,6 +71,12 @@ struct BuilderVariable {
     BuilderVariable(const VariableNode *node, Builder &builder); // global variable
     BuilderVariable(const VariableNode *node, BuilderScope &scope); // regular variable
     BuilderVariable(const VariableNode *node, Value *input, BuilderScope &scope); // function parameter
+};
+
+struct MatchResult {
+    std::optional<int64_t> failed;
+
+    size_t numImplicit = 0;
 };
 
 struct BuilderScope {
@@ -82,6 +94,11 @@ struct BuilderScope {
     // separate for now... for data efficiency - use findVariable function
     std::unordered_map<const VariableNode *, std::shared_ptr<BuilderVariable>> variables;
 
+    MatchResult match(
+        const FunctionNode *node, const std::vector<BuilderResult *> &parameters);
+    BuilderResult call(
+        const std::vector<const FunctionNode *> &options, const std::vector<BuilderResult *> &parameters);
+
     BuilderVariable *findVariable(const VariableNode *node) const;
 
     // Node for search scope.
@@ -94,6 +111,7 @@ struct BuilderScope {
     BuilderResult convertOrThrow(
         const Node *node, const BuilderResult &result, const Typename &type);
 
+    BuilderResult infer(const BuilderResult &result);
     BuilderResult unpack(const BuilderResult &result);
 
     std::optional<std::pair<BuilderResult, BuilderResult>> convert(
@@ -110,13 +128,11 @@ struct BuilderScope {
     BuilderResult makeExpressionOperation(const ExpressionOperation &operation);
     BuilderResult makeExpressionCombinator(const ExpressionCombinator &combinator);
     BuilderResult makeExpressionResult(const ExpressionResult &result);
-    BuilderResult makeExpressionInferred(const BuilderResult &result);
     BuilderResult makeExpression(const ExpressionNode *node);
 
     void makeIf(const IfNode *node);
     void makeFor(const ForNode *node);
     void makeBlock(const BlockNode *node);
-    void makeDebug(const DebugNode *node);
     void makeAssign(const AssignNode *node);
     void makeStatement(const StatementNode *node);
 

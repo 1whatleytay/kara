@@ -1,18 +1,19 @@
 import (c) 'stdio.h'
-import (c) 'GLFW/glfw3.h'
+
+create(a int) => 9
+create(b long) => 10
+create(c ulong) => 11
 
 main int {
-    glfwInit
+    let k = create(4 as int)
 
-    let window = glfwCreateWindow(800, 600, 'Hello World', null, null)
-
-    for window.glfwWindowShouldClose != 1 {
-        window.glfwSwapBuffers
-
-        glfwPollEvents
+    if k > 10 {
+        'Yep, k > 10'.puts
+    } else if k < 10 {
+        'Uh, k < 10'.puts
+    } else {
+        'Nope, k = 10'.puts
     }
 
-    window.glfwDestroyWindow
-
-    glfwTerminate
+    return 0
 }

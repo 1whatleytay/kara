@@ -9,8 +9,7 @@
 
 using namespace hermes;
 
-class VerifyError : public std::exception {
-public:
+struct VerifyError : public std::exception {
     std::string issue;
     const Node *node = nullptr;
 

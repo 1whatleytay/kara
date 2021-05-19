@@ -9,6 +9,95 @@
 #include <parser/variable.h>
 #include <parser/statement.h>
 
+#include <map>
+
+MatchResult BuilderScope::match(const FunctionNode *node, const std::vector<BuilderResult *> &parameters) {
+    auto funcParams = node->parameters();
+
+    if (funcParams.size() != parameters.size())
+        return { -1, 0 };
+
+    MatchResult result;
+
+    BuilderScope testScope(nullptr, *this, false);
+
+    for (size_t a = 0; a < funcParams.size(); a++) {
+        const VariableNode *var = funcParams[a];
+        const BuilderResult *value = parameters[a];
+
+        assert(var->hasFixedType);
+        assert(value->kind != BuilderResult::Kind::Unresolved);
+
+        auto type = function.builder.resolveTypename(var->fixedType());
+
+        if (type != value->type) {
+            auto conversion = testScope.convert(*value, type);
+
+            if (!conversion) {
+                result.failed = a;
+                break;
+            }
+
+            result.numImplicit++;
+        }
+    }
+
+    return result;
+}
+
+BuilderResult BuilderScope::call(
+    const std::vector<const FunctionNode *> &options, const std::vector<BuilderResult *> &parameters) {
+
+    std::vector<MatchResult> checks(options.size());
+    std::transform(options.begin(), options.end(), checks.begin(), [this, &parameters](auto o) {
+        return match(o, parameters);
+    });
+
+    size_t bet = SIZE_T_MAX;
+    std::vector<const FunctionNode *> picks;
+
+    for (size_t a = 0; a < checks.size(); a++) {
+        const MatchResult &m = checks[a];
+        const FunctionNode *f = options[a];
+
+        if (m.failed)
+            continue;
+
+        if (m.numImplicit == bet) {
+            picks.push_back(f);
+        } else if (m.numImplicit < bet) {
+            bet = m.numImplicit;
+            picks = { f };
+        }
+    }
+
+    if (picks.empty())
+        throw std::runtime_error("No functions match given function parameters.");
+
+    if (picks.size() != 1)
+        throw std::runtime_error(fmt::format("Multiple functions match the most accurate conversion level, {}.", bet));
+
+    const FunctionNode *pick = picks.front();
+    auto pickVariables = pick->parameters();
+
+    auto builderFunction = function.builder.makeFunction(pick);
+
+    std::vector<Value *> passParameters(parameters.size());
+
+    for (size_t a = 0; a < parameters.size(); a++) {
+        assert(pickVariables[a]->hasFixedType);
+
+        passParameters[a] = get(convert(
+            *parameters[a], function.builder.resolveTypename(pickVariables[a]->fixedType())).value());
+    }
+
+    return BuilderResult(
+        BuilderResult::Kind::Raw,
+        current ? current->CreateCall(builderFunction->function, passParameters) : nullptr,
+        *builderFunction->type.returnType
+    );
+}
+
 void BuilderFunction::build() {
     bool responsible = search::exclusive::parents(node, [this](const Node *n) {
         return n == builder.file.root.get();

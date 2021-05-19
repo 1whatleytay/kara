@@ -5,6 +5,7 @@
 #include <parser/assign.h>
 #include <parser/variable.h>
 #include <parser/literals.h>
+#include <parser/function.h>
 
 // this copies :flushed:
 std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const Typename &type, bool force) {
@@ -209,12 +210,89 @@ BuilderResult BuilderScope::unpack(const BuilderResult &result) {
                 value.kind = BuilderResult::Kind::Reference;
                 value.value = current ? current->CreateLoad(value.value) : nullptr;
                 break;
+
+            default:
+                assert(false);
         }
 
         value.type = *r->value;
     }
 
     return value;
+}
+
+BuilderResult BuilderScope::infer(const BuilderResult &result) {
+    if (result.kind == BuilderResult::Kind::Unresolved) {
+        // First variable in scope search will be lowest in scope.
+        auto iterator = std::find_if(result.references.begin(), result.references.end(), [](const Node *node) {
+            return node->is(Kind::Variable);
+        });
+
+        if (iterator != result.references.end()) {
+            auto var = (*iterator)->as<VariableNode>();
+
+            BuilderVariable *info;
+
+            if (var->parent->is(Kind::Root))
+                info = function.builder.makeGlobal(var); // AHHH THIS WONT WORK FOR EXTERNALss
+            else
+                info = findVariable(var);
+
+            if (!info)
+                throw VerifyError(var, "Cannot find variable reference.");
+
+            return BuilderResult(
+                BuilderResult::Kind::Reference,
+
+                info->value,
+                info->type
+            );
+        }
+
+        std::vector<const FunctionNode *> functions;
+
+        for (auto node : result.references) {
+            if (!node->is(Kind::Function))
+                continue;
+
+            functions.push_back(node->as<FunctionNode>());
+        }
+
+        if (!functions.empty()) {
+            std::vector<BuilderResult *> params;
+
+            if (result.implicit)
+                params.push_back(result.implicit.get());
+
+            try {
+                return call(functions, params);
+            } catch (const std::runtime_error &e) {
+                throw VerifyError(result.from, "{}", e.what());
+            }
+        } else {
+            throw VerifyError(result.from, "Reference does not implicitly resolve to anything.");
+        }
+
+        // if variable, return first
+        // if function, find one with 0 params or infer params, e.g. some version of match is needed
+    }
+
+    const FunctionTypename *functionTypename = std::get_if<FunctionTypename>(&result.type);
+
+    if (functionTypename && functionTypename->kind == FunctionTypename::Kind::Pointer) {
+        std::vector<Value *> params;
+
+        if (result.implicit)
+            params.push_back(get(*result.implicit));
+
+        return BuilderResult(
+            BuilderResult::Kind::Raw,
+            current ? current->CreateCall(reinterpret_cast<Function *>(result.value), params) : nullptr,
+            *functionTypename->returnType
+        );
+    }
+
+    return result;
 }
 
 void BuilderScope::makeAssign(const AssignNode *node) {

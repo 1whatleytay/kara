@@ -60,13 +60,16 @@ std::vector<const Node *> Builder::findAll(const ReferenceNode *node) {
             || (value->is(Kind::Type) && value->as<TypeNode>()->name == node->name);
     };
 
+    std::set<const Node *> combine;
+
     std::vector<const Node *> result = search::scope(node, match);
     std::vector<const Node *> more = searchAllDependencies(match);
 
-    result.insert(result.end(), more.begin(), more.end());
+    combine.insert(result.begin(), result.end());
+    combine.insert(more.begin(), more.end());
 
     if (result.empty())
         throw VerifyError(node, "Reference does not evaluate to anything.");
 
-    return result;
+    return std::vector<const Node *>(combine.begin(), combine.end());
 }
