@@ -68,8 +68,12 @@ void BuilderScope::makeParameters() {
     }
 }
 
-BuilderScope::BuilderScope(const Node *node, BuilderFunction &function, BuilderScope *parent, bool doCodeGen)
-    : parent(parent), function(function) {
+BuilderScope::BuilderScope(const Node *node, BuilderFunction &function, BuilderScope *parent, bool doCodeGen,
+    BasicBlock *continueBlock, BasicBlock *breakBlock) : parent(parent), function(function) {
+
+    this->breakBlock = breakBlock ? breakBlock : (parent ? parent->breakBlock : nullptr);
+    this->continueBlock = continueBlock ? continueBlock : (parent ? parent->continueBlock : nullptr);
+
     if (doCodeGen) {
         openingBlock = BasicBlock::Create(function.builder.context, "", function.function, function.exitBlock);
         currentBlock = openingBlock;
@@ -132,7 +136,8 @@ BuilderScope::BuilderScope(const Node *node, BuilderFunction &function, BuilderS
     }
 }
 
-BuilderScope::BuilderScope(const Node *node, BuilderScope &parent, bool doCodeGen)
-    : BuilderScope(node, parent.function, &parent, doCodeGen) { }
+BuilderScope::BuilderScope(const Node *node, BuilderScope &parent, bool doCodeGen,
+    BasicBlock *breakBlock, BasicBlock *continueBlock)
+    : BuilderScope(node, parent.function, &parent, doCodeGen, breakBlock, continueBlock) { }
 BuilderScope::BuilderScope(const Node *node, BuilderFunction &function, bool doCodeGen)
     : BuilderScope(node, function, nullptr, doCodeGen) { }

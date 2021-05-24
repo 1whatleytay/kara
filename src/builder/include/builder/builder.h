@@ -20,7 +20,6 @@ struct ForNode;
 struct CodeNode;
 struct TypeNode;
 struct BlockNode;
-struct DebugNode;
 struct AssignNode;
 struct ImportNode;
 struct FunctionNode;
@@ -86,6 +85,9 @@ struct BuilderScope {
     BasicBlock *openingBlock = nullptr;
     BasicBlock *currentBlock = nullptr;
 
+    BasicBlock *breakBlock = nullptr;
+    BasicBlock *continueBlock = nullptr;
+
     std::optional<IRBuilder<>> current;
 
     // For ExpressionNode scopes, product is stored here
@@ -136,13 +138,15 @@ struct BuilderScope {
     void makeAssign(const AssignNode *node);
     void makeStatement(const StatementNode *node);
 
-    BuilderScope(const Node *node, BuilderScope &parent, bool doCodeGen = true);
+    BuilderScope(const Node *node, BuilderScope &parent, bool doCodeGen = true,
+        BasicBlock *breakBlock = nullptr, BasicBlock *continueBlock = nullptr);
     BuilderScope(const Node *node, BuilderFunction &function, bool doCodeGen = true);
 
 private:
     void makeParameters();
 
-    BuilderScope(const Node *node, BuilderFunction &function, BuilderScope *parent, bool doCodeGen = true);
+    BuilderScope(const Node *node, BuilderFunction &function, BuilderScope *parent, bool doCodeGen = true,
+        BasicBlock *breakBlock = nullptr, BasicBlock *continueBlock = nullptr);
 };
 
 struct BuilderType {

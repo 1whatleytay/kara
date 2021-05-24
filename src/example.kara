@@ -1,18 +1,24 @@
 import (c) 'stdio.h'
+// import (c) 'stdlib.h'
 
-create(a int) => 9
-create(b long) => 10
-create(c ulong) => 11
+itoa(value int, buffer &[byte:], size int) nothing external
 
 main int {
-    let k = create(4 as int)
+    var buffer [byte:100]
+    var z = 4
 
-    if k > 10 {
-        'Yep, k > 10'.puts
-    } else if k < 10 {
-        'Uh, k < 10'.puts
-    } else {
-        'Nope, k = 10'.puts
+    for {
+        if z < 11 {
+            z += 1
+            continue
+        } else if z > 40 {
+            break
+        }
+
+        z.itoa(buffer, 10)
+        buffer.puts
+
+        z += 2
     }
 
     return 0

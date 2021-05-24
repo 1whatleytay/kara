@@ -45,6 +45,20 @@ void BuilderScope::makeStatement(const StatementNode *node) {
             break;
         }
 
+        case StatementNode::Operation::Break: {
+            assert(breakBlock);
+            current->CreateBr(breakBlock);
+
+            break;
+        }
+
+        case StatementNode::Operation::Continue: {
+            assert(continueBlock);
+            current->CreateBr(continueBlock);
+
+            break;
+        }
+
         default:
             assert(false);
     }

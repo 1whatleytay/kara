@@ -34,7 +34,6 @@ BuilderType *Builder::makeType(const TypeNode *node) {
 
         BuilderType *result = ptr.get();
         types[node] = std::move(ptr);
-
         result->build(); // needed to avoid recursive problems
 
         return result;
