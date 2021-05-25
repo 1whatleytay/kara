@@ -2,6 +2,7 @@
 
 #include <builder/error.h>
 
+#include <parser/literals.h>
 #include <parser/variable.h>
 
 #include <fmt/format.h>
@@ -20,9 +21,41 @@ BuilderVariable::BuilderVariable(const VariableNode *node, Builder &builder) : n
 
     using L = GlobalVariable::LinkageTypes;
 
+    assert(!node->hasInitialValue);
+
+    Constant *defaultValue = nullptr;
+
+    if (node->hasConstantValue) {
+        assert(node->hasFixedType);
+
+        auto numberNode = node->constantValue();
+
+        Type *resolvedType = node->hasFixedType
+            ? builder.makeTypename(builder.resolveTypename(node->fixedType())) : nullptr;
+
+        struct {
+            Builder &builder;
+            Type *resolvedType;
+
+            Constant *operator()(uint64_t v) {
+                return ConstantInt::get(resolvedType ? resolvedType : Type::getInt64Ty(builder.context), v);
+            }
+
+            Constant *operator()(int64_t v) {
+                return ConstantInt::getSigned(resolvedType ? resolvedType : Type::getInt64Ty(builder.context), v);
+            }
+
+            Constant *operator()(double v) {
+                return ConstantFP::get(resolvedType ? resolvedType : Type::getDoubleTy(builder.context), v);
+            }
+        } visitor { builder, resolvedType };
+
+        defaultValue = std::visit(visitor, numberNode->value);
+    }
+
     value = new GlobalVariable(
         *builder.module, builder.makeTypename(type), node->isMutable,
-        node->isExternal ? L::ExternalLinkage : L::PrivateLinkage, nullptr, node->name);
+        node->isExternal ? L::ExternalLinkage : L::PrivateLinkage, defaultValue, node->name);
 }
 
 BuilderVariable::BuilderVariable(const VariableNode *node, BuilderScope &scope) : node(node) {

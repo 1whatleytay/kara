@@ -8,7 +8,9 @@
 #include <parser/literals.h>
 #include <parser/variable.h>
 
+#include <clang/Lex/LiteralSupport.h>
 #include <clang/Frontend/FrontendAction.h>
+#include <clang/Frontend/CompilerInstance.h>
 #include <clang/Tooling/CommonOptionsParser.h>
 
 #include <fmt/printf.h>
@@ -26,7 +28,62 @@ namespace interfaces::header {
         return ptr;
     }
 
-    std::unique_ptr<Node> TranslateVisitor::make(Node *parent, const clang::QualType &wrapper, bool inStruct) const {
+    struct TranslatePreprocessorCallback : public clang::PPCallbacks {
+        TranslateFactory &factory;
+        CompilerInstance &compiler;
+
+        void MacroDefined(const Token &token, const MacroDirective *macro) override {
+            auto name = token.getIdentifierInfo()->getName();
+
+            auto info = macro->getMacroInfo();
+
+            if (info->getNumTokens() != 1)
+                return;
+
+            auto t = info->getReplacementToken(0);
+
+            if (t.is(tok::numeric_constant)) {
+                NumericLiteralParser parser(
+                    std::string_view(t.getLiteralData(), t.getLength()), macro->getLocation(),
+                    compiler.getSourceManager(), compiler.getLangOpts(),
+                    compiler.getTarget(), compiler.getDiagnostics());
+
+                if (!parser.isFloat) {
+                    llvm::APInt ap(64, 0);
+                    parser.GetIntegerValue(ap);
+
+                    auto varNode = std::make_unique<VariableNode>(factory.node, false, true);
+
+                    varNode->name = name;
+                    varNode->isMutable = false;
+                    varNode->hasFixedType = true;
+                    varNode->hasConstantValue = true;
+
+                    auto primNode = std::make_unique<PrimitiveTypenameNode>(varNode.get(), true);
+                    primNode->type = parser.isUnsigned ? PrimitiveType::ULong : PrimitiveType::Long;
+
+                    auto numberNode = std::make_unique<NumberNode>(varNode.get(), true);
+                    if (parser.isUnsigned)
+                        numberNode->value = ap.getZExtValue();
+                    else
+                        numberNode->value = ap.getSExtValue();
+
+                    varNode->children.push_back(std::move(primNode));
+                    varNode->children.push_back(std::move(numberNode));
+
+                    factory.node->children.push_back(std::move(varNode));
+                } else {
+                    fmt::print("Skipping token {}, float: {}, unsigned: {}\n", name, (bool)parser.isFloat, (bool)parser.isUnsigned);
+                }
+            }
+        }
+
+        explicit TranslatePreprocessorCallback(CompilerInstance &compiler, TranslateFactory &factory)
+            : compiler(compiler), factory(factory) { }
+    };
+
+    std::unique_ptr<Node> TranslateVisitor::make( // NOLINT(misc-no-recursion)
+        Node *parent, const clang::QualType &wrapper, bool inStruct) const {
         const clang::Type &type = *wrapper;
 
         std::string z = wrapper.getAsString();
@@ -312,6 +369,9 @@ namespace interfaces::header {
 
     std::unique_ptr<clang::ASTConsumer> TranslateAction::CreateASTConsumer(
         clang::CompilerInstance &compiler, llvm::StringRef file) {
+        assert(compiler.hasSourceManager());
+
+        compiler.getPreprocessor().addPPCallbacks(std::make_unique<TranslatePreprocessorCallback>(compiler, *factory));
 
         return std::make_unique<TranslateConsumer>(factory);
     }
@@ -327,8 +387,8 @@ namespace interfaces::header {
     InterfaceResult create(int count, const char **args) {
         auto parser = clang::tooling::CommonOptionsParser::create(
             count, args, llvm::cl::GeneralCategory, llvm::cl::OneOrMore);
-        if (auto error = parser.takeError())
-            throw std::runtime_error(toString(std::move(error)));
+        if (!parser)
+            throw std::runtime_error(toString(parser.takeError()));
 
         clang::tooling::ClangTool tool(parser->getCompilations(), parser->getSourcePathList());
 

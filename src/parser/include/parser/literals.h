@@ -8,7 +8,7 @@
 struct ExpressionNode;
 
 struct ParenthesesNode : public Node {
-    const ExpressionNode *body() const;
+    [[nodiscard]] const ExpressionNode *body() const;
 
     explicit ParenthesesNode(Node *parent);
 };
@@ -44,7 +44,7 @@ struct StringNode : public Node {
 };
 
 struct ArrayNode : public Node {
-    std::vector<const ExpressionNode *> elements() const;
+    [[nodiscard]] std::vector<const ExpressionNode *> elements() const;
 
     explicit ArrayNode(Node *parent);
 };

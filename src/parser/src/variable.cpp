@@ -1,5 +1,6 @@
 #include <parser/variable.h>
 
+#include <parser/literals.h>
 #include <parser/expression.h>
 
 const Node *VariableNode::fixedType() const {
@@ -7,7 +8,11 @@ const Node *VariableNode::fixedType() const {
 }
 
 const ExpressionNode *VariableNode::value() const {
-    return children.size() > hasFixedType ? children[hasFixedType]->as<ExpressionNode>() : nullptr;
+    return hasInitialValue ? children[hasFixedType]->as<ExpressionNode>() : nullptr;
+}
+
+const NumberNode *VariableNode::constantValue() const {
+    return hasConstantValue ? children[hasFixedType]->as<NumberNode>() : nullptr;
 }
 
 VariableNode::VariableNode(Node *parent, bool isExplicit, bool external) : Node(parent, Kind::Variable) {
@@ -25,7 +30,13 @@ VariableNode::VariableNode(Node *parent, bool isExplicit, bool external) : Node(
     name = token();
 
     if (next("=")) {
-        push<ExpressionNode>();
+        if (parent && parent->is(Kind::Root) && push<NumberNode>(true)) {
+            hasConstantValue = true;
+        } else {
+            push<ExpressionNode>();
+
+            hasInitialValue = true;
+        }
     } else {
         hasFixedType = true;
         pushTypename(this);
@@ -33,7 +44,13 @@ VariableNode::VariableNode(Node *parent, bool isExplicit, bool external) : Node(
         if (next("external", true)) {
             isExternal = true;
         } else if (next("=")) {
-            push<ExpressionNode>();
+            if (parent && parent->is(Kind::Root) && push<NumberNode>(true)) {
+                hasConstantValue = true;
+            } else {
+                push<ExpressionNode>();
+
+                hasInitialValue = true;
+            }
         }
     }
 }

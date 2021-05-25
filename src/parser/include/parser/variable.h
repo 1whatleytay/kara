@@ -13,11 +13,14 @@ struct VariableNode : public Node {
 
     bool isMutable = false;
     bool hasFixedType = false;
+    bool hasInitialValue = false;
+    bool hasConstantValue = false;
 
     bool isExternal = false;
 
     [[nodiscard]] const Node *fixedType() const;
     [[nodiscard]] const ExpressionNode *value() const;
+    [[nodiscard]] const NumberNode *constantValue() const;
 
     explicit VariableNode(Node *parent, bool isExplicit = true, bool external = false);
 };

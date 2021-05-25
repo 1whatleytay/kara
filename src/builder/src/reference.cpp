@@ -68,7 +68,7 @@ std::vector<const Node *> Builder::findAll(const ReferenceNode *node) {
     combine.insert(result.begin(), result.end());
     combine.insert(more.begin(), more.end());
 
-    if (result.empty())
+    if (combine.empty())
         throw VerifyError(node, "Reference does not evaluate to anything.");
 
     return std::vector<const Node *>(combine.begin(), combine.end());

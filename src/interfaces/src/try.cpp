@@ -101,9 +101,16 @@ int main(int count, const char **args) {
             case Kind::Variable: {
                 auto v = e->as<VariableNode>();
 
-                fmt::print("{} {} {}{}\n",
+                auto toString = [](const NumberNode *node) -> std::string {
+                    return std::visit([](auto x) { return std::to_string(x); }, node->value);
+                };
+
+                assert(!v->hasInitialValue);
+
+                fmt::print("{} {} {}{}{}\n",
                     v->isMutable ? "var" : "let", v->name,
-                    toTypeString(v->fixedType()), v->isExternal ? " external" : "");
+                    toTypeString(v->fixedType()), v->isExternal ? " external" : "",
+                    v->hasConstantValue ? fmt::format(" = {}", toString(v->constantValue())) : "");
 
                 break;
             }
