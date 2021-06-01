@@ -68,18 +68,77 @@ void BuilderScope::makeParameters() {
     }
 }
 
-BuilderScope::BuilderScope(const Node *node, BuilderFunction &function, BuilderScope *parent, bool doCodeGen,
-    BasicBlock *continueBlock, BasicBlock *breakBlock) : parent(parent), function(function) {
+void BuilderScope::commit() {
+    assert(exitValue && exitBlock);
 
-    this->breakBlock = breakBlock ? breakBlock : (parent ? parent->breakBlock : nullptr);
-    this->continueBlock = continueBlock ? continueBlock : (parent ? parent->continueBlock : nullptr);
+    if (!currentBlock->getTerminator()) {
+        exit(ExitPoint::Regular);
+    }
+
+    IRBuilder<> exit(exitBlock);
+
+    auto value = exit.CreateLoad(exitValue);
+
+    BasicBlock *pass = function.exitBlock;
+
+    if (parent) {
+        pass = BasicBlock::Create(function.builder.context, "pass", function.function, exitBlock);
+        IRBuilder<> passBuilder(pass);
+
+        passBuilder.CreateStore(value, parent->exitValue);
+        passBuilder.CreateBr(parent->exitChainBegin);
+    }
+
+    auto type = Type::getInt8Ty(function.builder.context);
+    auto inst = exit.CreateSwitch(value, pass, requiredPoints.size());
+
+    for (ExitPoint point : requiredPoints) {
+        auto exitId = static_cast<int8_t>(point);
+        auto constant = ConstantInt::get(type, exitId);
+
+        auto iterator = destinations.find(point);
+
+        if (iterator != destinations.end()) {
+            assert(iterator->second); // break/continue/return is just not allowed here
+
+            inst->addCase(constant, iterator->second);
+        } else if (parent) {
+            parent->requiredPoints.insert(point);
+        } else {
+            assert(false);
+        }
+    }
+}
+
+void BuilderScope::exit(ExitPoint point, BasicBlock *from) {
+    assert(exitValue && exitChainBegin);
+
+    IRBuilder<> output(from ? from : currentBlock);
+
+    requiredPoints.insert(point);
+
+    auto exitId = static_cast<int8_t>(point);
+    output.CreateStore(ConstantInt::get(Type::getInt8Ty(function.builder.context), exitId), exitValue);
+    output.CreateBr(exitChainBegin);
+}
+
+BuilderScope::BuilderScope(const Node *node, BuilderFunction &function, BuilderScope *parent, bool doCodeGen) // NOLINT(misc-no-recursion)
+    : parent(parent), function(function) {
+
+    BasicBlock *moveAfter = parent ? parent->exitBlock : function.exitBlock;
 
     if (doCodeGen) {
-        openingBlock = BasicBlock::Create(function.builder.context, "", function.function, function.exitBlock);
+        openingBlock = BasicBlock::Create(function.builder.context, "", function.function, moveAfter);
         currentBlock = openingBlock;
 
         current.emplace(function.builder.context);
         current->SetInsertPoint(currentBlock);
+
+        if (node->is(Kind::Code)) {
+            exitValue = function.entry.CreateAlloca(Type::getInt8Ty(function.builder.context), nullptr, "exit_type");
+            exitBlock = BasicBlock::Create(function.builder.context, "exit_scope", function.function, moveAfter);
+            exitChainBegin = exitBlock;
+        }
     }
 
     if (!parent)
@@ -127,6 +186,16 @@ BuilderScope::BuilderScope(const Node *node, BuilderFunction &function, BuilderS
                     makeExpression(child->as<ExpressionNode>());
                     break;
 
+                case Kind::Insight: {
+                    BuilderScope scope(child->as<InsightNode>()->expression(), *this, false);
+                    assert(scope.product);
+
+                    fmt::print("[INSIGHT, line {}] {}\n",
+                        LineDetails(child->state.text, child->index).lineNumber, toString(scope.product->type));
+
+                    break;
+                }
+
                 default:
                     assert(false);
             }
@@ -136,8 +205,7 @@ BuilderScope::BuilderScope(const Node *node, BuilderFunction &function, BuilderS
     }
 }
 
-BuilderScope::BuilderScope(const Node *node, BuilderScope &parent, bool doCodeGen,
-    BasicBlock *breakBlock, BasicBlock *continueBlock)
-    : BuilderScope(node, parent.function, &parent, doCodeGen, breakBlock, continueBlock) { }
+BuilderScope::BuilderScope(const Node *node, BuilderScope &parent, bool doCodeGen)
+    : BuilderScope(node, parent.function, &parent, doCodeGen) { }
 BuilderScope::BuilderScope(const Node *node, BuilderFunction &function, bool doCodeGen)
     : BuilderScope(node, function, nullptr, doCodeGen) { }

@@ -18,6 +18,7 @@ Options::Options(int count, const char **args) {
 
     app.add_option("-t,--triple", triple, "Target triple.");
 
+    app.add_flag("--optimize", optimize, "Whether or not to optimize LLVM ir with passes.");
     app.add_flag("--interpret", interpret, "Whether or not to interpret and run the code.")
         ->excludes(outputOption);
     app.add_flag("--print-ir", printIR, "Whether or not to print resultant IR.");

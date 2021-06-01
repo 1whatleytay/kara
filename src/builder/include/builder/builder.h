@@ -1,5 +1,4 @@
 #pragma once
-
 #include <options/options.h>
 
 #include <parser/root.h>
@@ -73,6 +72,8 @@ struct BuilderVariable {
 };
 
 struct MatchResult {
+    const FunctionNode *node;
+
     std::optional<int64_t> failed;
 
     size_t numImplicit = 0;
@@ -85,8 +86,22 @@ struct BuilderScope {
     BasicBlock *openingBlock = nullptr;
     BasicBlock *currentBlock = nullptr;
 
-    BasicBlock *breakBlock = nullptr;
-    BasicBlock *continueBlock = nullptr;
+    Value *exitValue = nullptr;
+    BasicBlock *exitBlock = nullptr;
+    BasicBlock *exitChainBegin = nullptr;
+
+    enum class ExitPoint {
+        Regular,
+        Return,
+        Break,
+        Continue
+    };
+
+    std::set<ExitPoint> requiredPoints = { ExitPoint::Regular };
+    std::unordered_map<ExitPoint, BasicBlock *> destinations;
+
+    void commit();
+    void exit(ExitPoint point, BasicBlock *from = nullptr);
 
     std::optional<IRBuilder<>> current;
 
@@ -138,15 +153,13 @@ struct BuilderScope {
     void makeAssign(const AssignNode *node);
     void makeStatement(const StatementNode *node);
 
-    BuilderScope(const Node *node, BuilderScope &parent, bool doCodeGen = true,
-        BasicBlock *breakBlock = nullptr, BasicBlock *continueBlock = nullptr);
+    BuilderScope(const Node *node, BuilderScope &parent, bool doCodeGen = true);
     BuilderScope(const Node *node, BuilderFunction &function, bool doCodeGen = true);
 
 private:
     void makeParameters();
 
-    BuilderScope(const Node *node, BuilderFunction &function, BuilderScope *parent, bool doCodeGen = true,
-        BasicBlock *breakBlock = nullptr, BasicBlock *continueBlock = nullptr);
+    BuilderScope(const Node *node, BuilderFunction &function, BuilderScope *parent, bool doCodeGen = true);
 };
 
 struct BuilderType {

@@ -20,6 +20,7 @@ struct Options {
     std::set<std::string> libraries;
 
     bool printIR = false;
+    bool optimize = false;
     bool interpret = false;
 
     Options() = default;

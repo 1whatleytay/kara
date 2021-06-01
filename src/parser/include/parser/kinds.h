@@ -17,6 +17,7 @@ enum class Kind {
     Expression,
     Operator,
     Statement,
+    Insight,
     Code,
     Reference,
     Number,

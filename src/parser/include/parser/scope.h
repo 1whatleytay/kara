@@ -10,24 +10,31 @@ struct CodeNode : public Node {
 };
 
 struct BlockNode : public Node {
-    const CodeNode *body() const;
+    enum class Type {
+        Regular,
+        Exit
+    };
+
+    Type type = Type::Regular;
+
+    [[nodiscard]] const CodeNode *body() const;
 
     explicit BlockNode(Node *parent);
 };
 
 struct IfNode : public Node {
-    const ExpressionNode *condition() const;
+    [[nodiscard]] const ExpressionNode *condition() const;
 
-    const CodeNode *onTrue() const;
-    const Node *onFalse() const;
+    [[nodiscard]] const CodeNode *onTrue() const;
+    [[nodiscard]] const Node *onFalse() const;
 
     explicit IfNode(Node *parent);
 };
 
 // Just for expression material.
 struct ForInNode : public Node {
-    const VariableNode *name() const;
-    const ExpressionNode *expression() const;
+    [[nodiscard]] const VariableNode *name() const;
+    [[nodiscard]] const ExpressionNode *expression() const;
 
     explicit ForInNode(Node *parent);
 };
@@ -35,8 +42,8 @@ struct ForInNode : public Node {
 struct ForNode : public Node {
     bool infinite = true;
 
-    const Node *condition() const;
-    const CodeNode *body() const;
+    [[nodiscard]] const Node *condition() const;
+    [[nodiscard]] const CodeNode *body() const;
 
     explicit ForNode(Node *parent);
 };

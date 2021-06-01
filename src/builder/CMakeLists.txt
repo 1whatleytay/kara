@@ -18,4 +18,4 @@ add_library(builder STATIC
     src/block.cpp)
 
 target_include_directories(builder PUBLIC include)
-target_link_libraries(builder PUBLIC parser options interfaces llvm rapidjson)
+target_link_libraries(builder PUBLIC parser options llvm rapidjson interfaces)

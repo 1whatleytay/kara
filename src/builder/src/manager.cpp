@@ -16,6 +16,19 @@
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/ExecutionEngine/Orc/LLJIT.h>
 
+// Passes
+#include <llvm/Passes/PassBuilder.h>
+#include <llvm/Transforms/Utils/Mem2Reg.h>
+#include <llvm/Transforms/Utils/LowerSwitch.h>
+#include <llvm/Transforms/Scalar/SimplifyCFG.h>
+
+// Analysis
+#include <llvm/IR/Dominators.h>
+#include <llvm/Analysis/LazyValueInfo.h>
+#include <llvm/Analysis/AssumptionCache.h>
+#include <llvm/Analysis/TargetLibraryInfo.h>
+#include <llvm/Analysis/TargetTransformInfo.h>
+
 #include <rapidjson/document.h>
 
 #include <fstream>
@@ -72,7 +85,7 @@ LibraryDocument::LibraryDocument(const std::string &json, const fs::path &root) 
         arguments.emplace_back(k.GetString());
 }
 
-void ManagerFile::resolve(std::set<const ManagerFile *> &visited) const {
+void ManagerFile::resolve(std::set<const ManagerFile *> &visited) const { // NOLINT(misc-no-recursion)
     visited.insert(this);
 
     for (const auto &d : dependencies) {
@@ -125,7 +138,8 @@ ManagerFile::ManagerFile(Manager &manager, fs::path path, std::string type, cons
         auto cString = [](const auto &s) { return s.c_str(); };
         std::transform(library->arguments.begin(), library->arguments.end(), std::back_inserter(arguments), cString);
 
-        auto [tupleState, tupleRoot] = interfaces::header::create(static_cast<int>(arguments.size()), arguments.data());
+        auto [tupleState, tupleRoot] = interfaces::header::create(
+            static_cast<int>(arguments.size()), arguments.data());
 
         state = std::move(tupleState);
         root = std::move(tupleRoot);
@@ -220,10 +234,10 @@ const ManagerFile &Manager::get(const fs::path &path, const fs::path &root, cons
         return *iterator->second;
 
     auto file = std::make_unique<ManagerFile>(*this, fullPath, type, doc);
-    auto &ref = *file;
+    auto *ref = file.get();
     nodes[fullPath] = std::move(file);
 
-    return ref;
+    return *ref;
 }
 
 Manager::Manager(const Options &options)
@@ -257,11 +271,42 @@ Manager::Manager(const Options &options)
         }
     }
 
-    if (options.printIR)
+    linker.reset();
+
+    if (verifyModule(*base, &llvm::errs(), nullptr)) {
         base->print(llvm::outs(), nullptr);
 
-    if (verifyModule(*base, &llvm::errs(), nullptr))
         throw std::runtime_error("Aborted.");
+    }
+
+    if (options.optimize) {
+        FunctionAnalysisManager fam;
+
+        fam.registerPass([]() { return PassInstrumentationAnalysis(); });
+        fam.registerPass([]() { return DominatorTreeAnalysis(); });
+        fam.registerPass([]() { return AssumptionAnalysis(); });
+        fam.registerPass([]() { return LazyValueAnalysis(); });
+        fam.registerPass([]() { return TargetLibraryAnalysis(); });
+        fam.registerPass([]() { return TargetIRAnalysis(); });
+
+        ModuleAnalysisManager mam;
+        mam.registerPass([]() { return PassInstrumentationAnalysis(); });
+
+        mam.registerPass([&fam]() { return FunctionAnalysisManagerModuleProxy(fam); });
+        fam.registerPass([&mam]() { return ModuleAnalysisManagerFunctionProxy(mam); });
+
+        FunctionPassManager fpm;
+        fpm.addPass(LowerSwitchPass());
+        fpm.addPass(SimplifyCFGPass());
+        fpm.addPass(PromotePass());
+
+        ModulePassManager mpm;
+        mpm.addPass(createModuleToFunctionPassAdaptor(std::move(fpm)));
+        mpm.run(*base, mam);
+    }
+
+    if (options.printIR)
+        base->print(llvm::outs(), nullptr);
 
     if (!options.output.empty()) {
         legacy::PassManager pass;
@@ -289,22 +334,23 @@ Manager::Manager(const Options &options)
         if (jit->addIRModule(orc::ThreadSafeModule(std::move(base), std::move(context))))
             throw std::runtime_error("Could not add module to jit instance.");
 
+        void (* print)(int) = [](int a) {
+            printf("%d\n", a);
+        };
+
+        jit->getMainJITDylib().define(llvm::orc::absoluteSymbols({
+            { jit->mangleAndIntern("print"), JITEvaluatedSymbol::fromPointer(print) }
+        }));
+
         for (const auto &library : libraries) {
             for (const auto &lib : library.libraries) {
-                auto bufferOrError = MemoryBuffer::getFileAsStream(lib.string());
+                auto loader = llvm::orc::StaticLibraryDefinitionGenerator::Load(
+                    jit->getObjLinkingLayer(), lib.c_str());
 
-                if (!bufferOrError) {
+                if (!loader) {
                     fmt::print("Failed to load library {}.\n", lib.string());
                 } else {
-                    auto loader = llvm::orc::StaticLibraryDefinitionGenerator::Load(
-                        jit->getObjLinkingLayer(), lib.c_str());
-
-                    if (!loader) {
-                        fmt::print("Error: {}\n", toString(loader.takeError()));
-                        fmt::print("Failed to load library {}.\n", lib.string());
-                    } else {
-                        jit->getMainJITDylib().addGenerator(std::move(loader.get()));
-                    }
+                    jit->getMainJITDylib().addGenerator(std::move(loader.get()));
                 }
             }
 

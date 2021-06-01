@@ -15,9 +15,10 @@ MatchResult BuilderScope::match(const FunctionNode *node, const std::vector<Buil
     auto funcParams = node->parameters();
 
     if (funcParams.size() != parameters.size())
-        return { -1, 0 };
+        return { node, -1, 0 };
 
     MatchResult result;
+    result.node = node;
 
     BuilderScope testScope(nullptr, *this, false);
 
@@ -48,6 +49,8 @@ MatchResult BuilderScope::match(const FunctionNode *node, const std::vector<Buil
 BuilderResult BuilderScope::call(
     const std::vector<const FunctionNode *> &options, const std::vector<BuilderResult *> &parameters) {
 
+    assert(!options.empty());
+
     std::vector<MatchResult> checks(options.size());
     std::transform(options.begin(), options.end(), checks.begin(), [this, &parameters](auto o) {
         return match(o, parameters);
@@ -71,10 +74,34 @@ BuilderResult BuilderScope::call(
         }
     }
 
-    if (picks.empty())
-        throw std::runtime_error("No functions match given function parameters.");
+    if (picks.empty()) {
+        for (const auto &c : checks) {
+            assert(c.failed);
 
-    if (picks.size() != 1)
+            std::string problem;
+
+            if (*c.failed == -1) {
+                problem = fmt::format("has {} parameters but call gave {}.",
+                    c.node->parameterCount, parameters.size());
+            } else {
+                problem = fmt::format("has parameter #{} of type {} but was given type {}.", *c.failed + 1,
+                    toString(function.builder.resolveTypename(c.node->parameters()[*c.failed]->fixedType())),
+                    toString(parameters[*c.failed]->type));
+            }
+
+            if (c.node->state.text.empty()) {
+                fmt::print("Function {} (from generated AST) {}\n",
+                    c.node->name, problem);
+            } else {
+                fmt::print("Function {} (from line {}) {}\n",
+                    c.node->name, LineDetails(c.node->state.text, c.node->index).lineNumber, problem);
+            }
+        }
+
+        throw std::runtime_error("No functions match given function parameters.");
+    }
+
+    if (picks.size() != 1 && !(std::all_of(picks.begin(), picks.end(), [](auto f) { return f->isExtern; })/* && bet == 0*/))
         throw std::runtime_error(fmt::format("Multiple functions match the most accurate conversion level, {}.", bet));
 
     const FunctionNode *pick = picks.front();
@@ -177,8 +204,12 @@ void BuilderFunction::build() {
 
         entry.CreateBr(scope.openingBlock);
 
-        if (!scope.currentBlock->getTerminator())
-            scope.current.value().CreateBr(exitBlock);
+        scope.destinations[BuilderScope::ExitPoint::Regular] = exitBlock;
+        scope.destinations[BuilderScope::ExitPoint::Return] = exitBlock;
+        scope.commit();
+
+//        if (!scope.currentBlock->getTerminator())
+//            scope.current.value().CreateBr(exitBlock);
 
         if (returnTypename == PrimitiveTypename::from(PrimitiveType::Nothing))
             exit.CreateRetVoid();

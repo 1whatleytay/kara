@@ -16,12 +16,33 @@ void BuilderScope::makeBlock(const BlockNode *node) {
 
     BuilderScope sub(node->children.front()->as<CodeNode>(), *this);
 
-    current->CreateBr(sub.openingBlock);
+    switch (node->type) {
+        case BlockNode::Type::Regular: {
+            current->CreateBr(sub.openingBlock);
 
-    currentBlock = BasicBlock::Create(function.builder.context, "", function.function, function.exitBlock);
-    current->SetInsertPoint(currentBlock);
+            currentBlock = BasicBlock::Create(function.builder.context, "", function.function, exitBlock);
+            current->SetInsertPoint(currentBlock);
 
-    br(sub.currentBlock, currentBlock);
+            sub.destinations[ExitPoint::Regular] = currentBlock;
+
+            break;
+        }
+
+        case BlockNode::Type::Exit: {
+            sub.destinations[ExitPoint::Regular] = exitChainBegin;
+
+            // Prohibit Strange Operations, this isn't done in function root scope, idk what will happen
+            sub.destinations[ExitPoint::Break] = nullptr;
+            sub.destinations[ExitPoint::Return] = nullptr;
+            sub.destinations[ExitPoint::Continue] = nullptr;
+
+            exitChainBegin = sub.openingBlock;
+
+            break;
+        }
+    }
+
+    sub.commit();
 }
 
 void BuilderScope::makeIf(const IfNode *node) {
@@ -33,7 +54,7 @@ void BuilderScope::makeIf(const IfNode *node) {
         scopes.push_back(std::make_unique<BuilderScope>(node->children[1]->as<CodeNode>(), *this));
         BuilderScope &sub = *scopes.back();
 
-        currentBlock = BasicBlock::Create(function.builder.context, "", function.function, function.exitBlock);
+        currentBlock = BasicBlock::Create(function.builder.context, "", function.function, exitBlock);
 
         BuilderResult conditionResult = makeExpression(node->children.front()->as<ExpressionNode>());
         std::optional<BuilderResult> conditionConverted =
@@ -65,7 +86,7 @@ void BuilderScope::makeIf(const IfNode *node) {
                     br(currentBlock, terminator.openingBlock);
 
                     currentBlock = BasicBlock::Create(
-                        function.builder.context, "", function.function, function.exitBlock);
+                        function.builder.context, "", function.function, exitBlock);
                     current->SetInsertPoint(currentBlock);
 
                     node = nullptr;
@@ -83,8 +104,10 @@ void BuilderScope::makeIf(const IfNode *node) {
     }
 
     for (const auto &scope : scopes) {
-        if (scope->current)
-            br(scope->currentBlock, currentBlock);
+        if (scope->current) {
+            scope->destinations[ExitPoint::Regular] = currentBlock;
+            scope->commit();
+        }
     }
 }
 
@@ -96,33 +119,29 @@ void BuilderScope::makeFor(const ForNode *node) {
         assert(current);
 
         if (current) { // cleanup is possible using method described in if std::vector<...> scopes
-            BasicBlock *entry = BasicBlock::Create(
-                function.builder.context, "loop_entry", function.function, function.exitBlock);
+            BuilderScope scope(code, *this, true);
 
-            BasicBlock *exit = BasicBlock::Create(
-                function.builder.context, "loop_exit", function.function, function.exitBlock);
+            current->CreateBr(scope.openingBlock);
 
-            BuilderScope scope(code, *this, true, entry, exit);
-
-            IRBuilder<>(entry).CreateBr(scope.openingBlock);
-
-            current->CreateBr(entry);
-            br(scope.currentBlock, entry);
-
-            currentBlock = exit;
+            currentBlock = BasicBlock::Create(function.builder.context, "", function.function, exitBlock);
             current->SetInsertPoint(currentBlock);
+
+            scope.destinations[ExitPoint::Break] = currentBlock;
+            scope.destinations[ExitPoint::Regular] = scope.openingBlock;
+            scope.destinations[ExitPoint::Continue] = scope.openingBlock;
+            scope.commit();
         }
     } else if (condition->is(Kind::Expression)) {
         assert(current);
 
         if (current) {
-            BasicBlock *entry = BasicBlock::Create(
-                function.builder.context, "loop_entry", function.function, function.exitBlock);
+//            BasicBlock *entry = BasicBlock::Create(
+//                function.builder.context, "loop_entry", function.function, function.exitBlock);
+//
+//            BasicBlock *exit = BasicBlock::Create(
+//                function.builder.context, "loop_exit", function.function, function.exitBlock);
 
-            BasicBlock *exit = BasicBlock::Create(
-                function.builder.context, "loop_exit", function.function, function.exitBlock);
-
-            BuilderScope check(condition, *this, true, entry, exit);
+            BuilderScope check(condition, *this, true);
 
             assert(check.product);
             auto converted = convert(*check.product, PrimitiveTypename { PrimitiveType::Bool });
@@ -130,17 +149,19 @@ void BuilderScope::makeFor(const ForNode *node) {
             if (!converted)
                 throw VerifyError(node, "For node must have bool as expression, got {}.", toString(check.product->type));
 
-            BuilderScope scope(code, *this, entry, exit);
+            BuilderScope scope(code, *this);
 
-            currentBlock = exit;
+            currentBlock = BasicBlock::Create(function.builder.context, "", function.function, exitBlock);
 
-            IRBuilder<>(entry).CreateBr(check.openingBlock);
-
-            current->CreateBr(entry);
-            check.current->CreateCondBr(check.get(*check.product), scope.openingBlock, exit);
-            br(scope.currentBlock, entry);
-
+            current->CreateBr(check.openingBlock);
             current->SetInsertPoint(currentBlock);
+
+            check.current->CreateCondBr(check.get(*check.product), scope.openingBlock, currentBlock);
+
+            scope.destinations[ExitPoint::Break] = currentBlock;
+            scope.destinations[ExitPoint::Regular] = check.openingBlock;
+            scope.destinations[ExitPoint::Continue] = check.openingBlock;
+            scope.commit();
         }
     } else if (condition->is(Kind::ForIn)) {
         assert(false);

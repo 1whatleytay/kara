@@ -71,6 +71,14 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const
     }
 
     if (typeRef && resultRef) {
+        if (*typeRef->value == PrimitiveTypename::from(PrimitiveType::Any)) {
+            return BuilderResult(
+                BuilderResult::Kind::Raw,
+                current ? current->CreatePointerCast(get(result), function.builder.makeTypename(type)) : nullptr,
+                type
+            );
+        }
+
         auto typeArray = std::get_if<ArrayTypename>(typeRef->value.get());
 
         if (typeArray && typeArray->kind == ArrayKind::Unbounded) {

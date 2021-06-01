@@ -1,0 +1,20 @@
+import (c) 'stdio.h'
+
+print(a int) nothing external
+
+main int {
+    var x = 0
+
+    exit { 'Hello World'.puts }
+
+    for {
+        exit { 'Ola'.puts }
+
+        if x > 100 { x.print break }
+        else { x += 7 return 8 }
+
+        x += 1
+    }
+
+    return 0
+}

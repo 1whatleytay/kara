@@ -7,7 +7,7 @@
 
 CodeNode::CodeNode(Node *parent) : Node(parent, Kind::Code) {
     while (!end() && !peek("}")) {
-        push<BlockNode, IfNode, ForNode, StatementNode, AssignNode, VariableNode, ExpressionNode>();
+        push<BlockNode, InsightNode, IfNode, ForNode, StatementNode, AssignNode, VariableNode, ExpressionNode>();
 
         while (next(","));
     }
@@ -18,7 +18,8 @@ const CodeNode *BlockNode::body() const {
 }
 
 BlockNode::BlockNode(Node *parent) : Node(parent, Kind::Block) {
-    match("block", true);
+    type = select<Type>({ "block", "exit" }, true);
+    match();
 
     needs("{");
 

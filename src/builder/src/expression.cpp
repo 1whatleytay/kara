@@ -88,10 +88,16 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
             if (current) {
                 Constant *initial = ConstantDataArray::getString(function.builder.context, e->text);
 
+                std::string convertedText(e->text.size(), '.');
+
+                std::transform(e->text.begin(), e->text.end(), convertedText.begin(), [](char c) {
+                    return (std::isalpha(c) || std::isdigit(c)) ? c : '_';
+                });
+
                 auto variable = new GlobalVariable(
                     *function.builder.module, initial->getType(),
                     true, GlobalVariable::LinkageTypes::PrivateLinkage,
-                    initial, fmt::format("str_{}", e->text)
+                    initial, fmt::format("str_{}", convertedText)
                 );
 
                 ptr = current->CreateStructGEP(variable, 0);
@@ -472,7 +478,7 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
                 current->CreateCondBr(get(sub), trueScope.openingBlock, falseScope.openingBlock);
 
                 currentBlock = BasicBlock::Create(
-                    function.builder.context, "", function.function, function.exitBlock);
+                    function.builder.context, "", function.function, exitBlock);
                 current->SetInsertPoint(currentBlock);
 
                 trueScope.current->CreateBr(currentBlock);

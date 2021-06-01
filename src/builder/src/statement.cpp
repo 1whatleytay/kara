@@ -40,24 +40,18 @@ void BuilderScope::makeStatement(const StatementNode *node) {
                 current->CreateStore(get(result), function.returnValue);
             }
 
-            current->CreateBr(function.exitBlock);
+            exit(ExitPoint::Return);
 
             break;
         }
 
-        case StatementNode::Operation::Break: {
-            assert(breakBlock);
-            current->CreateBr(breakBlock);
-
+        case StatementNode::Operation::Break:
+            exit(ExitPoint::Break);
             break;
-        }
 
-        case StatementNode::Operation::Continue: {
-            assert(continueBlock);
-            current->CreateBr(continueBlock);
-
+        case StatementNode::Operation::Continue:
+            exit(ExitPoint::Continue);
             break;
-        }
 
         default:
             assert(false);

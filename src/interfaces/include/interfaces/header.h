@@ -31,6 +31,15 @@ namespace interfaces::header {
         explicit TranslateVisitor(clang::ASTContext &context, TranslateFactory *factory);
     };
 
+    struct TranslatePreprocessorCallback : public clang::PPCallbacks {
+        TranslateFactory &factory;
+        clang::CompilerInstance &compiler;
+
+        void MacroDefined(const clang::Token &token, const clang::MacroDirective *macro) override;
+
+        explicit TranslatePreprocessorCallback(clang::CompilerInstance &compiler, TranslateFactory &factory);
+    };
+
     struct TranslateConsumer : public clang::ASTConsumer {
         TranslateFactory *factory;
 

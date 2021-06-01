@@ -28,59 +28,55 @@ namespace interfaces::header {
         return ptr;
     }
 
-    struct TranslatePreprocessorCallback : public clang::PPCallbacks {
-        TranslateFactory &factory;
-        CompilerInstance &compiler;
 
-        void MacroDefined(const Token &token, const MacroDirective *macro) override {
-            auto name = token.getIdentifierInfo()->getName();
+    void TranslatePreprocessorCallback::MacroDefined(const Token &token, const MacroDirective *macro) {
+        auto name = token.getIdentifierInfo()->getName();
 
-            auto info = macro->getMacroInfo();
+        auto info = macro->getMacroInfo();
 
-            if (info->getNumTokens() != 1)
-                return;
+        if (info->getNumTokens() != 1)
+            return;
 
-            auto t = info->getReplacementToken(0);
+        auto t = info->getReplacementToken(0);
 
-            if (t.is(tok::numeric_constant)) {
-                NumericLiteralParser parser(
-                    std::string_view(t.getLiteralData(), t.getLength()), macro->getLocation(),
-                    compiler.getSourceManager(), compiler.getLangOpts(),
-                    compiler.getTarget(), compiler.getDiagnostics());
+        if (t.is(tok::numeric_constant)) {
+            NumericLiteralParser parser(
+                std::string_view(t.getLiteralData(), t.getLength()), macro->getLocation(),
+                compiler.getSourceManager(), compiler.getLangOpts(),
+                compiler.getTarget(), compiler.getDiagnostics());
 
-                if (!parser.isFloat) {
-                    llvm::APInt ap(64, 0);
-                    parser.GetIntegerValue(ap);
+            if (!parser.isFloat) {
+                llvm::APInt ap(64, 0);
+                parser.GetIntegerValue(ap);
 
-                    auto varNode = std::make_unique<VariableNode>(factory.node, false, true);
+                auto varNode = std::make_unique<VariableNode>(factory.node, false, true);
 
-                    varNode->name = name;
-                    varNode->isMutable = false;
-                    varNode->hasFixedType = true;
-                    varNode->hasConstantValue = true;
+                varNode->name = name;
+                varNode->isMutable = false;
+                varNode->hasFixedType = true;
+                varNode->hasConstantValue = true;
 
-                    auto primNode = std::make_unique<PrimitiveTypenameNode>(varNode.get(), true);
-                    primNode->type = parser.isUnsigned ? PrimitiveType::ULong : PrimitiveType::Long;
+                auto primNode = std::make_unique<PrimitiveTypenameNode>(varNode.get(), true);
+                primNode->type = parser.isUnsigned ? PrimitiveType::ULong : PrimitiveType::Long;
 
-                    auto numberNode = std::make_unique<NumberNode>(varNode.get(), true);
-                    if (parser.isUnsigned)
-                        numberNode->value = ap.getZExtValue();
-                    else
-                        numberNode->value = ap.getSExtValue();
+                auto numberNode = std::make_unique<NumberNode>(varNode.get(), true);
+                if (parser.isUnsigned)
+                    numberNode->value = ap.getZExtValue();
+                else
+                    numberNode->value = ap.getSExtValue();
 
-                    varNode->children.push_back(std::move(primNode));
-                    varNode->children.push_back(std::move(numberNode));
+                varNode->children.push_back(std::move(primNode));
+                varNode->children.push_back(std::move(numberNode));
 
-                    factory.node->children.push_back(std::move(varNode));
-                } else {
-                    fmt::print("Skipping token {}, float: {}, unsigned: {}\n", name, (bool)parser.isFloat, (bool)parser.isUnsigned);
-                }
+                factory.node->children.push_back(std::move(varNode));
+            } else {
+                fmt::print("Skipping token {}, float: {}, unsigned: {}\n", name, (bool)parser.isFloat, (bool)parser.isUnsigned);
             }
         }
+    }
 
-        explicit TranslatePreprocessorCallback(CompilerInstance &compiler, TranslateFactory &factory)
-            : compiler(compiler), factory(factory) { }
-    };
+    TranslatePreprocessorCallback::TranslatePreprocessorCallback(CompilerInstance &compiler, TranslateFactory &factory)
+        : compiler(compiler), factory(factory) { }
 
     std::unique_ptr<Node> TranslateVisitor::make( // NOLINT(misc-no-recursion)
         Node *parent, const clang::QualType &wrapper, bool inStruct) const {
@@ -171,6 +167,15 @@ namespace interfaces::header {
 
             auto ref = std::make_unique<ReferenceTypenameNode>(parent, true);
 
+            if (type.isVoidPointerType()) {
+                auto prim = std::make_unique<PrimitiveTypenameNode>(ref.get(), true);
+
+                prim->type = PrimitiveType::Any;
+                ref->children.push_back(std::move(prim));
+
+                return ref;
+            }
+
             ArrayTypenameNode *arr = nullptr;
 
             {
@@ -182,15 +187,6 @@ namespace interfaces::header {
 
             arr->type = ArrayKind::Unbounded;
             ref->isMutable = !pointee.isConstQualified();
-
-            if (type.isVoidPointerType()) {
-                auto prim = std::make_unique<PrimitiveTypenameNode>(arr, true);
-
-                prim->type = PrimitiveType::Any;
-                arr->children.push_back(std::move(prim));
-
-                return ref;
-            }
 
             auto subtype = make(arr, pointee);
 
