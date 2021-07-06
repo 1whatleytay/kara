@@ -11,8 +11,17 @@ struct AsNode : public Node {
     explicit AsNode(Node *parent);
 };
 
+struct CallParameterNameNode : public Node {
+    std::string name;
+
+    explicit CallParameterNameNode(Node *parent);
+};
+
 struct CallNode : public Node {
     [[nodiscard]] std::vector<const ExpressionNode *> parameters() const;
+    [[nodiscard]] std::unordered_map<size_t, const CallParameterNameNode *> names() const;
+
+    [[nodiscard]] std::unordered_map<size_t, std::string> namesStripped() const;
 
     explicit CallNode(Node *parent);
 };

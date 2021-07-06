@@ -179,7 +179,7 @@ std::string toString(const PrimitiveTypename &type) {
         case PrimitiveType::Float: return "float";
         case PrimitiveType::Double: return "double";
         default:
-            assert(false);
+            throw;
     }
 }
 

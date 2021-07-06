@@ -28,7 +28,7 @@ std::string toTypeString(const Node *node) {
                 case PrimitiveType::Float: return "float";
                 case PrimitiveType::Double: return "double";
                 default:
-                    assert(false);
+                    throw;
             }
         case Kind::OptionalTypename: {
             auto e = node->as<OptionalTypenameNode>();
@@ -57,7 +57,7 @@ std::string toTypeString(const Node *node) {
         }
 
         default:
-            assert(false);
+            throw;
     }
 }
 
@@ -138,7 +138,7 @@ int main(int count, const char **args) {
             }
 
             default:
-                assert(false);
+                throw;
         }
     }
 }

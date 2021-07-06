@@ -20,7 +20,7 @@ void BuilderScope::makeBlock(const BlockNode *node) {
         case BlockNode::Type::Regular: {
             current->CreateBr(sub.openingBlock);
 
-            currentBlock = BasicBlock::Create(function.builder.context, "", function.function, exitBlock);
+            currentBlock = BasicBlock::Create(function.builder.context, "", function.function, lastBlock);
             current->SetInsertPoint(currentBlock);
 
             sub.destinations[ExitPoint::Regular] = currentBlock;
@@ -54,7 +54,7 @@ void BuilderScope::makeIf(const IfNode *node) {
         scopes.push_back(std::make_unique<BuilderScope>(node->children[1]->as<CodeNode>(), *this));
         BuilderScope &sub = *scopes.back();
 
-        currentBlock = BasicBlock::Create(function.builder.context, "", function.function, exitBlock);
+        currentBlock = BasicBlock::Create(function.builder.context, "", function.function, lastBlock);
 
         BuilderResult conditionResult = makeExpression(node->children.front()->as<ExpressionNode>());
         std::optional<BuilderResult> conditionConverted =
@@ -86,7 +86,7 @@ void BuilderScope::makeIf(const IfNode *node) {
                     br(currentBlock, terminator.openingBlock);
 
                     currentBlock = BasicBlock::Create(
-                        function.builder.context, "", function.function, exitBlock);
+                        function.builder.context, "", function.function, lastBlock);
                     current->SetInsertPoint(currentBlock);
 
                     node = nullptr;
@@ -95,7 +95,7 @@ void BuilderScope::makeIf(const IfNode *node) {
                 }
 
                 default:
-                    assert(false);
+                    throw;
             }
         } else {
             // no branch, all is good
@@ -123,7 +123,7 @@ void BuilderScope::makeFor(const ForNode *node) {
 
             current->CreateBr(scope.openingBlock);
 
-            currentBlock = BasicBlock::Create(function.builder.context, "", function.function, exitBlock);
+            currentBlock = BasicBlock::Create(function.builder.context, "", function.function, lastBlock);
             current->SetInsertPoint(currentBlock);
 
             scope.destinations[ExitPoint::Break] = currentBlock;
@@ -151,7 +151,7 @@ void BuilderScope::makeFor(const ForNode *node) {
 
             BuilderScope scope(code, *this);
 
-            currentBlock = BasicBlock::Create(function.builder.context, "", function.function, exitBlock);
+            currentBlock = BasicBlock::Create(function.builder.context, "", function.function, lastBlock);
 
             current->CreateBr(check.openingBlock);
             current->SetInsertPoint(currentBlock);
@@ -164,6 +164,6 @@ void BuilderScope::makeFor(const ForNode *node) {
             scope.commit();
         }
     } else if (condition->is(Kind::ForIn)) {
-        assert(false);
+        throw;
     }
 }

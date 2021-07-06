@@ -12,6 +12,9 @@ const ExpressionNode *ParenthesesNode::body() const {
 }
 
 ParenthesesNode::ParenthesesNode(Node *parent) : Node(parent, Kind::Parentheses) {
+    if (next("group"))
+        match();
+
     match("(");
 
     push<ExpressionNode>();

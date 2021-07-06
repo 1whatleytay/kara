@@ -49,6 +49,6 @@ TypeNode::TypeNode(Node *parent, bool external) : Node(parent, Kind::Type) {
             break;
 
         default:
-            assert(false);
+            throw;
     }
 }

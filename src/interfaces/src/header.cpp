@@ -69,9 +69,9 @@ namespace interfaces::header {
                 varNode->children.push_back(std::move(numberNode));
 
                 factory.node->children.push_back(std::move(varNode));
-            } else {
-                fmt::print("Skipping token {}, float: {}, unsigned: {}\n", name, (bool)parser.isFloat, (bool)parser.isUnsigned);
-            }
+            }// else {
+//                fmt::print("Skipping token {}, float: {}, unsigned: {}\n", name, (bool)parser.isFloat, (bool)parser.isUnsigned);
+//            }
         }
     }
 

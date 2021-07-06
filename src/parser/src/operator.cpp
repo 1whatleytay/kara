@@ -14,11 +14,47 @@ AsNode::AsNode(Node *parent) : Node(parent, Kind::As) {
     pushTypename(this);
 }
 
-std::vector<const ExpressionNode *> CallNode::parameters() const {
-    std::vector<const ExpressionNode *> result(children.size());
+CallParameterNameNode::CallParameterNameNode(Node *parent) : Node(parent, Kind::CallParameterName) {
+    name = token();
 
-    for (size_t a = 0; a < children.size(); a++)
-        result[a] = children[a]->as<ExpressionNode>();
+    match(":");
+}
+
+std::vector<const ExpressionNode *> CallNode::parameters() const {
+    std::vector<const ExpressionNode *> result;
+
+    for (const auto &c : children) {
+        if (c->is(Kind::Expression)) {
+            result.push_back(c->as<ExpressionNode>());
+        }
+    }
+
+    return result;
+}
+
+std::unordered_map<size_t, const CallParameterNameNode *> CallNode::names() const {
+    std::unordered_map<size_t, const CallParameterNameNode *> result;
+
+    size_t index = 0;
+
+    for (const auto &c : children) {
+        if (c->is(Kind::Expression))
+            index++;
+
+        if (c->is(Kind::CallParameterName))
+            result[index] = c->as<CallParameterNameNode>();
+    }
+
+    return result;
+}
+
+std::unordered_map<size_t, std::string> CallNode::namesStripped() const {
+    std::unordered_map<size_t, std::string> result;
+
+    auto v = names();
+
+    for (const auto &c : v)
+        result[c.first] = c.second->name;
 
     return result;
 }
@@ -33,6 +69,7 @@ CallNode::CallNode(Node *parent) : Node(parent, Kind::Call) {
         else
             first = false;
 
+        push<CallParameterNameNode>(true);
         push<ExpressionNode>();
     }
 

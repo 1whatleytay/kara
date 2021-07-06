@@ -32,7 +32,24 @@ struct ManagerFile;
 
 struct Builder;
 struct BuilderScope;
+struct BuilderResult;
 struct BuilderFunction;
+
+// Thinking struct for destroying objects when a statement is done.
+struct BuilderStatementContext {
+    // COUPLING AHH T_T I'm sorry...
+    // I need it to use invokeDestroy for now, would be best to separate everything to global scope but...
+    BuilderScope &parent;
+
+    BasicBlock *instructions = nullptr;
+
+    void consider(const BuilderResult &result);
+
+    void commit(BasicBlock *block);
+
+    explicit BuilderStatementContext(BuilderScope &parent);
+    ~BuilderStatementContext();
+};
 
 struct BuilderResult {
     enum class Kind {
@@ -54,9 +71,9 @@ struct BuilderResult {
 
     const Node *first(::Kind nodeKind);
 
-    BuilderResult(Kind kind, Value *value, Typename type,
+    BuilderResult(Kind kind, Value *value, Typename type, BuilderStatementContext *statementContext,
         std::unique_ptr<BuilderResult> implicit = nullptr);
-    BuilderResult(const Node *from, std::vector<const Node *> references,
+    BuilderResult(const Node *from, std::vector<const Node *> references, BuilderStatementContext *statementContext,
         std::unique_ptr<BuilderResult> implicit = nullptr);
 };
 
@@ -72,22 +89,34 @@ struct BuilderVariable {
 };
 
 struct MatchResult {
-    const FunctionNode *node;
-
-    std::optional<int64_t> failed;
+    std::optional<std::string> failed;
+    std::vector<const BuilderResult *> map;
 
     size_t numImplicit = 0;
+};
+
+struct MatchInput {
+    std::vector<const BuilderResult *> parameters;
+    std::unordered_map<size_t, std::string> names;
+};
+
+struct MatchCallError {
+    std::string problem;
+    std::vector<std::string> messages;
 };
 
 struct BuilderScope {
     BuilderFunction &function;
     BuilderScope *parent = nullptr;
 
+    BuilderStatementContext statementContext;
+
     BasicBlock *openingBlock = nullptr;
     BasicBlock *currentBlock = nullptr;
 
-    Value *exitValue = nullptr;
-    BasicBlock *exitBlock = nullptr;
+    BasicBlock *lastBlock = nullptr;
+
+    Value *exitChainType = nullptr;
     BasicBlock *exitChainBegin = nullptr;
 
     enum class ExitPoint {
@@ -112,9 +141,13 @@ struct BuilderScope {
     std::unordered_map<const VariableNode *, std::shared_ptr<BuilderVariable>> variables;
 
     MatchResult match(
-        const FunctionNode *node, const std::vector<BuilderResult *> &parameters);
-    BuilderResult call(
-        const std::vector<const FunctionNode *> &options, const std::vector<BuilderResult *> &parameters);
+        const std::vector<const VariableNode *> &variables, const MatchInput &input);
+    std::variant<BuilderResult, MatchCallError> call(
+        const std::vector<const Node *> &options, const MatchInput &input);
+    std::variant<BuilderResult, MatchCallError> call(
+        const std::vector<const Node *> &options, const MatchInput &input, IRBuilder<> *builder);
+
+    static BuilderResult callUnpack(const std::variant<BuilderResult, MatchCallError> &result, const Node *node);
 
     BuilderVariable *findVariable(const VariableNode *node) const;
 
@@ -130,6 +163,9 @@ struct BuilderScope {
 
     BuilderResult infer(const BuilderResult &result);
     BuilderResult unpack(const BuilderResult &result);
+
+    void invokeDestroy(const BuilderResult &result);
+    void invokeDestroy(const BuilderResult &result, BasicBlock *block);
 
     std::optional<std::pair<BuilderResult, BuilderResult>> convert(
         const BuilderResult &a, const BuilderResult &b);
@@ -208,6 +244,8 @@ struct Builder {
 
     LLVMContext &context;
     std::unique_ptr<Module> module;
+
+    std::vector<const Node *> destroyInvokables;
 
     std::unordered_map<const TypeNode *, std::unique_ptr<BuilderType>> types;
     std::unordered_map<const VariableNode *, std::unique_ptr<BuilderVariable>> globals;

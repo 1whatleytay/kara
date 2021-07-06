@@ -25,6 +25,7 @@ enum class Kind {
     Block,
     Unary,
     Call,
+    CallParameterName,
     If,
     For,
     ForIn,

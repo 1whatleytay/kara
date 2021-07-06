@@ -1,13 +1,16 @@
+#include "fmt/core.h"
 #include <options/options.h>
 
 #include <builder/manager.h>
 
-int main(int count, const char **args) {
-//    try {
-        std::make_unique<Manager>(Options(count, args));
-//    } catch (const std::exception &e) {
-//        return 1;
-//    }
+#include <fmt/printf.h>
 
-	return 0;
+int main(int count, const char **args) {
+   // try {
+    std::make_unique<Manager>(Options(count, args));
+   // } catch (const std::exception &e) {
+   //     return 1;
+   // }
+
+    return 0;
 }

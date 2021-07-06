@@ -69,23 +69,23 @@ void BuilderScope::makeParameters() {
 }
 
 void BuilderScope::commit() {
-    assert(exitValue && exitBlock);
+    assert(exitChainType && lastBlock);
 
     if (!currentBlock->getTerminator()) {
         exit(ExitPoint::Regular);
     }
 
-    IRBuilder<> exit(exitBlock);
+    IRBuilder<> exit(lastBlock);
 
-    auto value = exit.CreateLoad(exitValue);
+    auto value = exit.CreateLoad(exitChainType);
 
     BasicBlock *pass = function.exitBlock;
 
     if (parent) {
-        pass = BasicBlock::Create(function.builder.context, "pass", function.function, exitBlock);
+        pass = BasicBlock::Create(function.builder.context, "pass", function.function, lastBlock);
         IRBuilder<> passBuilder(pass);
 
-        passBuilder.CreateStore(value, parent->exitValue);
+        passBuilder.CreateStore(value, parent->exitChainType);
         passBuilder.CreateBr(parent->exitChainBegin);
     }
 
@@ -105,27 +105,27 @@ void BuilderScope::commit() {
         } else if (parent) {
             parent->requiredPoints.insert(point);
         } else {
-            assert(false);
+            throw;
         }
     }
 }
 
 void BuilderScope::exit(ExitPoint point, BasicBlock *from) {
-    assert(exitValue && exitChainBegin);
+    assert(exitChainType && exitChainBegin);
 
     IRBuilder<> output(from ? from : currentBlock);
 
     requiredPoints.insert(point);
 
     auto exitId = static_cast<int8_t>(point);
-    output.CreateStore(ConstantInt::get(Type::getInt8Ty(function.builder.context), exitId), exitValue);
+    output.CreateStore(ConstantInt::get(Type::getInt8Ty(function.builder.context), exitId), exitChainType);
     output.CreateBr(exitChainBegin);
 }
 
 BuilderScope::BuilderScope(const Node *node, BuilderFunction &function, BuilderScope *parent, bool doCodeGen) // NOLINT(misc-no-recursion)
-    : parent(parent), function(function) {
+    : parent(parent), function(function), statementContext(*this) {
 
-    BasicBlock *moveAfter = parent ? parent->exitBlock : function.exitBlock;
+    BasicBlock *moveAfter = parent ? parent->lastBlock : function.exitBlock;
 
     if (doCodeGen) {
         openingBlock = BasicBlock::Create(function.builder.context, "", function.function, moveAfter);
@@ -135,9 +135,9 @@ BuilderScope::BuilderScope(const Node *node, BuilderFunction &function, BuilderS
         current->SetInsertPoint(currentBlock);
 
         if (node->is(Kind::Code)) {
-            exitValue = function.entry.CreateAlloca(Type::getInt8Ty(function.builder.context), nullptr, "exit_type");
-            exitBlock = BasicBlock::Create(function.builder.context, "exit_scope", function.function, moveAfter);
-            exitChainBegin = exitBlock;
+            exitChainType = function.entry.CreateAlloca(Type::getInt8Ty(function.builder.context), nullptr, "exit_type");
+            lastBlock = BasicBlock::Create(function.builder.context, "exit_scope", function.function, moveAfter);
+            exitChainBegin = lastBlock;
         }
     }
 
@@ -156,11 +156,22 @@ BuilderScope::BuilderScope(const Node *node, BuilderFunction &function, BuilderS
 
         for (const auto &child : node->children) {
             switch (child->is<Kind>()) {
-                case Kind::Variable:
-                    variables[child->as<VariableNode>()] =
-                        std::make_unique<BuilderVariable>(child->as<VariableNode>(), *this);
+                case Kind::Variable: {
+                    auto var = std::make_unique<BuilderVariable>(child->as<VariableNode>(), *this);
+
+                    if (!std::holds_alternative<ReferenceTypename>(var->type)) {
+                        invokeDestroy(BuilderResult {
+                            BuilderResult::Kind::Reference,
+                            var->value,
+                            var->type,
+                            &statementContext
+                        });
+                    }
+
+                    variables[child->as<VariableNode>()] = std::move(var);
 
                     break;
+                }
 
                 case Kind::Assign:
                     makeAssign(child->as<AssignNode>());
@@ -168,7 +179,7 @@ BuilderScope::BuilderScope(const Node *node, BuilderFunction &function, BuilderS
 
                 case Kind::Statement:
                     makeStatement(child->as<StatementNode>());
-                    break;
+                    continue; // skip statementCommit.commit, makeStatement should do that at the right time
 
                 case Kind::Block:
                     makeBlock(child->as<BlockNode>());
@@ -197,8 +208,10 @@ BuilderScope::BuilderScope(const Node *node, BuilderFunction &function, BuilderS
                 }
 
                 default:
-                    assert(false);
+                    throw;
             }
+
+            statementContext.commit(currentBlock);
         }
     } else {
         throw VerifyError(node, "Unsupported BuilderScope node type.");

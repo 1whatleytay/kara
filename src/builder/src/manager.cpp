@@ -334,12 +334,15 @@ Manager::Manager(const Options &options)
         if (jit->addIRModule(orc::ThreadSafeModule(std::move(base), std::move(context))))
             throw std::runtime_error("Could not add module to jit instance.");
 
-        void (* print)(int) = [](int a) {
-            printf("%d\n", a);
+        void (* print)(char *, int) = [](char *buffer, int a) {
+            char v[200];
+            snprintf(v, 200, "%d", a);
+
+            strcat(buffer, v);
         };
 
-        jit->getMainJITDylib().define(llvm::orc::absoluteSymbols({
-            { jit->mangleAndIntern("print"), JITEvaluatedSymbol::fromPointer(print) }
+        auto _ = jit->getMainJITDylib().define(llvm::orc::absoluteSymbols({
+            { jit->mangleAndIntern("catInt"), JITEvaluatedSymbol::fromPointer(print) }
         }));
 
         for (const auto &library : libraries) {

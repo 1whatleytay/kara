@@ -9,6 +9,46 @@
 
 #include <llvm/Support/Host.h>
 
+void BuilderStatementContext::consider(const BuilderResult &result) {
+//    assert(parent.current);
+
+    // FFFFFF
+
+
+    if (parent.current && instructions
+        && result.kind == BuilderResult::Kind::Raw || result.kind == BuilderResult::Kind::Literal) {
+
+        parent.invokeDestroy(result, instructions);
+    }
+}
+
+void BuilderStatementContext::commit(BasicBlock *block) {
+    if (instructions && block) {
+        // no more, need BR refactor
+        auto &instIn = instructions->getInstList();
+
+        while (!instIn.empty()) {
+            instIn.front().moveBefore(*block, block->end());
+        }
+
+        instIn.clear();
+    }
+}
+
+BuilderStatementContext::BuilderStatementContext(BuilderScope &parent) : parent(parent) {
+    assert(parent.function.function); // parent.current is probably empty at this point
+
+    instructions = BasicBlock::Create(
+        parent.function.builder.context, "statement_context_block", parent.function.function);
+}
+
+BuilderStatementContext::~BuilderStatementContext() {
+    if (instructions) {
+        instructions->removeFromParent();
+        assert(instructions->empty());
+    }
+}
+
 const Node *BuilderResult::first(::Kind nodeKind) {
     auto iterator = std::find_if(references.begin(), references.end(), [nodeKind](const Node *node) {
         return node->is(nodeKind);
@@ -17,14 +57,23 @@ const Node *BuilderResult::first(::Kind nodeKind) {
     return iterator == references.end() ? nullptr : *iterator;
 }
 
+// oh dear
 BuilderResult::BuilderResult(Kind kind, Value *value, Typename type,
-    std::unique_ptr<BuilderResult> implicit)
-    : kind(kind), value(value), type(std::move(type)), implicit(std::move(implicit)) { }
+    BuilderStatementContext *statementContext, std::unique_ptr<BuilderResult> implicit)
+    : kind(kind), value(value), type(std::move(type)), implicit(std::move(implicit)) {
+
+    if (statementContext)
+        statementContext->consider(*this); // register
+}
 
 BuilderResult::BuilderResult(const Node *from, std::vector<const Node *> references,
-    std::unique_ptr<BuilderResult> implicit)
+    BuilderStatementContext *statementContext, std::unique_ptr<BuilderResult> implicit)
     : kind(BuilderResult::Kind::Unresolved), value(nullptr), from(from), references(std::move(references)),
-    type(PrimitiveTypename { PrimitiveType::Unresolved }), implicit(std::move(implicit)) { }
+    type(PrimitiveTypename { PrimitiveType::Unresolved }), implicit(std::move(implicit)) {
+
+    if (statementContext)
+        statementContext->consider(*this); // register
+}
 
 BuilderType *Builder::makeType(const TypeNode *node) {
     auto iterator = types.find(node);
@@ -82,6 +131,15 @@ Builder::Builder(const ManagerFile &file, const Options &opts)
 
     module->setDataLayout(*file.manager.target.layout);
     module->setTargetTriple(file.manager.target.triple);
+
+    destroyInvokables = searchAllDependencies([](const Node *node) -> bool {
+        if (!node->is(Kind::Function))
+            return false;
+
+        auto e = node->as<FunctionNode>();
+
+        return e->name == "destroy" && e->parameterCount == 1;
+    });
 
     for (const auto &node : root->children) {
         switch (node->is<Kind>()) {

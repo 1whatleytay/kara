@@ -16,50 +16,8 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
         case Kind::Reference: {
             auto e = node->as<ReferenceNode>();
 
-            return BuilderResult(e, function.builder.findAll(e));
+            return BuilderResult(e, function.builder.findAll(e), &statementContext);
         }
-
-//            switch (e->is<Kind>()) {
-//                case Kind::Variable: {
-//                    auto var = e->as<VariableNode>();
-//
-//                    BuilderVariable *info;
-//
-//                    if (var->parent->is(Kind::Root))
-//                        info = function.builder.makeGlobal(var); // AHHH THIS WONT WORK FOR EXTERNALss
-//                    else
-//                        info = findVariable(var);
-//
-//                    if (!info)
-//                        throw VerifyError(node, "Cannot find variable reference.");
-//
-//                    return BuilderResult(
-//                        BuilderResult::Kind::Reference,
-//
-//                        info->value,
-//                        info->type
-//                    );
-//                }
-//
-//                case Kind::Function: {
-//                    const auto *functionNode = e->as<FunctionNode>();
-//
-//                    BuilderFunction *callable = function.builder.makeFunction(functionNode);
-//
-//                    if (!callable->function)
-//                        throw VerifyError(node, "Reference cannot resolve function. Try adding return types.");
-//
-//                    return BuilderResult(
-//                        BuilderResult::Kind::Raw,
-//
-//                        callable->function,
-//                        callable->type
-//                    );
-//                }
-//
-//                default:
-//                    assert(false);
-//            }
 
         case Kind::Special: {
             assert(node->as<SpecialNode>()->type == SpecialNode::Type::Null);
@@ -67,7 +25,8 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 ConstantPointerNull::get(Type::getInt8PtrTy(function.builder.context)),
-                PrimitiveTypename { PrimitiveType::Null }
+                PrimitiveTypename { PrimitiveType::Null },
+                &statementContext
             );
         }
 
@@ -75,7 +34,8 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 ConstantInt::get(Type::getInt1Ty(function.builder.context), node->as<BoolNode>()->value),
-                PrimitiveTypename { PrimitiveType::Bool }
+                PrimitiveTypename { PrimitiveType::Bool },
+                &statementContext
             );
 
         case Kind::String: {
@@ -113,7 +73,9 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
 
                         std::make_shared<Typename>(PrimitiveTypename { PrimitiveType::Byte })
                     })
-                }
+                },
+
+                &statementContext
             );
         }
 
@@ -164,7 +126,8 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
             return BuilderResult(
                 BuilderResult::Kind::Literal,
                 value,
-                type
+                type,
+                &statementContext
             );
         }
 
@@ -173,12 +136,14 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
 
             struct {
                 LLVMContext &context;
+                BuilderStatementContext *statementContext;
 
                 BuilderResult operator()(int64_t s) {
                     return BuilderResult {
                         BuilderResult::Kind::Raw,
                         ConstantInt::getSigned(Type::getInt64Ty(context), s),
-                        PrimitiveTypename { PrimitiveType::Long }
+                        PrimitiveTypename { PrimitiveType::Long },
+                        statementContext
                     };
                 }
 
@@ -186,7 +151,8 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
                     return BuilderResult {
                         BuilderResult::Kind::Raw,
                         ConstantInt::get(Type::getInt64Ty(context), u),
-                        PrimitiveTypename { PrimitiveType::ULong }
+                        PrimitiveTypename { PrimitiveType::ULong },
+                        statementContext
                     };
                 }
 
@@ -194,33 +160,37 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
                     return BuilderResult {
                         BuilderResult::Kind::Raw,
                         ConstantFP::get(Type::getDoubleTy(context), f),
-                        PrimitiveTypename { PrimitiveType::Double }
+                        PrimitiveTypename { PrimitiveType::Double },
+                        statementContext
                     };
                 }
-            } visitor { function.builder.context };
+            } visitor { function.builder.context, &statementContext };
 
             return std::visit(visitor, e->value);
         }
 
         default:
-            assert(false);
+            throw;
     }
 }
 
 BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const BuilderResult &result) {
     switch (node->is<Kind>()) {
         case Kind::Call: {
-            const CallNode *callNode = node->as<CallNode>();
+            auto callNode = node->as<CallNode>();
+
+            auto callNames = callNode->names();
             auto callParameters = callNode->parameters();
 
             assert(result.kind == BuilderResult::Kind::Unresolved);
 
             size_t extraParameter = result.implicit ? 1 : 0;
 
-            std::vector<BuilderResult *> parameters(node->children.size() + extraParameter);
+            MatchInput callInput;
+            callInput.parameters.resize(callParameters.size() + extraParameter);
 
             if (result.implicit)
-                parameters[0] = result.implicit.get();
+                callInput.parameters[0] = result.implicit.get();
 
             std::vector<BuilderResult> resultLifetimes;
             resultLifetimes.reserve(callParameters.size());
@@ -228,31 +198,22 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
             for (auto c : callParameters)
                 resultLifetimes.push_back(makeExpression(c));
 
-//                std::optional<BuilderResult> parameterConverted = convert(
-//                    parameter, type->parameters[a + extraParameter]);
-//
-//                if (!parameterConverted)
-//                    throw VerifyError(exp,
-//                        "Expression is being passed to function that expects {} type but got {}.",
-//                        toString(type->parameters[a + extraParameter]), toString(parameter.type));
-
             for (size_t a = 0; a < resultLifetimes.size(); a++)
-                parameters[a + extraParameter] = &resultLifetimes[a];
+                callInput.parameters[a + extraParameter] = &resultLifetimes[a];
 
-            try {
-                std::vector<const FunctionNode *> functions;
+            callInput.names = callNode->namesStripped();
 
-                for (auto e : result.references) {
-                    if (!e->is(Kind::Function))
-                        continue;
+            std::vector<const Node *> functions;
 
-                    functions.push_back(e->as<FunctionNode>());
-                }
+            auto callable = [](const Node *n) { return n->is(Kind::Function) || n->is(Kind::Type); };
 
-                return call(functions, parameters);
-            } catch (const std::runtime_error &e) {
-                throw VerifyError(result.from, "{}", e.what());
-            }
+            std::copy_if(result.references.begin(), result.references.end(),
+                std::back_inserter(functions), callable);
+
+            if (functions.empty())
+                throw VerifyError(node, "Reference did not resolve to any functions to call.");
+
+            return callUnpack(call(functions, callInput), result.from);
         }
 
         case Kind::Dot: {
@@ -299,7 +260,8 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
                             ? BuilderResult::Kind::Reference
                             : BuilderResult::Kind::Literal,
                         current ? current->CreateStructGEP(structRef, index, refNode->name) : nullptr,
-                        function.builder.resolveTypename(varNode->fixedType())
+                        function.builder.resolveTypename(varNode->fixedType()),
+                        &statementContext
                     );
                 }
             }
@@ -322,7 +284,7 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
             if (n.empty())
                 throw VerifyError(node, "Could not find method or field with name {}.", refNode->name);
 
-            return BuilderResult(node, n, std::make_unique<BuilderResult>(sub));
+            return BuilderResult(node, n, &statementContext, std::make_unique<BuilderResult>(sub));
         }
 
         case Kind::Index: {
@@ -373,12 +335,13 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
                     ? BuilderResult::Kind::Reference
                     : BuilderResult::Kind::Literal,
                 indexArray(),
-                *arrayType->value
+                *arrayType->value,
+                &statementContext
             );
         }
 
         default:
-            assert(false);
+            throw;
     }
 }
 
@@ -406,7 +369,8 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
                     return BuilderResult(
                         BuilderResult::Kind::Raw,
                         current ? current->CreateNot(get(converted.value())) : nullptr,
-                        PrimitiveTypename { PrimitiveType::Bool }
+                        PrimitiveTypename { PrimitiveType::Bool },
+                        &statementContext
                     );
                 }
 
@@ -417,7 +381,8 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
                     return BuilderResult(
                         BuilderResult::Kind::Raw,
                         value.value,
-                        ReferenceTypename { std::make_shared<Typename>(value.type) }
+                        ReferenceTypename { std::make_shared<Typename>(value.type) },
+                        &statementContext
                     );
 
                 case UnaryNode::Operation::Fetch: {
@@ -427,12 +392,13 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
                     return BuilderResult(
                         BuilderResult::Kind::Reference,
                         get(value),
-                        *std::get<ReferenceTypename>(value.type).value
+                        *std::get<ReferenceTypename>(value.type).value,
+                        &statementContext
                     );
                 }
 
                 default:
-                    assert(false);
+                    throw;
             }
 
         case Kind::Ternary: {
@@ -478,7 +444,7 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
                 current->CreateCondBr(get(sub), trueScope.openingBlock, falseScope.openingBlock);
 
                 currentBlock = BasicBlock::Create(
-                    function.builder.context, "", function.function, exitBlock);
+                    function.builder.context, "", function.function, lastBlock);
                 current->SetInsertPoint(currentBlock);
 
                 trueScope.current->CreateBr(currentBlock);
@@ -488,7 +454,8 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
             return BuilderResult(
                 BuilderResult::Kind::Literal,
                 literal,
-                onTrue.type
+                onTrue.type,
+                &statementContext
             );
         }
 
@@ -509,7 +476,7 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
         }
 
         default:
-            assert(false);
+            throw;
     }
 }
 
@@ -567,7 +534,8 @@ BuilderResult BuilderScope::combine(const BuilderResult &left, const BuilderResu
                     ? current->CreateFAdd(get(a), get(b))
                     : current->CreateAdd(get(a), get(b))
                     : nullptr,
-                a.type
+                a.type,
+                &statementContext
             );
 
         case OperatorNode::Operation::Sub:
@@ -580,7 +548,8 @@ BuilderResult BuilderScope::combine(const BuilderResult &left, const BuilderResu
                     ? current->CreateFSub(get(a), get(b))
                     : current->CreateSub(get(a), get(b))
                     : nullptr,
-                a.type
+                a.type,
+                &statementContext
             );
 
         case OperatorNode::Operation::Mul:
@@ -593,7 +562,8 @@ BuilderResult BuilderScope::combine(const BuilderResult &left, const BuilderResu
                     ? current->CreateFMul(get(a), get(b))
                     : current->CreateMul(get(a), get(b))
                     : nullptr,
-                a.type
+                a.type,
+                &statementContext
             );
 
         case OperatorNode::Operation::Div:
@@ -608,7 +578,8 @@ BuilderResult BuilderScope::combine(const BuilderResult &left, const BuilderResu
                         ? current->CreateSDiv(get(a), get(b))
                         : current->CreateUDiv(get(a), get(b))
                     : nullptr,
-                a.type
+                a.type,
+                &statementContext
             );
 
         case OperatorNode::Operation::Equals:
@@ -621,7 +592,8 @@ BuilderResult BuilderScope::combine(const BuilderResult &left, const BuilderResu
                     ? current->CreateICmpEQ(get(a), get(b))
                     : current->CreateFCmpOEQ(get(a), get(b))
                     : nullptr,
-                PrimitiveTypename { PrimitiveType::Bool }
+                PrimitiveTypename { PrimitiveType::Bool },
+                &statementContext
             );
 
         case OperatorNode::Operation::NotEquals:
@@ -634,7 +606,8 @@ BuilderResult BuilderScope::combine(const BuilderResult &left, const BuilderResu
                     ? current->CreateICmpNE(get(a), get(b))
                     : current->CreateFCmpONE(get(a), get(b))
                     : nullptr,
-                PrimitiveTypename { PrimitiveType::Bool }
+                PrimitiveTypename { PrimitiveType::Bool },
+                &statementContext
             );
 
         case OperatorNode::Operation::Greater:
@@ -649,7 +622,8 @@ BuilderResult BuilderScope::combine(const BuilderResult &left, const BuilderResu
                         ? current->CreateICmpSGT(get(a), get(b))
                         : current->CreateICmpUGT(get(a), get(b))
                     : nullptr,
-                PrimitiveTypename { PrimitiveType::Bool }
+                PrimitiveTypename { PrimitiveType::Bool },
+                &statementContext
             );
 
         case OperatorNode::Operation::GreaterEqual:
@@ -664,7 +638,8 @@ BuilderResult BuilderScope::combine(const BuilderResult &left, const BuilderResu
                         ? current->CreateICmpSGE(get(a), get(b))
                         : current->CreateICmpUGE(get(a), get(b))
                     : nullptr,
-                PrimitiveTypename { PrimitiveType::Bool }
+                PrimitiveTypename { PrimitiveType::Bool },
+                &statementContext
             );
 
         case OperatorNode::Operation::Lesser:
@@ -679,7 +654,8 @@ BuilderResult BuilderScope::combine(const BuilderResult &left, const BuilderResu
                         ? current->CreateICmpSLT(get(a), get(b))
                         : current->CreateICmpULT(get(a), get(b))
                     : nullptr,
-                PrimitiveTypename { PrimitiveType::Bool }
+                PrimitiveTypename { PrimitiveType::Bool },
+                &statementContext
             );
 
         case OperatorNode::Operation::LesserEqual:
@@ -694,7 +670,8 @@ BuilderResult BuilderScope::combine(const BuilderResult &left, const BuilderResu
                         ? current->CreateICmpSLE(get(a), get(b))
                         : current->CreateICmpULE(get(a), get(b))
                     : nullptr,
-                PrimitiveTypename { PrimitiveType::Bool }
+                PrimitiveTypename { PrimitiveType::Bool },
+                &statementContext
             );
 
         default:

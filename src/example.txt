@@ -1,20 +1,44 @@
 import (c) 'stdio.h'
+import (c) 'string.h'
 
-print(a int) nothing external
+type char = byte
+type string = [char:]
+
+catInt(buffer &var string, a int) nothing external
+
+type Pizza {
+    name &string
+    numToppings int
+    flavor int
+    textureGoodness int
+}
+
+k Pizza {
+    return Pizza('', 1, 2, 3)
+}
+
+say(p &Pizza) {
+    p.name.puts
+    '^ Created'.puts
+}
+
+destroy(p &Pizza) {
+    p.name.puts
+    '^ Destroyed'.puts
+}
 
 main int {
-    var x = 0
+    let p = Pizza(textureGoodness: 4, 12, name: 'Delicious', 9)
+    p.say
 
-    exit { 'Hello World'.puts }
+    let n = &p
+    p.say
 
-    for {
-        exit { 'Ola'.puts }
+    let p = Pizza(textureGoodness: 4, 12, name: 'Wow', 9)
+    p.say
 
-        if x > 100 { x.print break }
-        else { x += 7 return 8 }
-
-        x += 1
-    }
+    let p = Pizza(textureGoodness: 4, 12, name: 'Tasty', 9)
+    p.say
 
     return 0
 }

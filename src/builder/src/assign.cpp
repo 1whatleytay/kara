@@ -7,7 +7,7 @@
 #include <parser/literals.h>
 #include <parser/function.h>
 
-// this copies :flushed:
+// this copies :flushed: (future: why am i complaining about this, isn't BuilderResult supposed to be copied)
 std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const Typename &type, bool force) {
     BuilderResult result = r;
 
@@ -25,7 +25,8 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 current ? current->CreateBitCast(get(result), function.builder.makeTypename(type)) : nullptr,
-                type
+                type,
+                &statementContext
             );
         }
 
@@ -33,7 +34,8 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 current ? current->CreateIntToPtr(get(result), function.builder.makeTypename(type)) : nullptr,
-                type
+                type,
+                &statementContext
             );
         }
     }
@@ -43,7 +45,8 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const
         return BuilderResult(
             BuilderResult::Kind::Reference,
             get(result),
-            type
+            type,
+            &statementContext
         );
     }
 
@@ -52,7 +55,8 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const
         return BuilderResult(
             BuilderResult::Kind::Raw,
             ref(result),
-            type
+            type,
+            &statementContext
         );
     }
 
@@ -63,7 +67,8 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const
             ReferenceTypename {
                 std::make_shared<Typename>(result.type),
                 result.kind == BuilderResult::Kind::Reference
-            }
+            },
+            &statementContext
         );
 
         resultRef = std::get_if<ReferenceTypename>(&result.type);
@@ -75,7 +80,8 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 current ? current->CreatePointerCast(get(result), function.builder.makeTypename(type)) : nullptr,
-                type
+                type,
+                &statementContext
             );
         }
 
@@ -86,7 +92,8 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const
                 return BuilderResult(
                     BuilderResult::Kind::Raw,
                     get(result),
-                    type
+                    type,
+                    &statementContext
                 );
             }
 
@@ -97,7 +104,8 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const
                 return BuilderResult(
                     BuilderResult::Kind::Raw,
                     current ? current->CreateStructGEP(get(result), 0) : nullptr,
-                    type
+                    type,
+                    &statementContext
                 );
             }
         }
@@ -107,7 +115,8 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const
         return BuilderResult(
             BuilderResult::Kind::Raw,
             current ? current->CreatePointerCast(get(result), function.builder.makeTypename(type)) : nullptr,
-            type
+            type,
+            &statementContext
         );
     }
 
@@ -115,7 +124,8 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const
         return BuilderResult(
             BuilderResult::Kind::Raw,
             current ? current->CreateIsNotNull(get(result)) : nullptr,
-            type
+            type,
+            &statementContext
         );
     }
 
@@ -131,7 +141,8 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const
                         ? current->CreateSIToFP(get(result), dest)
                         : current->CreateUIToFP(get(result), dest)
                         : nullptr,
-                    type
+                    type,
+                    &statementContext
                 );
             }
 
@@ -143,7 +154,8 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const
                         ? current->CreateFPToSI(get(result), dest)
                         : current->CreateFPToUI(get(result), dest)
                         : nullptr,
-                    type
+                    type,
+                    &statementContext
                 );
             }
 
@@ -159,7 +171,8 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const
                         ? current->CreateSExtOrTrunc(get(result), dest)
                         : current->CreateZExtOrTrunc(get(result), dest)
                     : nullptr,
-                type
+                type,
+                &statementContext
             );
         }
     }
@@ -194,6 +207,7 @@ std::optional<std::pair<BuilderResult, BuilderResult>> BuilderScope::convert(
     return convert(a, *this, b, *this);
 }
 
+// gonna delete this
 BuilderResult BuilderScope::convertOrThrow(const Node *node, const BuilderResult &result, const Typename &type) {
     std::optional<BuilderResult> value = convert(result, type);
 
@@ -201,6 +215,28 @@ BuilderResult BuilderScope::convertOrThrow(const Node *node, const BuilderResult
         throw VerifyError(node, "Expected type {}, type is {}.", toString(type), toString(result.type));
 
     return *value;
+}
+
+void BuilderScope::invokeDestroy(const BuilderResult &result) {
+    invokeDestroy(result, exitChainBegin);
+}
+
+void BuilderScope::invokeDestroy(const BuilderResult &result, BasicBlock *block) {
+    if (!current)
+        return;
+
+    IRBuilder<> builder(function.builder.context);
+    builder.SetInsertPoint(block, block->begin());
+
+    if (!function.builder.destroyInvokables.empty() && !std::holds_alternative<ReferenceTypename>(result.type)) {
+        try {
+            call(function.builder.destroyInvokables, { { &result }, { } }, &builder);
+        } catch (const std::runtime_error &e) { }
+    }
+
+    // TODO: needs call to implicit object destructor, probably in BuilderType, can do later
+    // ^^ outside of try catch, so call doesn't fail and cancel destructing an object
+    // we can also make builder function null if we dont have anything to destroy, type X { a int, b int, c int } but idk if that's worth
 }
 
 BuilderResult BuilderScope::unpack(const BuilderResult &result) {
@@ -220,7 +256,7 @@ BuilderResult BuilderScope::unpack(const BuilderResult &result) {
                 break;
 
             default:
-                assert(false);
+                throw;
         }
 
         value.type = *r->value;
@@ -253,30 +289,25 @@ BuilderResult BuilderScope::infer(const BuilderResult &result) {
                 BuilderResult::Kind::Reference,
 
                 info->value,
-                info->type
+                info->type,
+                &statementContext
             );
         }
 
-        std::vector<const FunctionNode *> functions;
+        std::vector<const Node *> functions;
 
-        for (auto node : result.references) {
-            if (!node->is(Kind::Function))
-                continue;
+        auto callable = [](const Node *n) { return n->is(Kind::Function) || n->is(Kind::Type); };
 
-            functions.push_back(node->as<FunctionNode>());
-        }
+        std::copy_if(result.references.begin(), result.references.end(),
+            std::back_inserter(functions), callable);
 
         if (!functions.empty()) {
-            std::vector<BuilderResult *> params;
+            std::vector<const BuilderResult *> params;
 
             if (result.implicit)
                 params.push_back(result.implicit.get());
 
-            try {
-                return call(functions, params);
-            } catch (const std::runtime_error &e) {
-                throw VerifyError(result.from, "{}", e.what());
-            }
+            return callUnpack(call(functions, { params, { } }), result.from);
         } else {
             throw VerifyError(result.from, "Reference does not implicitly resolve to anything.");
         }
@@ -296,7 +327,8 @@ BuilderResult BuilderScope::infer(const BuilderResult &result) {
         return BuilderResult(
             BuilderResult::Kind::Raw,
             current ? current->CreateCall(reinterpret_cast<Function *>(result.value), params) : nullptr,
-            *functionTypename->returnType
+            *functionTypename->returnType,
+            &statementContext
         );
     }
 

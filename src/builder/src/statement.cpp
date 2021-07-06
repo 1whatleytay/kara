@@ -40,6 +40,8 @@ void BuilderScope::makeStatement(const StatementNode *node) {
                 current->CreateStore(get(result), function.returnValue);
             }
 
+            statementContext.commit(currentBlock);
+
             exit(ExitPoint::Return);
 
             break;
@@ -54,6 +56,6 @@ void BuilderScope::makeStatement(const StatementNode *node) {
             break;
 
         default:
-            assert(false);
+            throw;
     }
 }

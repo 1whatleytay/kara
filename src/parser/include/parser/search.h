@@ -8,9 +8,11 @@ namespace search {
     using Checker = std::function<bool(const Node *)>;
 
     std::vector<const Node *> scope(const Node *origin, const Checker &checker);
+    std::vector<const Node *> scopeFrom(const Node *origin, const Checker &checker);
 }
 
 namespace search::exclusive {
     const Node *scope(const Node *origin, const Checker &checker);
     const Node *parents(const Node *origin, const Checker &checker);
+    const Node *scopeFrom(const Node *origin, const Checker &checker);
 }

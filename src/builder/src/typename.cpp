@@ -25,6 +25,9 @@ Typename Builder::resolveTypename(const Node *node) {
             if (!type)
                 type = searchDependencies(match)->as<TypeNode>();
 
+            if (!type)
+                throw VerifyError(node, "Cannot find type {}.", e->name);
+
             if (auto alias = type->alias())
                 return resolveTypename(alias);
 
