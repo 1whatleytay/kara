@@ -11,7 +11,11 @@ InsightNode::InsightNode(Node *parent) : Node(parent, Kind::Insight) {
 }
 
 StatementNode::StatementNode(Node *parent) : Node(parent, Kind::Statement) {
-    op = select<Operation>({ "return", "break", "continue" }, true);
+    op = select<Operation>({
+        { "return", Operation::Return },
+        { "break", Operation::Break },
+        { "continue", Operation::Continue },
+    }, true);
 
     match();
 

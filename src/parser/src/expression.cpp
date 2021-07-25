@@ -87,6 +87,7 @@ ExpressionNode::ExpressionNode(Node *parent, bool placeholder) : Node(parent, Ki
         OperatorNode::Operation::Div,
         OperatorNode::Operation::Add,
         OperatorNode::Operation::Sub,
+        OperatorNode::Operation::Mod,
 
         OperatorNode::Operation::Equals,
         OperatorNode::Operation::NotEquals,

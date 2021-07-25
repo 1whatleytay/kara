@@ -304,7 +304,9 @@ void BuilderFunction::build() {
     if (body && body->is(Kind::Expression) && !node->hasFixedType
         && returnTypename == PrimitiveTypename::from(PrimitiveType::Nothing)) {
 
-        returnTypename = BuilderScope(body, *this, false).product.value().type;
+        BuilderScope productScope(body, *this, false);
+
+        returnTypename = productScope.product.value().type;
     }
 
     returnType = builder.makeTypename(returnTypename);
@@ -368,9 +370,13 @@ void BuilderFunction::build() {
 
         entry.CreateBr(scope.openingBlock);
 
-        scope.destinations[BuilderScope::ExitPoint::Regular] = exitBlock;
-        scope.destinations[BuilderScope::ExitPoint::Return] = exitBlock;
-        scope.commit();
+        if (body->is(Kind::Code)) { // wwww
+            scope.destinations[BuilderScope::ExitPoint::Regular] = exitBlock;
+            scope.destinations[BuilderScope::ExitPoint::Return] = exitBlock;
+            scope.commit();
+        } else {
+            scope.current->CreateBr(exitBlock);
+        }
 
 //        if (!scope.currentBlock->getTerminator())
 //            scope.current.value().CreateBr(exitBlock);

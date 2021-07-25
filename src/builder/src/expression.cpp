@@ -374,6 +374,24 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
                     );
                 }
 
+                case UnaryNode::Operation::Negative: {
+                    auto typePrim = std::get_if<PrimitiveTypename>(&value.type);
+
+                    if (!typePrim || !(typePrim->isSigned() || typePrim->isFloat()))
+                        throw VerifyError(operation.op, "Source type for operation must be signed or float.");
+
+                    return BuilderResult(
+                        BuilderResult::Kind::Raw,
+                        current
+                            ? typePrim->isFloat()
+                                ? current->CreateFNeg(get(value))
+                                : current->CreateNeg(get(value))
+                            : nullptr,
+                        value.type,
+                        &statementContext
+                    );
+                }
+
                 case UnaryNode::Operation::Reference:
                     if (value.kind != BuilderResult::Kind::Reference)
                         throw VerifyError(operation.op, "Cannot get reference of temporary.");
@@ -577,6 +595,22 @@ BuilderResult BuilderScope::combine(const BuilderResult &left, const BuilderResu
                     : aPrim->isSigned()
                         ? current->CreateSDiv(get(a), get(b))
                         : current->CreateUDiv(get(a), get(b))
+                    : nullptr,
+                a.type,
+                &statementContext
+            );
+
+        case OperatorNode::Operation::Mod:
+            needs({ asInt });
+
+            return BuilderResult(
+                BuilderResult::Kind::Raw,
+                current
+                    ? aPrim->isFloat()
+                    ? current->CreateFRem(get(a), get(b))
+                    : aPrim->isSigned()
+                        ? current->CreateURem(get(a), get(b))
+                        : current->CreateSRem(get(a), get(b))
                     : nullptr,
                 a.type,
                 &statementContext

@@ -17,7 +17,7 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const
     auto typeRef = std::get_if<ReferenceTypename>(&type);
     auto resultRef = std::get_if<ReferenceTypename>(&result.type);
 
-    auto otherPrim = std::get_if<PrimitiveTypename>(&type);
+    auto typePrim = std::get_if<PrimitiveTypename>(&type);
     auto resultPrim = std::get_if<PrimitiveTypename>(&result.type);
 
     if (force) {
@@ -25,6 +25,15 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 current ? current->CreateBitCast(get(result), function.builder.makeTypename(type)) : nullptr,
+                type,
+                &statementContext
+            );
+        }
+
+        if (typePrim && resultRef && typePrim->type == PrimitiveType::ULong) {
+            return BuilderResult(
+                BuilderResult::Kind::Raw,
+                current ? current->CreatePtrToInt(get(result), function.builder.makeTypename(type)) : nullptr,
                 type,
                 &statementContext
             );
@@ -129,11 +138,11 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const
         );
     }
 
-    if (otherPrim && resultPrim) {
-        if (otherPrim->isNumber() && resultPrim->isNumber()) {
-            Type *dest = function.builder.makePrimitiveType(otherPrim->type);
+    if (typePrim && resultPrim) {
+        if (typePrim->isNumber() && resultPrim->isNumber()) {
+            Type *dest = function.builder.makePrimitiveType(typePrim->type);
 
-            if (resultPrim->isInteger() && otherPrim->isFloat()) { // int -> float
+            if (resultPrim->isInteger() && typePrim->isFloat()) { // int -> float
                 return BuilderResult(
                     BuilderResult::Kind::Raw,
                     current
@@ -146,11 +155,11 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const
                 );
             }
 
-            if (resultPrim->isFloat() && otherPrim->isInteger()) { // float -> int
+            if (resultPrim->isFloat() && typePrim->isInteger()) { // float -> int
                 return BuilderResult(
                     BuilderResult::Kind::Raw,
                     current
-                        ? otherPrim->isSigned()
+                        ? typePrim->isSigned()
                         ? current->CreateFPToSI(get(result), dest)
                         : current->CreateFPToUI(get(result), dest)
                         : nullptr,
@@ -163,11 +172,11 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const
             return BuilderResult(
                 BuilderResult::Kind::Raw,
                 current
-                    ? otherPrim->isFloat()
-                    ? resultPrim->priority() > otherPrim->priority()
+                    ? typePrim->isFloat()
+                    ? resultPrim->priority() > typePrim->priority()
                         ? current->CreateFPTrunc(get(result), dest)
                         : current->CreateFPExt(get(result), dest)
-                    : otherPrim->isSigned()
+                    : typePrim->isSigned()
                         ? current->CreateSExtOrTrunc(get(result), dest)
                         : current->CreateZExtOrTrunc(get(result), dest)
                     : nullptr,
@@ -185,36 +194,81 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const
     return std::nullopt;
 }
 
-std::optional<std::pair<BuilderResult, BuilderResult>> BuilderScope::convert(
-    const BuilderResult &a, BuilderScope &aScope,
-    const BuilderResult &b, BuilderScope &bScope) {
-    std::optional<BuilderResult> medium;
+std::optional<Typename> BuilderScope::negotiate(const Typename &left, const Typename &right) {
+    if (left == right)
+        return left;
 
-    // Try to convert second first, so it's at least consistent.
-    medium = bScope.convert(b, a.type);
-    if (medium.has_value())
-        return std::make_pair(a, medium.value());
+    auto leftPrim = std::get_if<PrimitiveTypename>(&left);
+    auto rightPrim = std::get_if<PrimitiveTypename>(&right);
 
-    medium = aScope.convert(a, b.type);
-    if (medium.has_value())
-        return std::make_pair(medium.value(), b);
+    if (leftPrim && rightPrim && leftPrim->isNumber() && rightPrim->isNumber()) {
+        int32_t leftSize = leftPrim->size();
+        int32_t rightSize = rightPrim->size();
+
+        bool leftFloat = leftPrim->isFloat();
+        bool rightFloat = rightPrim->isFloat();
+
+        bool leftSign = leftPrim->isSigned();
+        bool rightSign = rightPrim->isSigned();
+
+        int32_t size = std::max(leftSize, rightSize);
+        bool isSigned = leftSign || rightSign;
+        bool isFloat = leftFloat || rightFloat;
+
+        PrimitiveType type = ([&]() {
+            if (isFloat) {
+                switch (size) {
+                    case 8: return PrimitiveType::Double;
+                    case 4: return PrimitiveType::Float;
+                    default: throw;
+                }
+            }
+
+            if (isSigned) {
+                switch (size) {
+                    case 8: return PrimitiveType::Long;
+                    case 4: return PrimitiveType::Int;
+                    case 2: return PrimitiveType::Short;
+                    case 1: return PrimitiveType::Byte;
+                    default: throw;
+                }
+            } else {
+                switch (size) {
+                    case 8: return PrimitiveType::ULong;
+                    case 4: return PrimitiveType::UInt;
+                    case 2: return PrimitiveType::UShort;
+                    case 1: return PrimitiveType::UByte;
+                    default: throw;
+                }
+            }
+        })();
+
+        return PrimitiveTypename { type };
+    }
 
     return std::nullopt;
 }
 
 std::optional<std::pair<BuilderResult, BuilderResult>> BuilderScope::convert(
-    const BuilderResult &a, const BuilderResult &b) {
-    return convert(a, *this, b, *this);
+    const BuilderResult &a, BuilderScope &aScope,
+    const BuilderResult &b, BuilderScope &bScope) {
+    std::optional<Typename> mediator = negotiate(a.type, b.type);
+
+    if (!mediator)
+        return std::nullopt;
+
+    auto left = aScope.convert(a, *mediator);
+    auto right = bScope.convert(b, *mediator);
+
+    if (!left || !right)
+        return std::nullopt;
+
+    return std::make_pair(*left, *right);
 }
 
-// gonna delete this
-BuilderResult BuilderScope::convertOrThrow(const Node *node, const BuilderResult &result, const Typename &type) {
-    std::optional<BuilderResult> value = convert(result, type);
-
-    if (!value)
-        throw VerifyError(node, "Expected type {}, type is {}.", toString(type), toString(result.type));
-
-    return *value;
+std::optional<std::pair<BuilderResult, BuilderResult>> BuilderScope::convert(
+    const BuilderResult &a, const BuilderResult &b) {
+    return convert(a, *this, b, *this);
 }
 
 void BuilderScope::invokeDestroy(const BuilderResult &result) {
@@ -278,7 +332,7 @@ BuilderResult BuilderScope::infer(const BuilderResult &result) {
             BuilderVariable *info;
 
             if (var->parent->is(Kind::Root))
-                info = function.builder.makeGlobal(var); // AHHH THIS WONT WORK FOR EXTERNALss
+                info = function.builder.makeGlobal(var); // AH THIS WONT WORK FOR EXTERNAL
             else
                 info = findVariable(var);
 
@@ -352,34 +406,26 @@ void BuilderScope::makeAssign(const AssignNode *node) {
         throw VerifyError(node, "Left side of assign expression must be some variable or reference.");
     }
 
-
     if (current) {
         Value *result;
 
         try {
-            switch (node->op) {
-                case AssignNode::Operator::Assign:
-                    result = get(source);
-                    break;
 
-                case AssignNode::Operator::Plus:
-                    result = get(combine(source, destination, OperatorNode::Operation::Add));
-                    break;
+            if (node->op == AssignNode::Operator::Assign) {
+                result = get(source);
+            } else {
+                auto operation = ([op = node->op]() {
+                    switch (op) {
+                        case AssignNode::Operator::Plus: return OperatorNode::Operation::Add;
+                        case AssignNode::Operator::Minus: return OperatorNode::Operation::Sub;
+                        case AssignNode::Operator::Multiply: return OperatorNode::Operation::Mul;
+                        case AssignNode::Operator::Divide: return OperatorNode::Operation::Div;
+                        case AssignNode::Operator::Modulo: return OperatorNode::Operation::Mod;
+                        default: throw std::runtime_error("Unimplemented assign node operator.");
+                    }
+                })();
 
-                case AssignNode::Operator::Minus:
-                    result = get(combine(source, destination, OperatorNode::Operation::Sub));
-                    break;
-
-                case AssignNode::Operator::Multiply:
-                    result = get(combine(source, destination, OperatorNode::Operation::Mul));
-                    break;
-
-                case AssignNode::Operator::Divide:
-                    result = get(combine(source, destination, OperatorNode::Operation::Div));
-                    break;
-
-                default:
-                    throw std::exception();
+                result = get(combine(destination, source, operation));
             }
         } catch (const std::runtime_error &e) {
             throw VerifyError(node, "{}", e.what());

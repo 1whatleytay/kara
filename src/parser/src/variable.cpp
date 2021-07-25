@@ -19,12 +19,14 @@ VariableNode::VariableNode(Node *parent, bool isExplicit, bool external) : Node(
     if (external)
         return;
 
-    std::vector<std::string> options = { "let", "var" };
-    size_t mutability = select(options, true, !isExplicit);
+    SelectMap<bool> mutabilityMap = { { "let", false }, { "var", true } };
 
-    if (mutability != options.size()) {
+    std::optional<bool> mutability = isExplicit ? select(mutabilityMap, true) : maybe(mutabilityMap, true);
+
+    if (mutability) {
         match();
-        isMutable = mutability;
+        isMutable = mutability.value(); // analysis says "The address of a the local variable may escape the function"
+        // ^^^ i call bs
     }
 
     name = token();

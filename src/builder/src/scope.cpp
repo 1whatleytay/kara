@@ -123,7 +123,7 @@ void BuilderScope::exit(ExitPoint point, BasicBlock *from) {
 }
 
 BuilderScope::BuilderScope(const Node *node, BuilderFunction &function, BuilderScope *parent, bool doCodeGen) // NOLINT(misc-no-recursion)
-    : parent(parent), function(function), statementContext(*this) {
+    : parent(parent), function(function), statementContext(*this, doCodeGen) {
 
     BasicBlock *moveAfter = parent ? parent->lastBlock : function.exitBlock;
 

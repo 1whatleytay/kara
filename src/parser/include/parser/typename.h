@@ -90,6 +90,7 @@ struct PrimitiveTypename {
 
     [[nodiscard]] bool isNumber() const;
 
+    [[nodiscard]] int32_t size() const;
     [[nodiscard]] int32_t priority() const;
 
     static Typename from(PrimitiveType type);

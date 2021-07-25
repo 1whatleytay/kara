@@ -88,8 +88,8 @@ LibraryDocument::LibraryDocument(const std::string &json, const fs::path &root) 
 void ManagerFile::resolve(std::set<const ManagerFile *> &visited) const { // NOLINT(misc-no-recursion)
     visited.insert(this);
 
-    for (const auto &d : dependencies) {
-        const ManagerFile *f = &manager.get(std::get<0>(d), fs::path(path).parent_path().string(), std::get<1>(d));
+    for (const auto &[depPath, type] : dependencies) {
+        const ManagerFile *f = &manager.get(depPath, fs::path(path).parent_path().string(), type);
 
         if (visited.find(f) != visited.end())
             continue;
@@ -260,14 +260,31 @@ Manager::Manager(const Options &options)
     std::unique_ptr<Module> base;
     std::optional<Linker> linker;
 
-    for (const auto &s : options.inputs) {
-        Builder b = create(get(s));
+    std::set<const ManagerFile *> built;
+
+    auto buildFile = [&](const ManagerFile &file) {
+        Builder b = create(file);
 
         if (!linker) {
             base = std::move(b.module);
             linker.emplace(*base);
         } else {
             linker->linkInModule(std::move(b.module));
+        }
+    };
+
+    for (const auto &s : options.inputs) {
+        auto &file = get(s);
+
+        built.insert(&file);
+        buildFile(file);
+    }
+
+    if (options.interpret) {
+        for (const auto &pair : nodes) {
+            if (built.find(pair.second.get()) == built.end()) {
+                buildFile(*pair.second);
+            }
         }
     }
 

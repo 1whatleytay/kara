@@ -48,6 +48,7 @@ struct TernaryNode : public Node {
 struct UnaryNode : public Node {
     enum class Operation {
         Not,
+        Negative,
         Reference,
         Fetch,
     };
@@ -63,12 +64,13 @@ struct OperatorNode : public Node {
         Sub,
         Mul,
         Div,
+        Mod,
         Equals,
         NotEquals,
-        Greater,
         GreaterEqual,
-        Lesser,
         LesserEqual,
+        Greater,
+        Lesser,
         And,
         Or,
     };

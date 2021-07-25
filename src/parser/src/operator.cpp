@@ -118,30 +118,32 @@ TernaryNode::TernaryNode(Node *parent) : Node(parent, Kind::Ternary) {
 
 UnaryNode::UnaryNode(Node *parent) : Node(parent, Kind::Unary) {
     op = select<Operation>({
-        "!", // Not
-        "&", // Reference
-        "@", // Fetch
+        { "!", Operation::Not },
+        { "-", Operation::Negative },
+        { "&", Operation::Reference },
+        { "@", Operation::Fetch }
     });
 }
 
 OperatorNode::OperatorNode(Node *parent) : Node(parent, Kind::Operator) {
-    std::vector<std::string> doNotCapture = { "+=", "-=", "*=", "/=" };
+    std::vector<std::string> doNotCapture = { "+=", "-=", "*=", "/=", "%=" };
 
-    if (select(doNotCapture, false, true) != doNotCapture.size())
+    if (maybe<bool>({ { "+=", true }, { "-=", true }, { "*=", true }, { "/=", true }, { "%=", true } }, false))
         error("Operator cannot capture this text.");
 
     op = select<Operation>({
-        "+", // Add
-        "-", // Sub
-        "*", // Mul
-        "/", // Div
-        "==", // Equals
-        "!=", // NotEquals
-        ">", // Greater
-        ">=", // GreaterEqual
-        "<", // Lesser
-        "<=", // LesserEqual
-        "&&", // And
-        "||" // Or
+        { "+", Operation::Add },
+        { "-", Operation::Sub },
+        { "*", Operation::Mul },
+        { "/", Operation::Div },
+        { "%", Operation::Mod },
+        { "==", Operation::Equals },
+        { "!=", Operation::NotEquals },
+        { ">=", Operation::GreaterEqual },
+        { "<=", Operation::LesserEqual },
+        { ">", Operation::Greater },
+        { "<", Operation::Lesser },
+        { "&&", Operation::And },
+        { "||", Operation::Or },
     });
 }

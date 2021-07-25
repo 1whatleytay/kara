@@ -23,18 +23,20 @@ ParenthesesNode::ParenthesesNode(Node *parent) : Node(parent, Kind::Parentheses)
 }
 
 BoolNode::BoolNode(Node *parent) : Node(parent, Kind::Bool) {
-    value = select<bool>({ "false", "true" }, true);
+    value = select<bool>({ { "false", false }, { "true", true } }, true);
 }
 
 SpecialNode::SpecialNode(Node *parent) : Node(parent, Kind::Special) {
-    type = select<Type>({ "any", "nothing", "null" }, true);
+    type = select<Type>({ { "any", Type::Any }, { "nothing", Type::Nothing }, { "null", Type::Null } }, true);
 }
 
 NumberNode::NumberNode(Node *parent, bool external) : Node(parent, Kind::Number) {
     if (external)
         return;
 
-    bool positive = select({ "-", "+" }, false, true) != 0;
+    std::optional<int64_t> sign = maybe<int64_t>({ { "-", -1 }, { "+", +1 } }, false);
+    bool positive = !sign || *sign > 0;
+    bool explicitPositive = sign && positive;
 
     size_t start = state.index;
 
@@ -73,10 +75,10 @@ NumberNode::NumberNode(Node *parent, bool external) : Node(parent, Kind::Number)
         if (full.find('.') == std::string::npos) {
             uint64_t v = std::stoull(full);
 
-            if (positive) {
+            if (v > INT64_MAX || explicitPositive) {
                 value = v;
             } else {
-                value = -static_cast<int64_t>(v);
+                value = (positive ? +1 : -1) * static_cast<int64_t>(v);
             }
         } else {
             double v = std::stod(full);
@@ -86,7 +88,7 @@ NumberNode::NumberNode(Node *parent, bool external) : Node(parent, Kind::Number)
     } catch (const std::out_of_range &e) {
         error(fmt::format("Token {} cannot be represented by a number.", full));
     } catch (const std::invalid_argument &e) {
-        error(fmt::format("Token {} is not a number..", full));
+        error(fmt::format("Token {} is not a number.", full));
     }
 }
 
@@ -99,9 +101,7 @@ StringNode::StringNode(Node *parent) : Node(parent, Kind::String) {
 
     std::stringstream stream;
 
-    std::vector<std::string> quotes = { "\'", "\"" };
-
-    std::string quote = quotes[select(quotes)];
+    auto quote = select<std::string>({ { "\'", "\'" }, { "\"", "\'" } });
     match();
 
     enum class BreakChars {
@@ -109,7 +109,31 @@ StringNode::StringNode(Node *parent) : Node(parent, Kind::String) {
         Backslash,
         Quote,
     };
+
+    enum class SpecialChars {
+        NewLine,
+        Tab,
+        DollarSign,
+        Null,
+        SingleQuote,
+        DoubleQuote,
+        Backslash,
+    };
+
     std::vector<std::string> breakChars = { "$", "\\", quote };
+    SelectMap<BreakChars> breakCharsMap = {
+        { "$", BreakChars::Dollar }, { "\\", BreakChars::Backslash }, { quote, BreakChars::Quote }
+    };
+
+    SelectMap<SpecialChars> specialCharsMap = {
+        { "n", SpecialChars::NewLine },
+        { "t", SpecialChars::Tab },
+        { "$", SpecialChars::DollarSign },
+        { "0", SpecialChars::Null },
+        { "\'", SpecialChars::Backslash },
+        { "\"", SpecialChars::SingleQuote },
+        { "\\", SpecialChars::DoubleQuote },
+    };
 
     bool loop = true;
     while (loop) {
@@ -118,7 +142,7 @@ StringNode::StringNode(Node *parent) : Node(parent, Kind::String) {
         if (peek("'"))
             spaceStoppable = defaultPop;
 
-        switch (select<BreakChars>(breakChars)) {
+        switch (select(breakCharsMap)) {
             case BreakChars::Dollar:
                 spaceStoppable = notSpace;
                 needs("{");
@@ -132,17 +156,7 @@ StringNode::StringNode(Node *parent) : Node(parent, Kind::String) {
                 break;
 
             case BreakChars::Backslash:
-                enum class SpecialChars {
-                    NewLine,
-                    Tab,
-                    DollarSign,
-                    Null,
-                    SingleQuote,
-                    DoubleQuote,
-                    Backslash,
-                };
-
-                switch (select<SpecialChars>({ "n", "t", "$", "0", "\'", "\"", "\\" })) {
+                switch (select(specialCharsMap)) {
                     case SpecialChars::NewLine:
                         stream << '\n';
                         break;

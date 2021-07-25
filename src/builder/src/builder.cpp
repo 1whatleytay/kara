@@ -10,11 +10,6 @@
 #include <llvm/Support/Host.h>
 
 void BuilderStatementContext::consider(const BuilderResult &result) {
-//    assert(parent.current);
-
-    // FFFFFF
-
-
     if (parent.current && instructions
         && result.kind == BuilderResult::Kind::Raw || result.kind == BuilderResult::Kind::Literal) {
 
@@ -35,11 +30,11 @@ void BuilderStatementContext::commit(BasicBlock *block) {
     }
 }
 
-BuilderStatementContext::BuilderStatementContext(BuilderScope &parent) : parent(parent) {
-    assert(parent.function.function); // parent.current is probably empty at this point
-
-    instructions = BasicBlock::Create(
-        parent.function.builder.context, "statement_context_block", parent.function.function);
+BuilderStatementContext::BuilderStatementContext(BuilderScope &parent, bool doCodeGen) : parent(parent) {
+    if (doCodeGen) {
+        instructions = BasicBlock::Create(
+            parent.function.builder.context, "statement_context_block", parent.function.function);
+    }
 }
 
 BuilderStatementContext::~BuilderStatementContext() {

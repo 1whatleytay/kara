@@ -65,9 +65,8 @@ BuilderVariable::BuilderVariable(const VariableNode *node, BuilderScope &scope) 
 
     std::optional<BuilderResult> possibleDefault;
 
-    if (node->value()) {
+    if (node->hasInitialValue) {
         BuilderResult result = scope.makeExpression(node->value());
-        possibleDefault = result; // copy :|
 
         if (node->hasFixedType) {
             auto fixedType = function.builder.resolveTypename(node->fixedType());
@@ -85,6 +84,7 @@ BuilderVariable::BuilderVariable(const VariableNode *node, BuilderScope &scope) 
         }
 
         type = result.type;
+        possibleDefault = result; // copy :|
     } else {
         type = function.builder.resolveTypename(node->fixedType());
     }

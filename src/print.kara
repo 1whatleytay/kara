@@ -1,0 +1,40 @@
+import (c) 'stdio.h'
+import (c) 'string.h'
+
+type char = byte
+type string = [char:]
+
+sub(a &char) => ((a as ulong) - +1) as &char
+toChar(a &string) => a[0]
+
+abs(a int) => a >= 0 ? a : -a
+
+print(var a int) {
+    if a == 0 { '0'.puts }
+
+    let neg = a < 0
+
+    a = a.abs
+
+    var buffer [char:50]
+    var ptr = &buffer[50]
+
+    ptr = ptr.sub
+    @ptr = 0
+
+    for a > 0 {
+        let num = a % 10
+
+        ptr = ptr.sub
+        @ptr = '0'.toChar + num
+
+        a /= 10
+    }
+
+    if neg {
+        ptr = ptr.sub
+        @ptr = '-'.toChar
+    }
+
+    (ptr as &[char:]).puts
+}

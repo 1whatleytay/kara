@@ -47,7 +47,7 @@ struct BuilderStatementContext {
 
     void commit(BasicBlock *block);
 
-    explicit BuilderStatementContext(BuilderScope &parent);
+    explicit BuilderStatementContext(BuilderScope &parent, bool doCodeGen);
     ~BuilderStatementContext();
 };
 
@@ -152,24 +152,22 @@ struct BuilderScope {
     BuilderVariable *findVariable(const VariableNode *node) const;
 
     // Node for search scope.
+    static std::optional<Typename> negotiate(const Typename &left, const Typename &right);
+
     std::optional<BuilderResult> convert(
         const BuilderResult &result, const Typename &type, bool force = false);
     static std::optional<std::pair<BuilderResult, BuilderResult>> convert(
         const BuilderResult &a, BuilderScope &aScope,
         const BuilderResult &b, BuilderScope &bScope);
+    std::optional<std::pair<BuilderResult, BuilderResult>> convert(
+        const BuilderResult &a, const BuilderResult &b);
 
-    BuilderResult convertOrThrow(
-        const Node *node, const BuilderResult &result, const Typename &type);
 
     BuilderResult infer(const BuilderResult &result);
     BuilderResult unpack(const BuilderResult &result);
 
     void invokeDestroy(const BuilderResult &result);
     void invokeDestroy(const BuilderResult &result, BasicBlock *block);
-
-    std::optional<std::pair<BuilderResult, BuilderResult>> convert(
-        const BuilderResult &a, const BuilderResult &b);
-
     Value *get(const BuilderResult &result);
     Value *ref(const BuilderResult &result);
 

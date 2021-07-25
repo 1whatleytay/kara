@@ -25,12 +25,21 @@ PrimitiveTypenameNode::PrimitiveTypenameNode(Node *parent, bool external) : Node
      */
 
     type = select<PrimitiveType>({
-        "any", "null", "nothing",
-        "bool",
-        "byte", "short", "int", "long",
-        "ubyte", "ushort", "uint", "ulong",
-        "float", "double"
-    });
+        { "any", PrimitiveType::Any },
+        { "null", PrimitiveType::Null },
+        { "nothing", PrimitiveType::Nothing },
+        { "bool", PrimitiveType::Bool },
+        { "byte", PrimitiveType::Byte },
+        { "short", PrimitiveType::Short },
+        { "int", PrimitiveType::Int },
+        { "long", PrimitiveType::Long },
+        { "ubyte", PrimitiveType::UByte },
+        { "ushort", PrimitiveType::UShort },
+        { "uint", PrimitiveType::UInt },
+        { "ulong", PrimitiveType::ULong },
+        { "float", PrimitiveType::Float },
+        { "double", PrimitiveType::Double }
+    }, true);
 }
 
 const Node *ReferenceTypenameNode::body() const {
@@ -43,7 +52,7 @@ ReferenceTypenameNode::ReferenceTypenameNode(Node *parent, bool external) : Node
 
     match("&");
 
-    isMutable = select({ "let", "var" }, true, true) == 1;
+    isMutable = decide({ { "let", false }, { "var", true } }, false, true);
 
     pushTypename(this);
 }
@@ -56,7 +65,7 @@ OptionalTypenameNode::OptionalTypenameNode(Node *parent, bool external) : Node(p
     if (external)
         return;
 
-    bubbles = select<bool>({ "?", "!" });
+    bubbles = select<bool>({ { "?", false }, { "!", true } }, false);
 
     pushTypename(this);
 }
@@ -226,6 +235,27 @@ bool PrimitiveTypename::isFloat() const {
 
 bool PrimitiveTypename::isNumber() const {
     return isInteger() || isFloat();
+}
+
+int32_t PrimitiveTypename::size() const {
+    switch (type) {
+        case PrimitiveType::ULong:
+        case PrimitiveType::Long:
+        case PrimitiveType::Double:
+            return 8;
+        case PrimitiveType::UInt:
+        case PrimitiveType::Int:
+        case PrimitiveType::Float:
+            return 4;
+        case PrimitiveType::UShort:
+        case PrimitiveType::Short:
+            return 2;
+        case PrimitiveType::UByte:
+        case PrimitiveType::Byte:
+            return 1;
+        default:
+            return -1;
+    }
 }
 
 int32_t PrimitiveTypename::priority() const {

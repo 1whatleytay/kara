@@ -10,13 +10,14 @@ struct AssignNode : public Node {
         Plus,
         Minus,
         Multiply,
-        Divide
+        Divide,
+        Modulo
     };
 
     Operator op = Operator::Assign;
 
-    const ExpressionNode *left() const;
-    const ExpressionNode *right() const;
+    [[nodiscard]] const ExpressionNode *left() const;
+    [[nodiscard]] const ExpressionNode *right() const;
 
     explicit AssignNode(Node *parent);
 };

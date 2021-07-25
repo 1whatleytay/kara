@@ -13,7 +13,14 @@ const ExpressionNode *AssignNode::right() const {
 AssignNode::AssignNode(Node *parent) : Node(parent, Kind::Assign) {
     push<ExpressionNode>();
 
-    op = select<Operator>({ "=", "+=", "-=", "*=", "/=" });
+    op = select<Operator>({
+        { "=", Operator::Assign },
+        { "+=", Operator::Plus },
+        { "-=", Operator::Minus },
+        { "*=", Operator::Multiply },
+        { "/=", Operator::Divide },
+        { "%=", Operator::Modulo },
+    });
     match();
 
     push<ExpressionNode>();

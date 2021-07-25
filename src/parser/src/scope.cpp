@@ -18,7 +18,7 @@ const CodeNode *BlockNode::body() const {
 }
 
 BlockNode::BlockNode(Node *parent) : Node(parent, Kind::Block) {
-    type = select<Type>({ "block", "exit" }, true);
+    type = select<Type>({ { "block", Type::Regular }, { "exit", Type::Exit } }, true);
     match();
 
     needs("{");

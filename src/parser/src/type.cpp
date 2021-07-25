@@ -28,7 +28,7 @@ TypeNode::TypeNode(Node *parent, bool external) : Node(parent, Kind::Type) {
         Alias
     };
 
-    auto check = select<Operators>({ "{", "=" });
+    auto check = select<Operators>({ { "{", Operators::NewClass }, { "=", Operators::Alias } });
 
     switch (check) {
         case Operators::NewClass:

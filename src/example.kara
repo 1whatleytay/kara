@@ -1,0 +1,17 @@
+import 'print.kara'
+
+main int {
+    var thing = 40
+    thing.print
+
+    thing -= 73
+    thing.print
+
+    thing *= 2
+    thing.print
+
+    thing += 70
+    thing.print
+
+    return thing
+}

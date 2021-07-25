@@ -56,12 +56,18 @@ Typename Builder::resolveTypename(const Node *node) {
         case Kind::ArrayTypename: {
             auto e = node->as<ArrayTypenameNode>();
 
+            struct {
+                uint64_t operator()(uint64_t v) { return v; }
+                uint64_t operator()(int64_t v) { assert(v >= 0); return v; }
+                uint64_t operator()(double v) { throw; }
+            } visitor;
+
             return ArrayTypename {
                 e->type,
 
                 std::make_shared<Typename>(resolveTypename(e->body())),
 
-                e->type == ArrayKind::FixedSize ? std::get<uint64_t>(e->fixedSize()->value) : 0
+                e->type == ArrayKind::FixedSize ? std::visit(visitor, e->fixedSize()->value) : 0
             };
         }
 
