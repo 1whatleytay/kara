@@ -25,6 +25,9 @@ Options::Options(int count, const char **args) {
 
     app.add_option("-l,--lib", libraries, "JSON files describing libraries.");
 
+    app.add_option("--malloc", malloc, "Name of malloc stub function to link against (i8 * (size_t)).");
+    app.add_option("--free", free, "Name of free stub function to link against (void (i8 *)).");
+
     try {
         app.parse(count, args);
     } catch (const CLI::Error &e) {

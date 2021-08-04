@@ -30,6 +30,7 @@ enum class Kind {
     For,
     ForIn,
     Bool,
+    New,
     Special,
     Array,
     Index,

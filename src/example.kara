@@ -1,17 +1,18 @@
 import 'print.kara'
 
+type Pizza {
+    name &string
+    flavor int
+}
+
+make *Pizza => *Pizza('hey', 8) // no delete here, there should be a double free... whatever
+
 main int {
-    var thing = 40
-    thing.print
+    let a = Pizza('wow', 4)
+    let b = make
 
-    thing -= 73
-    thing.print
+    a.name.puts
+    b.name.puts
 
-    thing *= 2
-    thing.print
-
-    thing += 70
-    thing.print
-
-    return thing
+    return 0
 }

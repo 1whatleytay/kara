@@ -1,6 +1,7 @@
 #include <builder/builder.h>
 
 #include <builder/error.h>
+#include <builder/manager.h>
 
 #include <parser/type.h>
 #include <parser/function.h>
@@ -169,6 +170,19 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
             return std::visit(visitor, e->value);
         }
 
+        case Kind::New: {
+            auto *e = node->as<NewNode>();
+
+            return BuilderResult(e, { e }, &statementContext);
+
+//            auto type = function.builder.resolveTypename(e->type());
+//            auto llvmType = function.builder.makeTypename(type);
+//
+//            size_t size = function.builder.file.manager.target.layout->getTypeStoreSize(llvmType);
+//
+//            fmt::print("Will alloc {} bytes for type {}.\n", size, toString(type));
+        }
+
         default:
             throw;
     }
@@ -202,6 +216,28 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
                 callInput.parameters[a + extraParameter] = &resultLifetimes[a];
 
             callInput.names = callNode->namesStripped();
+
+            auto isNewNode = [](const Node *n) { return n->is(Kind::New); };
+            auto newIt = std::find_if(result.references.begin(), result.references.end(), isNewNode);
+
+            if (newIt != result.references.end()) {
+                auto newNode = (*newIt)->as<NewNode>();
+                auto type = function.builder.resolveTypename(newNode->type());
+
+                auto typeNode = std::get_if<NamedTypename>(&type);
+
+                if (!typeNode)
+                    throw VerifyError(newNode, "New parameters may only be passed to a type/struct.");
+
+                auto value = callUnpack(call({ typeNode->type }, callInput), result.from);
+
+                auto output = makeNew(newNode);
+
+                if (current)
+                    current->CreateStore(get(value), get(output));
+
+                return output;
+            }
 
             std::vector<const Node *> functions;
 

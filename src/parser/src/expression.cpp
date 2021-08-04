@@ -37,7 +37,7 @@ ExpressionNode::ExpressionNode(Node *parent, bool placeholder) : Node(parent, Ki
     while(!end() && !exit) {
         while (push<UnaryNode>(true));
 
-        push<ParenthesesNode, ArrayNode, StringNode, SpecialNode, BoolNode, NumberNode, ReferenceNode>();
+        push<ParenthesesNode, ArrayNode, StringNode, SpecialNode, BoolNode, NumberNode, NewNode, ReferenceNode>();
 
         while (true) {
             if (!push<CallNode, IndexNode, DotNode, OperatorNode>(true)) {

@@ -10,12 +10,14 @@
 #include <llvm/IR/LLVMContext.h>
 
 #include <optional>
+#include <unordered_set>
 #include <unordered_map>
 
 using namespace llvm;
 
 struct IfNode;
 struct ForNode;
+struct NewNode;
 struct CodeNode;
 struct TypeNode;
 struct BlockNode;
@@ -41,14 +43,17 @@ struct BuilderStatementContext {
     // I need it to use invokeDestroy for now, would be best to separate everything to global scope but...
     BuilderScope &parent;
 
-    BasicBlock *instructions = nullptr;
+    uint64_t nextUID = 1;
+    uint64_t getNextUID();
+
+    std::vector<BuilderResult> toDestroy;
+    std::unordered_set<uint64_t> avoidDestroy;
 
     void consider(const BuilderResult &result);
 
     void commit(BasicBlock *block);
 
-    explicit BuilderStatementContext(BuilderScope &parent, bool doCodeGen);
-    ~BuilderStatementContext();
+    explicit BuilderStatementContext(BuilderScope &parent);
 };
 
 struct BuilderResult {
@@ -68,6 +73,8 @@ struct BuilderResult {
 
     const Node *from = nullptr;
     std::vector<const Node *> references;
+
+    uint64_t statementUID = 0; // copied when needed, for reference in move without refactor
 
     const Node *first(::Kind nodeKind);
 
@@ -162,11 +169,12 @@ struct BuilderScope {
     std::optional<std::pair<BuilderResult, BuilderResult>> convert(
         const BuilderResult &a, const BuilderResult &b);
 
-
     BuilderResult infer(const BuilderResult &result);
     BuilderResult unpack(const BuilderResult &result);
+    BuilderResult pass(const BuilderResult &result);
 
     void invokeDestroy(const BuilderResult &result);
+    void invokeDestroy(const BuilderResult &result, IRBuilder<> &builder);
     void invokeDestroy(const BuilderResult &result, BasicBlock *block);
     Value *get(const BuilderResult &result);
     Value *ref(const BuilderResult &result);
@@ -180,6 +188,8 @@ struct BuilderScope {
     BuilderResult makeExpressionCombinator(const ExpressionCombinator &combinator);
     BuilderResult makeExpressionResult(const ExpressionResult &result);
     BuilderResult makeExpression(const ExpressionNode *node);
+
+    BuilderResult makeNew(const NewNode *node);
 
     void makeIf(const IfNode *node);
     void makeFor(const ForNode *node);
@@ -238,6 +248,9 @@ struct Builder {
     const ManagerFile &file;
     const Options &options;
 
+    Function *mallocCache = nullptr;
+    Function *freeCache = nullptr;
+
     std::set<const ManagerFile *> dependencies;
 
     LLVMContext &context;
@@ -252,6 +265,9 @@ struct Builder {
     BuilderType *makeType(const TypeNode *node);
     BuilderVariable *makeGlobal(const VariableNode *node);
     BuilderFunction *makeFunction(const FunctionNode *node);
+
+    Function *getMalloc();
+    Function *getFree();
 
     const Node *find(const ReferenceNode *node);
     std::vector<const Node *> findAll(const ReferenceNode *node);

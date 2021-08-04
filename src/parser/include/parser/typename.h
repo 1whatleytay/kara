@@ -23,6 +23,12 @@ enum class ArrayKind {
     Iterable, // [MyType::]
 };
 
+enum class ReferenceKind {
+    Regular, // &T
+    Unique, // *T
+    Shared, // *shared T
+};
+
 struct NamedTypenameNode : public Node {
     std::string name;
 
@@ -36,6 +42,7 @@ struct PrimitiveTypenameNode : public Node {
 };
 
 struct ReferenceTypenameNode : public Node {
+    ReferenceKind kind = ReferenceKind::Regular;
     bool isMutable = false;
 
     [[nodiscard]] const Node *body() const;
@@ -125,6 +132,7 @@ struct ReferenceTypename {
     std::shared_ptr<Typename> value;
 
     bool isMutable = true;
+    ReferenceKind kind = ReferenceKind::Regular;
 
     bool operator==(const ReferenceTypename &other) const;
     bool operator!=(const ReferenceTypename &other) const;

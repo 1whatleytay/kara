@@ -9,40 +9,45 @@
 
 #include <llvm/Support/Host.h>
 
-void BuilderStatementContext::consider(const BuilderResult &result) {
-    if (parent.current && instructions
-        && result.kind == BuilderResult::Kind::Raw || result.kind == BuilderResult::Kind::Literal) {
+uint64_t BuilderStatementContext::getNextUID() { return nextUID++; }
 
-        parent.invokeDestroy(result, instructions);
+void BuilderStatementContext::consider(const BuilderResult &result) {
+    if (parent.current && result.kind == BuilderResult::Kind::Raw || result.kind == BuilderResult::Kind::Literal) {
+        toDestroy.push_back(result);
     }
 }
 
 void BuilderStatementContext::commit(BasicBlock *block) {
-    if (instructions && block) {
-        // no more, need BR refactor
-        auto &instIn = instructions->getInstList();
+//    if (instructions && block) {
+//        // no more, need BR refactor
+//        auto &instIn = instructions->getInstList();
+//
+//        while (!instIn.empty()) {
+//            instIn.front().moveBefore(*block, block->end());
+//        }
+//
+//        instIn.clear();
+//    }
 
-        while (!instIn.empty()) {
-            instIn.front().moveBefore(*block, block->end());
-        }
+    if (!parent.current)
+        return;
 
-        instIn.clear();
+    IRBuilder<> builder(block);
+
+    for (auto it = toDestroy.rbegin(); it != toDestroy.rend(); ++it) {
+        BuilderResult &destroy = *it;
+
+        if (avoidDestroy.find(destroy.statementUID) != avoidDestroy.end())
+            continue;
+
+        parent.invokeDestroy(destroy, builder);
     }
+
+    toDestroy.clear();
+    avoidDestroy.clear();
 }
 
-BuilderStatementContext::BuilderStatementContext(BuilderScope &parent, bool doCodeGen) : parent(parent) {
-    if (doCodeGen) {
-        instructions = BasicBlock::Create(
-            parent.function.builder.context, "statement_context_block", parent.function.function);
-    }
-}
-
-BuilderStatementContext::~BuilderStatementContext() {
-    if (instructions) {
-        instructions->removeFromParent();
-        assert(instructions->empty());
-    }
-}
+BuilderStatementContext::BuilderStatementContext(BuilderScope &parent) : parent(parent) { }
 
 const Node *BuilderResult::first(::Kind nodeKind) {
     auto iterator = std::find_if(references.begin(), references.end(), [nodeKind](const Node *node) {
@@ -57,8 +62,10 @@ BuilderResult::BuilderResult(Kind kind, Value *value, Typename type,
     BuilderStatementContext *statementContext, std::unique_ptr<BuilderResult> implicit)
     : kind(kind), value(value), type(std::move(type)), implicit(std::move(implicit)) {
 
-    if (statementContext)
+    if (statementContext) {
+        statementUID = statementContext->getNextUID();
         statementContext->consider(*this); // register
+    }
 }
 
 BuilderResult::BuilderResult(const Node *from, std::vector<const Node *> references,
@@ -66,8 +73,10 @@ BuilderResult::BuilderResult(const Node *from, std::vector<const Node *> referen
     : kind(BuilderResult::Kind::Unresolved), value(nullptr), from(from), references(std::move(references)),
     type(PrimitiveTypename { PrimitiveType::Unresolved }), implicit(std::move(implicit)) {
 
-    if (statementContext)
+    if (statementContext) {
+        statementUID = statementContext->getNextUID();
         statementContext->consider(*this); // register
+    }
 }
 
 BuilderType *Builder::makeType(const TypeNode *node) {
@@ -116,6 +125,32 @@ BuilderFunction *Builder::makeFunction(const FunctionNode *node) {
     } else {
         return iterator->second.get();
     }
+}
+
+Function *Builder::getMalloc() {
+    if (!mallocCache) {
+        auto type = FunctionType::get(
+            Type::getInt8PtrTy(context),
+            std::vector<Type *> { Type::getInt64Ty(context) },
+            false);
+
+        mallocCache = Function::Create(type, GlobalVariable::LinkageTypes::ExternalLinkage, options.malloc, *module);
+    }
+
+    return mallocCache;
+}
+
+Function *Builder::getFree() {
+    if (!freeCache) {
+        auto type = FunctionType::get(
+            Type::getVoidTy(context),
+            std::vector<Type *> { Type::getInt8PtrTy(context) },
+            false);
+
+        freeCache = Function::Create(type, GlobalVariable::LinkageTypes::ExternalLinkage, options.free, *module);
+    }
+
+    return freeCache;
 }
 
 Builder::Builder(const ManagerFile &file, const Options &opts)

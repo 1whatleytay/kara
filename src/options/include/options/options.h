@@ -23,6 +23,9 @@ struct Options {
     bool optimize = false;
     bool interpret = false;
 
+    std::string malloc = "malloc";
+    std::string free = "free";
+
     Options() = default;
     Options(int count, const char **args);
 };

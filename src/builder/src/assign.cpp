@@ -1,6 +1,7 @@
 #include <builder/builder.h>
 
 #include <builder/error.h>
+#include <builder/manager.h>
 
 #include <parser/assign.h>
 #include <parser/variable.h>
@@ -276,13 +277,28 @@ void BuilderScope::invokeDestroy(const BuilderResult &result) {
 }
 
 void BuilderScope::invokeDestroy(const BuilderResult &result, BasicBlock *block) {
-    if (!current)
-        return;
-
     IRBuilder<> builder(function.builder.context);
     builder.SetInsertPoint(block, block->begin());
 
-    if (!function.builder.destroyInvokables.empty() && !std::holds_alternative<ReferenceTypename>(result.type)) {
+    invokeDestroy(result, builder);
+}
+
+void BuilderScope::invokeDestroy(const BuilderResult &result, IRBuilder<> &builder) {
+    if (!current)
+        return;
+
+    auto referenceTypename = std::get_if<ReferenceTypename>(&result.type);
+
+    if (referenceTypename) {
+        if (referenceTypename->kind == ReferenceKind::Unique) {
+            auto free = function.builder.getFree();
+            auto pointer = builder.CreatePointerCast(get(result), Type::getInt8PtrTy(function.builder.context));
+
+            builder.CreateCall(free, { pointer });
+
+            // call destroy invokables
+        }
+    } else if (!function.builder.destroyInvokables.empty()) {
         try {
             call(function.builder.destroyInvokables, { { &result }, { } }, &builder);
         } catch (const std::runtime_error &e) { }
@@ -319,15 +335,28 @@ BuilderResult BuilderScope::unpack(const BuilderResult &result) {
     return value;
 }
 
+// remove from statement scope or call move operator
+BuilderResult BuilderScope::pass(const BuilderResult &result) {
+    assert(result.kind != BuilderResult::Kind::Unresolved);
+
+    auto reference = std::get_if<ReferenceTypename>(&result.type);
+
+    if (reference && reference->kind != ReferenceKind::Regular) {
+        statementContext.avoidDestroy.insert(result.statementUID);
+    }
+
+    return result;
+}
+
 BuilderResult BuilderScope::infer(const BuilderResult &result) {
     if (result.kind == BuilderResult::Kind::Unresolved) {
         // First variable in scope search will be lowest in scope.
-        auto iterator = std::find_if(result.references.begin(), result.references.end(), [](const Node *node) {
+        auto varIterator = std::find_if(result.references.begin(), result.references.end(), [](const Node *node) {
             return node->is(Kind::Variable);
         });
 
-        if (iterator != result.references.end()) {
-            auto var = (*iterator)->as<VariableNode>();
+        if (varIterator != result.references.end()) {
+            auto var = (*varIterator)->as<VariableNode>();
 
             BuilderVariable *info;
 
@@ -347,6 +376,13 @@ BuilderResult BuilderScope::infer(const BuilderResult &result) {
                 &statementContext
             );
         }
+
+        auto newIterator = std::find_if(result.references.begin(), result.references.end(), [](const Node *node) {
+            return node->is(Kind::New);
+        });
+
+        if (newIterator != result.references.end())
+            return makeNew((*newIterator)->as<NewNode>());
 
         std::vector<const Node *> functions;
 
@@ -389,6 +425,25 @@ BuilderResult BuilderScope::infer(const BuilderResult &result) {
     return result;
 }
 
+BuilderResult BuilderScope::makeNew(const NewNode *node) {
+    auto type = function.builder.resolveTypename(node->type());
+    auto llvmType = function.builder.makeTypename(type);
+    auto pointerType = PointerType::get(llvmType, 0);
+
+    size_t bytes = function.builder.file.manager.target.layout->getTypeStoreSize(llvmType);
+    auto malloc = function.builder.getMalloc();
+
+    auto constant = ConstantInt::get(Type::getInt64Ty(function.builder.context), bytes);
+
+    return BuilderResult(
+        BuilderResult::Kind::Raw,
+
+        current ? current->CreatePointerCast(current->CreateCall(malloc, { constant }), pointerType) : nullptr,
+        ReferenceTypename { std::make_shared<Typename>(type), true, ReferenceKind::Unique },
+        &statementContext
+    );
+}
+
 void BuilderScope::makeAssign(const AssignNode *node) {
     BuilderResult destination = makeExpression(node->children.front()->as<ExpressionNode>());
 
@@ -412,7 +467,7 @@ void BuilderScope::makeAssign(const AssignNode *node) {
         try {
 
             if (node->op == AssignNode::Operator::Assign) {
-                result = get(source);
+                result = get(pass(source));
             } else {
                 auto operation = ([op = node->op]() {
                     switch (op) {
@@ -425,7 +480,7 @@ void BuilderScope::makeAssign(const AssignNode *node) {
                     }
                 })();
 
-                result = get(combine(destination, source, operation));
+                result = get(pass(combine(destination, source, operation)));
             }
         } catch (const std::runtime_error &e) {
             throw VerifyError(node, "{}", e.what());

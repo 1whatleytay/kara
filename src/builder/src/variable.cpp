@@ -83,6 +83,8 @@ BuilderVariable::BuilderVariable(const VariableNode *node, BuilderScope &scope) 
             result = *resultConverted;
         }
 
+        result = scope.pass(result);
+
         type = result.type;
         possibleDefault = result; // copy :|
     } else {

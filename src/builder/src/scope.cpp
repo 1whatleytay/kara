@@ -123,7 +123,7 @@ void BuilderScope::exit(ExitPoint point, BasicBlock *from) {
 }
 
 BuilderScope::BuilderScope(const Node *node, BuilderFunction &function, BuilderScope *parent, bool doCodeGen) // NOLINT(misc-no-recursion)
-    : parent(parent), function(function), statementContext(*this, doCodeGen) {
+    : parent(parent), function(function), statementContext(*this) {
 
     BasicBlock *moveAfter = parent ? parent->lastBlock : function.exitBlock;
 
@@ -159,14 +159,12 @@ BuilderScope::BuilderScope(const Node *node, BuilderFunction &function, BuilderS
                 case Kind::Variable: {
                     auto var = std::make_unique<BuilderVariable>(child->as<VariableNode>(), *this);
 
-                    if (!std::holds_alternative<ReferenceTypename>(var->type)) {
-                        invokeDestroy(BuilderResult {
-                            BuilderResult::Kind::Reference,
-                            var->value,
-                            var->type,
-                            &statementContext
-                        });
-                    }
+                    invokeDestroy(BuilderResult {
+                        BuilderResult::Kind::Reference,
+                        var->value,
+                        var->type,
+                        &statementContext // safe to put, is reference dw
+                    });
 
                     variables[child->as<VariableNode>()] = std::move(var);
 

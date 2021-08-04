@@ -1,5 +1,6 @@
 #include <parser/literals.h>
 
+#include <parser/typename.h>
 #include <parser/expression.h>
 
 #include <fmt/format.h>
@@ -214,4 +215,14 @@ ArrayNode::ArrayNode(Node *parent) : Node(parent, Kind::Array) {
 
 ReferenceNode::ReferenceNode(Node *parent) : Node(parent, Kind::Reference) {
     name = token();
+}
+
+const Node *NewNode::type() const {
+    return children.front().get();
+}
+
+NewNode::NewNode(Node *parent) : Node(parent, Kind::New) {
+    match("*");
+
+    pushTypename(this);
 }

@@ -49,7 +49,7 @@ Typename Builder::resolveTypename(const Node *node) {
             auto e = node->as<ReferenceTypenameNode>();
 
             return ReferenceTypename {
-                std::make_shared<Typename>(resolveTypename(e->body())), e->isMutable
+                std::make_shared<Typename>(resolveTypename(e->body())), e->isMutable, e->kind
             };
         }
 

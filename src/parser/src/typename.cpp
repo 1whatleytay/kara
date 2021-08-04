@@ -50,7 +50,15 @@ ReferenceTypenameNode::ReferenceTypenameNode(Node *parent, bool external) : Node
     if (external)
         return;
 
-    match("&");
+    kind = select<ReferenceKind>({{ "&", ReferenceKind::Regular }, { "*", ReferenceKind::Unique } }, false);
+    match();
+
+    if (next("shared", true)) {
+        if (kind != ReferenceKind::Unique)
+            error("Shared pointer requested but base type is not unique.");
+
+        kind = ReferenceKind::Shared;
+    }
 
     isMutable = decide({ { "let", false }, { "var", true } }, false, true);
 
@@ -137,7 +145,7 @@ bool FunctionTypename::operator!=(const FunctionTypename &other) const {
 }
 
 bool ReferenceTypename::operator==(const ReferenceTypename &other) const {
-    return *value == *other.value;
+    return *value == *other.value && kind == other.kind;
 }
 
 bool OptionalTypename::operator==(const OptionalTypename &other) const {
@@ -201,7 +209,32 @@ std::string toString(const OptionalTypename &type) {
 }
 
 std::string toString(const ReferenceTypename &type) {
-    return fmt::format("&{}{}", type.isMutable ? "var " : "", toString(*type.value));
+    auto prefix = ([type]() {
+        switch (type.kind) {
+            case ReferenceKind::Regular:
+                return "&";
+            case ReferenceKind::Unique:
+                return "*";
+            case ReferenceKind::Shared:
+                return "*shared ";
+            default:
+                throw;
+        }
+    })();
+
+    auto mutability = ([type]() -> std::string {
+        switch (type.kind) {
+            case ReferenceKind::Regular:
+                return type.isMutable ? "var " : "";
+            case ReferenceKind::Unique:
+            case ReferenceKind::Shared:
+                return type.isMutable ? "" : "let ";
+            default:
+                throw;
+        }
+    })();
+
+    return fmt::format("{}{}{}", prefix, mutability, toString(*type.value));
 }
 
 std::string toString(const FunctionTypename &type) {

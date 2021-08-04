@@ -54,3 +54,9 @@ struct ReferenceNode : public Node {
 
     explicit ReferenceNode(Node *parent);
 };
+
+struct NewNode : public Node {
+    [[nodiscard]] const Node *type() const;
+
+    explicit NewNode(Node *parent);
+};

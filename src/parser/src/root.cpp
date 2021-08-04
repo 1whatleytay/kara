@@ -35,6 +35,8 @@ RootNode::RootNode(State &state, bool external) : Node(state, Kind::Root) {
         return notSpace(text, size);
     };
 
+    state.push(spaceStoppable); // needed to start parsing properly
+
     while (!end()) {
         push<ImportNode, TypeNode, VariableNode, FunctionNode>();
 
