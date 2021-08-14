@@ -13,6 +13,7 @@ namespace {
 
 void BuilderScope::makeBlock(const BlockNode *node) {
     assert(current);
+    assert(function);
 
     BuilderScope sub(node->children.front()->as<CodeNode>(), *this);
 
@@ -20,7 +21,7 @@ void BuilderScope::makeBlock(const BlockNode *node) {
         case BlockNode::Type::Regular: {
             current->CreateBr(sub.openingBlock);
 
-            currentBlock = BasicBlock::Create(function.builder.context, "", function.function, lastBlock);
+            currentBlock = BasicBlock::Create(builder.context, "", function->function, lastBlock);
             current->SetInsertPoint(currentBlock);
 
             sub.destinations[ExitPoint::Regular] = currentBlock;
@@ -47,6 +48,7 @@ void BuilderScope::makeBlock(const BlockNode *node) {
 
 void BuilderScope::makeIf(const IfNode *node) {
     assert(current);
+    assert(function);
 
     std::vector<std::unique_ptr<BuilderScope>> scopes;
 
@@ -54,7 +56,7 @@ void BuilderScope::makeIf(const IfNode *node) {
         scopes.push_back(std::make_unique<BuilderScope>(node->children[1]->as<CodeNode>(), *this));
         BuilderScope &sub = *scopes.back();
 
-        currentBlock = BasicBlock::Create(function.builder.context, "", function.function, lastBlock);
+        currentBlock = BasicBlock::Create(builder.context, "", function->function, lastBlock);
 
         BuilderResult conditionResult = makeExpression(node->children.front()->as<ExpressionNode>());
         std::optional<BuilderResult> conditionConverted =
@@ -86,7 +88,7 @@ void BuilderScope::makeIf(const IfNode *node) {
                     br(currentBlock, terminator.openingBlock);
 
                     currentBlock = BasicBlock::Create(
-                        function.builder.context, "", function.function, lastBlock);
+                        builder.context, "", function->function, lastBlock);
                     current->SetInsertPoint(currentBlock);
 
                     node = nullptr;
@@ -112,18 +114,19 @@ void BuilderScope::makeIf(const IfNode *node) {
 }
 
 void BuilderScope::makeFor(const ForNode *node) {
+    assert(current);
+    assert(function);
+
     const Node *condition = node->condition();
     auto *code = node->body();
 
     if (!condition) {
-        assert(current);
-
         if (current) { // cleanup is possible using method described in if std::vector<...> scopes
             BuilderScope scope(code, *this, true);
 
             current->CreateBr(scope.openingBlock);
 
-            currentBlock = BasicBlock::Create(function.builder.context, "", function.function, lastBlock);
+            currentBlock = BasicBlock::Create(builder.context, "", function->function, lastBlock);
             current->SetInsertPoint(currentBlock);
 
             scope.destinations[ExitPoint::Break] = currentBlock;
@@ -151,7 +154,7 @@ void BuilderScope::makeFor(const ForNode *node) {
 
             BuilderScope scope(code, *this);
 
-            currentBlock = BasicBlock::Create(function.builder.context, "", function.function, lastBlock);
+            currentBlock = BasicBlock::Create(builder.context, "", function->function, lastBlock);
 
             current->CreateBr(check.openingBlock);
             current->SetInsertPoint(currentBlock);

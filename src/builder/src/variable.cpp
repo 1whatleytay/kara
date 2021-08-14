@@ -59,7 +59,9 @@ BuilderVariable::BuilderVariable(const VariableNode *node, Builder &builder) : n
 }
 
 BuilderVariable::BuilderVariable(const VariableNode *node, BuilderScope &scope) : node(node) {
-    BuilderFunction &function = scope.function;
+    assert(scope.function);
+
+    BuilderFunction &function = *scope.function;
 
     assert(node->hasFixedType || node->value());
 
@@ -100,7 +102,9 @@ BuilderVariable::BuilderVariable(const VariableNode *node, BuilderScope &scope) 
 }
 
 BuilderVariable::BuilderVariable(const VariableNode *node, Value *input, BuilderScope &scope) : node(node) {
-    BuilderFunction &function = scope.function;
+    assert(scope.function);
+
+    BuilderFunction &function = *scope.function;
 
     if (!node->hasFixedType || node->value())
         throw VerifyError(node, "A function parameter must have fixed type and no default value, unimplemented.");

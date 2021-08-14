@@ -1,14 +1,24 @@
 import 'print.kara'
 
+type X { a int }
+
+destroy(x &X) {
+    x.a.print
+    'X Destroyed'.puts
+}
+
 type Pizza {
+    x X
     name &string
     flavor int
 }
 
-make *Pizza => *Pizza('hey', 8) // no delete here, there should be a double free... whatever
+make *Pizza {
+    return *Pizza(X(0), 'hey', 8)
+}
 
 main int {
-    let a = Pizza('wow', 4)
+    let a = Pizza(X(1), 'wow', 4)
     let b = make
 
     a.name.puts

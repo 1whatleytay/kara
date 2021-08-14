@@ -42,7 +42,7 @@ MatchResult BuilderScope::match(const std::vector<const VariableNode *> &paramet
         assert(var->hasFixedType);
         assert(value->kind != BuilderResult::Kind::Unresolved);
 
-        auto type = function.builder.resolveTypename(var->fixedType());
+        auto type = builder.resolveTypename(var->fixedType());
 
         if (type != value->type) {
             auto conversion = testScope.convert(*value, type);
@@ -105,7 +105,7 @@ MatchResult BuilderScope::match(const std::vector<const VariableNode *> &paramet
 }
 
 std::variant<BuilderResult, MatchCallError> BuilderScope::call(
-    const std::vector<const Node *> &options, const MatchInput &input, IRBuilder<> *builder) {
+    const std::vector<const Node *> &options, const MatchInput &input, IRBuilder<> *irBuilder) {
 
     assert(!options.empty());
 
@@ -202,21 +202,21 @@ std::variant<BuilderResult, MatchCallError> BuilderScope::call(
 
             auto pickVariables = e->parameters();
 
-            auto builderFunction = function.builder.makeFunction(e);
+            auto builderFunction = builder.makeFunction(e);
 
             std::vector<Value *> passParameters(match.map.size());
 
             for (size_t a = 0; a < passParameters.size(); a++) {
                 assert(pickVariables[a]->hasFixedType);
 
-                auto type = function.builder.resolveTypename(pickVariables[a]->fixedType());
+                auto type = builder.resolveTypename(pickVariables[a]->fixedType());
 
                 passParameters[a] = get(convert(*match.map[a], type).value());
             }
 
             return BuilderResult(
                 BuilderResult::Kind::Raw,
-                builder ? builder->CreateCall(builderFunction->function, passParameters) : nullptr,
+                irBuilder ? irBuilder->CreateCall(builderFunction->function, passParameters) : nullptr,
                 *builderFunction->type.returnType,
                 &statementContext
             );
@@ -228,9 +228,11 @@ std::variant<BuilderResult, MatchCallError> BuilderScope::call(
 
             NamedTypename type = { e };
 
-            if (builder) {
-                BuilderType *builderType = function.builder.makeType(e);
-                Value *value = function.entry.CreateAlloca(builderType->type);
+            if (irBuilder) {
+                assert(function);
+
+                BuilderType *builderType = builder.makeType(e);
+                Value *value = function->entry.CreateAlloca(builderType->type);
 
                 assert(fields.size() == match.map.size()); // sanity
 
@@ -240,9 +242,9 @@ std::variant<BuilderResult, MatchCallError> BuilderScope::call(
 
                     assert(field->hasFixedType);
 
-                    builder->CreateStore(
-                        get(convert(*m, function.builder.resolveTypename(field->fixedType())).value()),
-                        builder->CreateStructGEP(value, builderType->indices[field]));
+                    irBuilder->CreateStore(
+                        get(convert(*m, builder.resolveTypename(field->fixedType())).value()),
+                        irBuilder->CreateStructGEP(value, builderType->indices[field]));
                 }
 
                 return BuilderResult(
@@ -290,52 +292,82 @@ BuilderResult BuilderScope::callUnpack(const std::variant<BuilderResult, MatchCa
 }
 
 void BuilderFunction::build() {
-    bool responsible = search::exclusive::parents(node, [this](const Node *n) {
-        return n == builder.file.root.get();
-    });
+    bool responsible = search::exclusive::root(node) == builder.root;
 
     Typename returnTypename = PrimitiveTypename::from(PrimitiveType::Nothing);
 
-    if (auto fixed = node->fixedType())
-        returnTypename = builder.resolveTypename(fixed);
+    const Node *body = nullptr;
 
-    const Node *body = responsible ? node->body() : nullptr;
-    // Check for inferred type from expression node maybe?
-    if (body && body->is(Kind::Expression) && !node->hasFixedType
-        && returnTypename == PrimitiveTypename::from(PrimitiveType::Nothing)) {
+    switch (node->is<Kind>()) {
+        case Kind::Function: {
+            auto e = node->as<FunctionNode>();
 
-        BuilderScope productScope(body, *this, false);
+            if (auto fixed = e->fixedType())
+                returnTypename = builder.resolveTypename(fixed);
 
-        returnTypename = productScope.product.value().type;
-    }
+            body = responsible ? e->body() : nullptr;
+            // Check for inferred type from expression node maybe?
+            if (body && body->is(Kind::Expression) && !e->hasFixedType
+            && returnTypename == PrimitiveTypename::from(PrimitiveType::Nothing)) {
 
-    returnType = builder.makeTypename(returnTypename);
+                BuilderScope productScope(body, *this, false);
 
-    std::vector<Typename> parameters(node->parameterCount);
-    std::vector<Type *> parameterTypes(node->parameterCount);
+                returnTypename = productScope.product.value().type;
+            }
 
-    auto parameterVariables = node->parameters();
+            returnType = builder.makeTypename(returnTypename);
 
-    for (size_t a = 0; a < node->parameterCount; a++) {
-        auto fixed = parameterVariables[a]->fixedType();
+            std::vector<Typename> parameters(e->parameterCount);
+            std::vector<Type *> parameterTypes(e->parameterCount);
 
-        if (!fixed) {
-            throw VerifyError(node->children[a].get(),
-                "Function parameter must have given type, default parameters are not implemented.");
+            auto parameterVariables = e->parameters();
+
+            for (size_t a = 0; a < e->parameterCount; a++) {
+                auto fixed = parameterVariables[a]->fixedType();
+
+                if (!fixed) {
+                    throw VerifyError(e->children[a].get(),
+                        "Function parameter must have given type, default parameters are not implemented.");
+                }
+
+                parameters[a] = builder.resolveTypename(fixed);
+                parameterTypes[a] = builder.makeTypename(parameters[a]);
+            }
+
+            type = {
+                FunctionTypename::Kind::Pointer,
+                std::make_shared<Typename>(returnTypename),
+                std::move(parameters)
+            };
+
+            FunctionType *valueType = FunctionType::get(returnType, parameterTypes, false);
+            function = Function::Create(valueType, GlobalVariable::ExternalLinkage, 0, e->name, builder.module.get());
+
+            break;
         }
 
-        parameters[a] = builder.resolveTypename(fixed);
-        parameterTypes[a] = builder.makeTypename(parameters[a]);
+        case Kind::Type: {
+            assert(purpose == Purpose::TypeDestructor); // no weirdness please
+
+            auto e = node->as<TypeNode>();
+            auto structType = builder.makeType(e);
+
+            auto voidType = Type::getVoidTy(builder.context);
+            auto paramType = PointerType::get(structType->type, 0);
+
+            auto name = fmt::format("{}_implicit_dest", e->name);
+
+            FunctionType *valueType = FunctionType::get(voidType, { paramType }, false);
+            function = Function::Create(valueType, GlobalVariable::ExternalLinkage, 0, name, builder.module.get());
+
+            body = responsible ? e : nullptr;
+
+            break;
+        }
+
+        default:
+            throw;
     }
-
-    type = {
-        FunctionTypename::Kind::Pointer,
-        std::make_shared<Typename>(returnTypename),
-        std::move(parameters)
-    };
-
-    FunctionType *valueType = FunctionType::get(returnType, parameterTypes, false);
-    function = Function::Create(valueType, GlobalVariable::ExternalLinkage, 0, node->name, builder.module.get());
 
     if (body) {
         entryBlock = BasicBlock::Create(builder.context, "entry", function);
@@ -378,9 +410,6 @@ void BuilderFunction::build() {
             scope.current->CreateBr(exitBlock);
         }
 
-//        if (!scope.currentBlock->getTerminator())
-//            scope.current.value().CreateBr(exitBlock);
-
         if (returnTypename == PrimitiveTypename::from(PrimitiveType::Nothing))
             exit.CreateRetVoid();
         else
@@ -388,5 +417,16 @@ void BuilderFunction::build() {
     }
 }
 
-BuilderFunction::BuilderFunction(const FunctionNode *node, Builder &builder)
-    : builder(builder), node(node), entry(builder.context), exit(builder.context) { }
+BuilderFunction::BuilderFunction(const Node *node, Builder &builder)
+    : builder(builder), node(node), entry(builder.context), exit(builder.context) {
+    purpose = ([node]() {
+        switch (node->is<Kind>()) {
+            case Kind::Function:
+                return Purpose::UserFunction;
+            case Kind::Type:
+                return Purpose::TypeDestructor;
+            default:
+                throw;
+        }
+    })();
+}

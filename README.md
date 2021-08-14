@@ -94,6 +94,8 @@ Until `1.0`.
  - [ ] Declaration for Mutable References, `takeOptions(let opts)`
  - [ ] Discard for Mutable References `giveOptions(let)`
  - [ ] Select Levels through Keywords `global.f` vs `scope.f`
+ - [x] Casting with `as`, `a as T`
+ - [ ] Parameter Casting (in place of inheritance), `a as T from fieldOfTThatWouldContainA`
 
 ### Standard Library
  - [ ] Stdin + Stdout

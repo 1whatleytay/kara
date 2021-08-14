@@ -19,10 +19,17 @@ void BuilderType::build() {
     }
 
     type->setBody(types);
+
+    implicitDestructor->build();
 }
 
 BuilderType::BuilderType(const TypeNode *node, Builder &builder) : node(node), builder(builder) {
     assert(!node->isAlias);
 
     type = StructType::create(builder.context, { }, node->name);
+
+    auto ptr = std::make_unique<BuilderFunction>(node, builder);
+    implicitDestructor = ptr.get();
+
+    builder.implicitDestructors[node] = std::move(ptr);
 }

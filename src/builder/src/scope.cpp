@@ -3,6 +3,7 @@
 #include <builder/error.h>
 #include <parser/search.h>
 
+#include <parser/type.h>
 #include <parser/scope.h>
 #include <parser/assign.h>
 #include <parser/function.h>
@@ -30,17 +31,27 @@ Value *BuilderScope::get(const BuilderResult &result) {
     if (!current)
         return nullptr;
 
-    return result.kind != BuilderResult::Kind::Raw ? current->CreateLoad(result.value) : result.value;
+    return get(result, *current);
+}
+
+Value *BuilderScope::get(const BuilderResult &result, IRBuilder<> &irBuilder) const {
+    return result.kind != BuilderResult::Kind::Raw ? irBuilder.CreateLoad(result.value) : result.value;
 }
 
 Value *BuilderScope::ref(const BuilderResult &result) {
     if (!current)
         return nullptr;
 
-    if (result.kind == BuilderResult::Kind::Raw) {
-        Value *ref = function.entry.CreateAlloca(function.builder.makeTypename(result.type));
+    return ref(result, *current);
+}
 
-        current->CreateStore(result.value, ref);
+Value *BuilderScope::ref(const BuilderResult &result, IRBuilder<> &irBuilder) const {
+    if (result.kind == BuilderResult::Kind::Raw) {
+        assert(function);
+
+        Value *ref = function->entry.CreateAlloca(function->builder.makeTypename(result.type));
+
+        irBuilder.CreateStore(result.value, ref);
 
         return ref;
     } else {
@@ -49,8 +60,9 @@ Value *BuilderScope::ref(const BuilderResult &result) {
 }
 
 void BuilderScope::makeParameters() {
-    const FunctionNode *astFunction = function.node;
+    assert(function && function->node->is(Kind::Function));
 
+    auto astFunction = function->node->as<FunctionNode>();
     auto parameters = astFunction->parameters();
 
     // Create parameters within scope.
@@ -60,7 +72,7 @@ void BuilderScope::makeParameters() {
         Argument *argument = nullptr;
 
         if (current) {
-            argument = function.function->getArg(a);
+            argument = function->function->getArg(a);
             argument->setName(parameterNode->name);
         }
 
@@ -69,6 +81,8 @@ void BuilderScope::makeParameters() {
 }
 
 void BuilderScope::commit() {
+    assert(function);
+
     assert(exitChainType && lastBlock);
 
     if (!currentBlock->getTerminator()) {
@@ -79,17 +93,17 @@ void BuilderScope::commit() {
 
     auto value = exit.CreateLoad(exitChainType);
 
-    BasicBlock *pass = function.exitBlock;
+    BasicBlock *pass = function->exitBlock;
 
     if (parent) {
-        pass = BasicBlock::Create(function.builder.context, "pass", function.function, lastBlock);
+        pass = BasicBlock::Create(builder.context, "pass", function->function, lastBlock);
         IRBuilder<> passBuilder(pass);
 
         passBuilder.CreateStore(value, parent->exitChainType);
         passBuilder.CreateBr(parent->exitChainBegin);
     }
 
-    auto type = Type::getInt8Ty(function.builder.context);
+    auto type = Type::getInt8Ty(builder.context);
     auto inst = exit.CreateSwitch(value, pass, requiredPoints.size());
 
     for (ExitPoint point : requiredPoints) {
@@ -118,12 +132,12 @@ void BuilderScope::exit(ExitPoint point, BasicBlock *from) {
     requiredPoints.insert(point);
 
     auto exitId = static_cast<int8_t>(point);
-    output.CreateStore(ConstantInt::get(Type::getInt8Ty(function.builder.context), exitId), exitChainType);
+    output.CreateStore(ConstantInt::get(Type::getInt8Ty(builder.context), exitId), exitChainType);
     output.CreateBr(exitChainBegin);
 }
 
 BuilderScope::BuilderScope(const Node *node, BuilderFunction &function, BuilderScope *parent, bool doCodeGen) // NOLINT(misc-no-recursion)
-    : parent(parent), function(function), statementContext(*this) {
+    : parent(parent), builder(function.builder), function(&function), statementContext(*this) {
 
     BasicBlock *moveAfter = parent ? parent->lastBlock : function.exitBlock;
 
@@ -134,14 +148,14 @@ BuilderScope::BuilderScope(const Node *node, BuilderFunction &function, BuilderS
         current.emplace(function.builder.context);
         current->SetInsertPoint(currentBlock);
 
-        if (node->is(Kind::Code)) {
+        if (node && node->is(Kind::Code)) {
             exitChainType = function.entry.CreateAlloca(Type::getInt8Ty(function.builder.context), nullptr, "exit_type");
             lastBlock = BasicBlock::Create(function.builder.context, "exit_scope", function.function, moveAfter);
             exitChainBegin = lastBlock;
         }
     }
 
-    if (!parent)
+    if (!parent && !node->is(Kind::Type)) // dont bother building parameters for type destructor functions
         makeParameters();
 
     if (!node) {
@@ -149,74 +163,125 @@ BuilderScope::BuilderScope(const Node *node, BuilderFunction &function, BuilderS
         return;
     }
 
-    if (node->is(Kind::Expression)) {
-        product = makeExpression(node->as<ExpressionNode>());
-    } else if (node->is(Kind::Code)) {
-        assert(doCodeGen);
+    switch (node->is<Kind>()) {
+        case Kind::Expression:
+            product = makeExpression(node->as<ExpressionNode>());
 
-        for (const auto &child : node->children) {
-            switch (child->is<Kind>()) {
-                case Kind::Variable: {
-                    auto var = std::make_unique<BuilderVariable>(child->as<VariableNode>(), *this);
+            break;
 
-                    invokeDestroy(BuilderResult {
-                        BuilderResult::Kind::Reference,
-                        var->value,
-                        var->type,
-                        &statementContext // safe to put, is reference dw
-                    });
+        case Kind::Code:
+            assert(doCodeGen);
 
-                    variables[child->as<VariableNode>()] = std::move(var);
+            for (const auto &child : node->children) {
+                switch (child->is<Kind>()) {
+                    case Kind::Variable: {
+                        auto var = std::make_unique<BuilderVariable>(child->as<VariableNode>(), *this);
 
-                    break;
+                        invokeDestroy(BuilderResult {
+                            BuilderResult::Kind::Reference,
+                            var->value,
+                            var->type,
+                            &statementContext // safe to put, is reference dw
+                        });
+
+                        variables[child->as<VariableNode>()] = std::move(var);
+
+                        break;
+                    }
+
+                    case Kind::Assign:
+                        makeAssign(child->as<AssignNode>());
+                        break;
+
+                    case Kind::Statement:
+                        makeStatement(child->as<StatementNode>());
+                        continue; // skip statementCommit.commit, makeStatement should do that at the right time
+
+                    case Kind::Block:
+                        makeBlock(child->as<BlockNode>());
+                        break;
+
+                    case Kind::If:
+                        makeIf(child->as<IfNode>());
+                        break;
+
+                    case Kind::For:
+                        makeFor(child->as<ForNode>());
+                        break;
+
+                    case Kind::Expression:
+                        makeExpression(child->as<ExpressionNode>());
+                        break;
+
+                    case Kind::Insight: {
+                        BuilderScope scope(child->as<InsightNode>()->expression(), *this, false);
+                        assert(scope.product);
+
+                        fmt::print("[INSIGHT, line {}] {}\n",
+                            LineDetails(child->state.text, child->index).lineNumber, toString(scope.product->type));
+
+                        break;
+                    }
+
+                    default:
+                        throw;
                 }
 
-                case Kind::Assign:
-                    makeAssign(child->as<AssignNode>());
-                    break;
-
-                case Kind::Statement:
-                    makeStatement(child->as<StatementNode>());
-                    continue; // skip statementCommit.commit, makeStatement should do that at the right time
-
-                case Kind::Block:
-                    makeBlock(child->as<BlockNode>());
-                    break;
-
-                case Kind::If:
-                    makeIf(child->as<IfNode>());
-                    break;
-
-                case Kind::For:
-                    makeFor(child->as<ForNode>());
-                    break;
-
-                case Kind::Expression:
-                    makeExpression(child->as<ExpressionNode>());
-                    break;
-
-                case Kind::Insight: {
-                    BuilderScope scope(child->as<InsightNode>()->expression(), *this, false);
-                    assert(scope.product);
-
-                    fmt::print("[INSIGHT, line {}] {}\n",
-                        LineDetails(child->state.text, child->index).lineNumber, toString(scope.product->type));
-
-                    break;
-                }
-
-                default:
-                    throw;
+                statementContext.commit(currentBlock);
             }
 
-            statementContext.commit(currentBlock);
+            break;
+
+        case Kind::Type: { // create destructor for elements
+            assert(function.purpose == BuilderFunction::Purpose::TypeDestructor); // no mistakes
+
+            auto e = node->as<TypeNode>();
+
+            if (e->isAlias)
+                return;
+
+            auto type = builder.makeType(e);
+            auto fields = e->fields();
+
+            assert(function.function->arg_size() > 0);
+
+            Argument *arg = function.function->getArg(0);
+
+            { // sanity checks
+                auto underlyingType = arg->getType();
+                assert(underlyingType->isPointerTy());
+
+                auto pointeeType = underlyingType->getPointerElementType();
+                assert(pointeeType == type->type);
+            }
+
+            assert(current);
+
+            for (auto it = fields.rbegin(); it != fields.rend(); ++it) {
+                auto var = *it;
+                auto index = type->indices.at(var);
+
+                assert(var->hasFixedType);
+
+                auto result = BuilderResult(
+                    BuilderResult::Kind::Reference,
+                    current->CreateStructGEP(arg, index),
+                    builder.resolveTypename(var->fixedType()),
+                    &statementContext // might as well
+                );
+
+                invokeDestroy(result, *current);
+            }
+
+            break;
         }
-    } else {
-        throw VerifyError(node, "Unsupported BuilderScope node type.");
+
+        default:
+            throw VerifyError(node, "Unsupported BuilderScope node type.");
     }
 }
 
 BuilderScope::BuilderScope(const Node *node, BuilderScope &parent, bool doCodeGen)
-    : BuilderScope(node, parent.function, &parent, doCodeGen) { }
+    : BuilderScope(node, parent.function ? *parent.function : throw, &parent, doCodeGen) { }
 BuilderScope::BuilderScope(const Node *node, BuilderFunction &function, bool doCodeGen)
     : BuilderScope(node, function, nullptr, doCodeGen) { }

@@ -12,8 +12,15 @@
 uint64_t BuilderStatementContext::getNextUID() { return nextUID++; }
 
 void BuilderStatementContext::consider(const BuilderResult &result) {
-    if (parent.current && result.kind == BuilderResult::Kind::Raw || result.kind == BuilderResult::Kind::Literal) {
-        toDestroy.push_back(result);
+    auto typeRef = std::get_if<ReferenceTypename>(&result.type);
+
+    if (parent.current
+        && (result.kind == BuilderResult::Kind::Raw || result.kind == BuilderResult::Kind::Literal)
+        && std::holds_alternative<PrimitiveTypename>(result.type)
+        && (!typeRef || typeRef->kind != ReferenceKind::Regular)) {
+        assert(!lock);
+
+        toDestroy.push(result);
     }
 }
 
@@ -34,16 +41,21 @@ void BuilderStatementContext::commit(BasicBlock *block) {
 
     IRBuilder<> builder(block);
 
-    for (auto it = toDestroy.rbegin(); it != toDestroy.rend(); ++it) {
-        BuilderResult &destroy = *it;
+    lock = true;
+
+    while (!toDestroy.empty()) {
+        const BuilderResult &destroy = toDestroy.front();
 
         if (avoidDestroy.find(destroy.statementUID) != avoidDestroy.end())
             continue;
 
         parent.invokeDestroy(destroy, builder);
+
+        toDestroy.pop();
     }
 
-    toDestroy.clear();
+    lock = false;
+
     avoidDestroy.clear();
 }
 

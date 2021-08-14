@@ -97,4 +97,13 @@ namespace search::exclusive {
 
         return nullptr;
     }
+
+
+    const Node *root(const Node *of) {
+        while (of && of->parent)
+            of = of->parent;
+
+        return of;
+    }
+
 }

@@ -17,7 +17,7 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
         case Kind::Reference: {
             auto e = node->as<ReferenceNode>();
 
-            return BuilderResult(e, function.builder.findAll(e), &statementContext);
+            return BuilderResult(e, builder.findAll(e), &statementContext);
         }
 
         case Kind::Special: {
@@ -25,7 +25,7 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
 
             return BuilderResult(
                 BuilderResult::Kind::Raw,
-                ConstantPointerNull::get(Type::getInt8PtrTy(function.builder.context)),
+                ConstantPointerNull::get(Type::getInt8PtrTy(builder.context)),
                 PrimitiveTypename { PrimitiveType::Null },
                 &statementContext
             );
@@ -34,7 +34,7 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
         case Kind::Bool:
             return BuilderResult(
                 BuilderResult::Kind::Raw,
-                ConstantInt::get(Type::getInt1Ty(function.builder.context), node->as<BoolNode>()->value),
+                ConstantInt::get(Type::getInt1Ty(builder.context), node->as<BoolNode>()->value),
                 PrimitiveTypename { PrimitiveType::Bool },
                 &statementContext
             );
@@ -47,7 +47,7 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
             Value *ptr = nullptr;
 
             if (current) {
-                Constant *initial = ConstantDataArray::getString(function.builder.context, e->text);
+                Constant *initial = ConstantDataArray::getString(builder.context, e->text);
 
                 std::string convertedText(e->text.size(), '.');
 
@@ -56,7 +56,7 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
                 });
 
                 auto variable = new GlobalVariable(
-                    *function.builder.module, initial->getType(),
+                    *builder.module, initial->getType(),
                     true, GlobalVariable::LinkageTypes::PrivateLinkage,
                     initial, fmt::format("str_{}", convertedText)
                 );
@@ -104,19 +104,21 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
                 results.size()
             };
 
-            Type *arrayType = function.builder.makeTypename(type);
+            Type *arrayType = builder.makeTypename(type);
 
             Value *value = nullptr;
 
             if (current) {
-                value = function.entry.CreateAlloca(arrayType);
+                assert(function);
+
+                value = function->entry.CreateAlloca(arrayType);
 
                 for (size_t a = 0; a < results.size(); a++) {
                     const BuilderResult &result = results[a];
 
-                    Value *index = ConstantInt::get(Type::getInt64Ty(function.builder.context), a);
+                    Value *index = ConstantInt::get(Type::getInt64Ty(builder.context), a);
                     Value *point = current->CreateInBoundsGEP(value, {
-                        ConstantInt::get(Type::getInt64Ty(function.builder.context), 0),
+                        ConstantInt::get(Type::getInt64Ty(builder.context), 0),
                         index
                     });
 
@@ -165,7 +167,7 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
                         statementContext
                     };
                 }
-            } visitor { function.builder.context, &statementContext };
+            } visitor { builder.context, &statementContext };
 
             return std::visit(visitor, e->value);
         }
@@ -175,10 +177,10 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
 
             return BuilderResult(e, { e }, &statementContext);
 
-//            auto type = function.builder.resolveTypename(e->type());
-//            auto llvmType = function.builder.makeTypename(type);
+//            auto type = builder.resolveTypename(e->type());
+//            auto llvmType = builder.makeTypename(type);
 //
-//            size_t size = function.builder.file.manager.target.layout->getTypeStoreSize(llvmType);
+//            size_t size = builder.file.manager.target.layout->getTypeStoreSize(llvmType);
 //
 //            fmt::print("Will alloc {} bytes for type {}.\n", size, toString(type));
         }
@@ -222,7 +224,7 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
 
             if (newIt != result.references.end()) {
                 auto newNode = (*newIt)->as<NewNode>();
-                auto type = function.builder.resolveTypename(newNode->type());
+                auto type = builder.resolveTypename(newNode->type());
 
                 auto typeNode = std::get_if<NamedTypename>(&type);
 
@@ -268,7 +270,7 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
             }
 
             if (auto *type = std::get_if<NamedTypename>(subtype)) {
-                BuilderType *builderType = function.builder.makeType(type->type);
+                BuilderType *builderType = builder.makeType(type->type);
 
                 auto match = [refNode](auto var) { return var->name == refNode->name; };
 
@@ -296,13 +298,13 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
                             ? BuilderResult::Kind::Reference
                             : BuilderResult::Kind::Literal,
                         current ? current->CreateStructGEP(structRef, index, refNode->name) : nullptr,
-                        function.builder.resolveTypename(varNode->fixedType()),
+                        builder.resolveTypename(varNode->fixedType()),
                         &statementContext
                     );
                 }
             }
 
-            const auto &global = function.builder.root->children;
+            const auto &global = builder.root->children;
 
             auto matchFunction = [&](const Node *node) {
                 if (!node->is(Kind::Function))
@@ -315,7 +317,7 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
                 return true;
             };
 
-            auto n = function.builder.searchAllDependencies(matchFunction);
+            auto n = builder.searchAllDependencies(matchFunction);
 
             if (n.empty())
                 throw VerifyError(node, "Could not find method or field with name {}.", refNode->name);
@@ -354,7 +356,7 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
                 switch (arrayType->kind) {
                     case ArrayKind::FixedSize:
                         return current->CreateGEP(ref(sub), {
-                            ConstantInt::get(Type::getInt64Ty(function.builder.context), 0),
+                            ConstantInt::get(Type::getInt64Ty(builder.context), 0),
                             get(index)
                         });
 
@@ -489,8 +491,10 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
 
             Value *literal = nullptr;
 
+            assert(function);
+
             if (current) {
-                literal = function.entry.CreateAlloca(function.builder.makeTypename(onTrue.type));
+                literal = function->entry.CreateAlloca(builder.makeTypename(onTrue.type));
 
                 trueScope.current->CreateStore(trueScope.get(onTrue), literal);
                 falseScope.current->CreateStore(falseScope.get(onFalse), literal);
@@ -498,7 +502,7 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
                 current->CreateCondBr(get(sub), trueScope.openingBlock, falseScope.openingBlock);
 
                 currentBlock = BasicBlock::Create(
-                    function.builder.context, "", function.function, lastBlock);
+                    builder.context, "", function->function, lastBlock);
                 current->SetInsertPoint(currentBlock);
 
                 trueScope.current->CreateBr(currentBlock);
@@ -516,7 +520,7 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
         case Kind::As: {
             auto *e = operation.op->as<AsNode>();
 
-            auto destination = function.builder.resolveTypename(e->type());
+            auto destination = builder.resolveTypename(e->type());
 
             std::optional<BuilderResult> converted = convert(value, destination, true);
 

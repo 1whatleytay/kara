@@ -283,12 +283,16 @@ Manager::Manager(const Options &options)
     if (options.interpret) {
         for (const auto &pair : nodes) {
             if (built.find(pair.second.get()) == built.end()) {
-                buildFile(*pair.second);
+                if (pair.second->type != "c") {
+                    buildFile(*pair.second);
+                }
             }
         }
     }
 
     linker.reset();
+
+
 
     if (verifyModule(*base, &llvm::errs(), nullptr)) {
         base->print(llvm::outs(), nullptr);

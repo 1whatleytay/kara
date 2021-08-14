@@ -9,6 +9,7 @@
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
 
+#include <queue>
 #include <optional>
 #include <unordered_set>
 #include <unordered_map>
@@ -36,25 +37,7 @@ struct Builder;
 struct BuilderScope;
 struct BuilderResult;
 struct BuilderFunction;
-
-// Thinking struct for destroying objects when a statement is done.
-struct BuilderStatementContext {
-    // COUPLING AHH T_T I'm sorry...
-    // I need it to use invokeDestroy for now, would be best to separate everything to global scope but...
-    BuilderScope &parent;
-
-    uint64_t nextUID = 1;
-    uint64_t getNextUID();
-
-    std::vector<BuilderResult> toDestroy;
-    std::unordered_set<uint64_t> avoidDestroy;
-
-    void consider(const BuilderResult &result);
-
-    void commit(BasicBlock *block);
-
-    explicit BuilderStatementContext(BuilderScope &parent);
-};
+struct BuilderStatementContext;
 
 struct BuilderResult {
     enum class Kind {
@@ -82,6 +65,28 @@ struct BuilderResult {
         std::unique_ptr<BuilderResult> implicit = nullptr);
     BuilderResult(const Node *from, std::vector<const Node *> references, BuilderStatementContext *statementContext,
         std::unique_ptr<BuilderResult> implicit = nullptr);
+};
+
+
+// Thinking struct for destroying objects when a statement is done.
+struct BuilderStatementContext {
+    // COUPLING AHH T_T I'm sorry...
+    // I need it to use invokeDestroy for now, would be best to separate everything to global scope but...
+    BuilderScope &parent;
+
+    uint64_t nextUID = 1;
+    uint64_t getNextUID();
+
+    bool lock = false; // for debugging consider/commit loops
+
+    std::queue<BuilderResult> toDestroy;
+    std::unordered_set<uint64_t> avoidDestroy;
+
+    void consider(const BuilderResult &result);
+
+    void commit(BasicBlock *block);
+
+    explicit BuilderStatementContext(BuilderScope &parent);
 };
 
 struct BuilderVariable {
@@ -113,8 +118,9 @@ struct MatchCallError {
 };
 
 struct BuilderScope {
-    BuilderFunction &function;
+    Builder &builder;
     BuilderScope *parent = nullptr;
+    BuilderFunction *function = nullptr;
 
     BuilderStatementContext statementContext;
 
@@ -176,8 +182,11 @@ struct BuilderScope {
     void invokeDestroy(const BuilderResult &result);
     void invokeDestroy(const BuilderResult &result, IRBuilder<> &builder);
     void invokeDestroy(const BuilderResult &result, BasicBlock *block);
+
     Value *get(const BuilderResult &result);
     Value *ref(const BuilderResult &result);
+    Value *get(const BuilderResult &result, IRBuilder<> &builder) const;
+    Value *ref(const BuilderResult &result, IRBuilder<> &builder) const;
 
     BuilderResult combine(const BuilderResult &a, const BuilderResult &b, OperatorNode::Operation op);
 
@@ -214,6 +223,8 @@ struct BuilderType {
 
     std::unordered_map<const VariableNode *, size_t> indices;
 
+    BuilderFunction *implicitDestructor = nullptr;
+
     // for avoiding recursive problems
     void build();
 
@@ -221,9 +232,16 @@ struct BuilderType {
 };
 
 struct BuilderFunction {
+    enum class Purpose {
+        UserFunction,
+        TypeDestructor,
+    };
+
+    Purpose purpose = Purpose::UserFunction;
+
     Builder &builder;
 
-    const FunctionNode *node = nullptr;
+    const Node *node = nullptr;
 
     BasicBlock *entryBlock = nullptr;
     BasicBlock *exitBlock = nullptr;
@@ -239,7 +257,7 @@ struct BuilderFunction {
 
     void build();
 
-    BuilderFunction(const FunctionNode *node, Builder &builder);
+    BuilderFunction(const Node *node, Builder &builder);
 };
 
 struct Builder {
@@ -257,6 +275,8 @@ struct Builder {
     std::unique_ptr<Module> module;
 
     std::vector<const Node *> destroyInvokables;
+
+    std::unordered_map<const TypeNode *, std::unique_ptr<BuilderFunction>> implicitDestructors;
 
     std::unordered_map<const TypeNode *, std::unique_ptr<BuilderType>> types;
     std::unordered_map<const VariableNode *, std::unique_ptr<BuilderVariable>> globals;

@@ -8,7 +8,6 @@
 #include <parser/literals.h>
 #include <parser/function.h>
 
-// this copies :flushed: (future: why am i complaining about this, isn't BuilderResult supposed to be copied)
 std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const Typename &type, bool force) {
     BuilderResult result = r;
 
@@ -25,7 +24,7 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const
         if (typeRef && resultRef) {
             return BuilderResult(
                 BuilderResult::Kind::Raw,
-                current ? current->CreateBitCast(get(result), function.builder.makeTypename(type)) : nullptr,
+                current ? current->CreateBitCast(get(result), builder.makeTypename(type)) : nullptr,
                 type,
                 &statementContext
             );
@@ -34,7 +33,7 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const
         if (typePrim && resultRef && typePrim->type == PrimitiveType::ULong) {
             return BuilderResult(
                 BuilderResult::Kind::Raw,
-                current ? current->CreatePtrToInt(get(result), function.builder.makeTypename(type)) : nullptr,
+                current ? current->CreatePtrToInt(get(result), builder.makeTypename(type)) : nullptr,
                 type,
                 &statementContext
             );
@@ -43,7 +42,7 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const
         if (typeRef && resultPrim && resultPrim->type == PrimitiveType::ULong) {
             return BuilderResult(
                 BuilderResult::Kind::Raw,
-                current ? current->CreateIntToPtr(get(result), function.builder.makeTypename(type)) : nullptr,
+                current ? current->CreateIntToPtr(get(result), builder.makeTypename(type)) : nullptr,
                 type,
                 &statementContext
             );
@@ -61,7 +60,8 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const
     }
 
     // Promote reference
-    if (typeRef && *typeRef->value == result.type) {
+    if (typeRef && *typeRef->value == result.type && typeRef->kind == ReferenceKind::Regular) {
+        // dont promote to unique or shared
         return BuilderResult(
             BuilderResult::Kind::Raw,
             ref(result),
@@ -89,7 +89,7 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const
         if (*typeRef->value == PrimitiveTypename::from(PrimitiveType::Any)) {
             return BuilderResult(
                 BuilderResult::Kind::Raw,
-                current ? current->CreatePointerCast(get(result), function.builder.makeTypename(type)) : nullptr,
+                current ? current->CreatePointerCast(get(result), builder.makeTypename(type)) : nullptr,
                 type,
                 &statementContext
             );
@@ -124,7 +124,7 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const
     if (result.type == PrimitiveTypename::from(PrimitiveType::Null) && typeRef) {
         return BuilderResult(
             BuilderResult::Kind::Raw,
-            current ? current->CreatePointerCast(get(result), function.builder.makeTypename(type)) : nullptr,
+            current ? current->CreatePointerCast(get(result), builder.makeTypename(type)) : nullptr,
             type,
             &statementContext
         );
@@ -141,7 +141,7 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const
 
     if (typePrim && resultPrim) {
         if (typePrim->isNumber() && resultPrim->isNumber()) {
-            Type *dest = function.builder.makePrimitiveType(typePrim->type);
+            Type *dest = builder.makePrimitiveType(typePrim->type);
 
             if (resultPrim->isInteger() && typePrim->isFloat()) { // int -> float
                 return BuilderResult(
@@ -277,13 +277,13 @@ void BuilderScope::invokeDestroy(const BuilderResult &result) {
 }
 
 void BuilderScope::invokeDestroy(const BuilderResult &result, BasicBlock *block) {
-    IRBuilder<> builder(function.builder.context);
-    builder.SetInsertPoint(block, block->begin());
+    IRBuilder<> irBuilder(builder.context);
+    irBuilder.SetInsertPoint(block, block->begin());
 
-    invokeDestroy(result, builder);
+    invokeDestroy(result, irBuilder);
 }
 
-void BuilderScope::invokeDestroy(const BuilderResult &result, IRBuilder<> &builder) {
+void BuilderScope::invokeDestroy(const BuilderResult &result, IRBuilder<> &irBuilder) {
     if (!current)
         return;
 
@@ -291,16 +291,44 @@ void BuilderScope::invokeDestroy(const BuilderResult &result, IRBuilder<> &build
 
     if (referenceTypename) {
         if (referenceTypename->kind == ReferenceKind::Unique) {
-            auto free = function.builder.getFree();
-            auto pointer = builder.CreatePointerCast(get(result), Type::getInt8PtrTy(function.builder.context));
+            auto free = builder.getFree();
+            auto pointer = irBuilder.CreatePointerCast(get(result), Type::getInt8PtrTy(builder.context));
 
-            builder.CreateCall(free, { pointer });
+            // alternative is keep Kind::Reference but only CreateLoad(result.value)
+            auto containedValue = BuilderResult(
+                BuilderResult::Kind::Raw,
+                irBuilder.CreateLoad(get(result), "invokeDestroy_load"),
+                *referenceTypename->value,
+                nullptr // dont do it!! &statementContext would be here but i want raw
+            );
 
-            // call destroy invokables
+            invokeDestroy(containedValue, irBuilder);
+
+            irBuilder.CreateCall(free, { pointer });
         }
-    } else if (!function.builder.destroyInvokables.empty()) {
+    } else if (!builder.destroyInvokables.empty()) {
         try {
-            call(function.builder.destroyInvokables, { { &result }, { } }, &builder);
+            call(builder.destroyInvokables, { { &result }, { } }, &irBuilder);
+
+            if (auto named = std::get_if<NamedTypename>(&result.type)) {
+                auto containedType = named->type;
+                auto builderType = builder.makeType(containedType);
+
+                auto func = builderType->implicitDestructor->function;
+
+                Value *param = ref(result, irBuilder);
+
+                // duplicate sanity check
+                {
+                    auto paramType = param->getType();
+                    assert(paramType->isPointerTy());
+
+                    auto pointeeType = paramType->getPointerElementType();
+                    assert(pointeeType == builderType->type);
+                }
+
+                irBuilder.CreateCall(func, { param });
+            }
         } catch (const std::runtime_error &e) { }
     }
 
@@ -361,7 +389,7 @@ BuilderResult BuilderScope::infer(const BuilderResult &result) {
             BuilderVariable *info;
 
             if (var->parent->is(Kind::Root))
-                info = function.builder.makeGlobal(var); // AH THIS WONT WORK FOR EXTERNAL
+                info = builder.makeGlobal(var); // AH THIS WONT WORK FOR EXTERNAL
             else
                 info = findVariable(var);
 
@@ -426,14 +454,14 @@ BuilderResult BuilderScope::infer(const BuilderResult &result) {
 }
 
 BuilderResult BuilderScope::makeNew(const NewNode *node) {
-    auto type = function.builder.resolveTypename(node->type());
-    auto llvmType = function.builder.makeTypename(type);
+    auto type = builder.resolveTypename(node->type());
+    auto llvmType = builder.makeTypename(type);
     auto pointerType = PointerType::get(llvmType, 0);
 
-    size_t bytes = function.builder.file.manager.target.layout->getTypeStoreSize(llvmType);
-    auto malloc = function.builder.getMalloc();
+    size_t bytes = builder.file.manager.target.layout->getTypeStoreSize(llvmType);
+    auto malloc = builder.getMalloc();
 
-    auto constant = ConstantInt::get(Type::getInt64Ty(function.builder.context), bytes);
+    auto constant = ConstantInt::get(Type::getInt64Ty(builder.context), bytes);
 
     return BuilderResult(
         BuilderResult::Kind::Raw,

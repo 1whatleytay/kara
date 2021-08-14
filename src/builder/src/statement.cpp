@@ -12,32 +12,35 @@ void BuilderScope::makeStatement(const StatementNode *node) {
 
     switch (node->op) {
         case StatementNode::Operation::Return: {
+            assert(function);
+
             if (node->children.empty()) {
-                if (*function.type.returnType != nothing) {
+                if (*function->type.returnType != nothing) {
                     throw VerifyError(node,
                         "Method is of type {} but return statement does not return anything",
-                        toString(*function.type.returnType));
+                        toString(*function->type.returnType));
                 }
             } else {
-                if (!node->children.empty() && *function.type.returnType == nothing) {
+                if (!node->children.empty() && *function->type.returnType == nothing) {
                     throw VerifyError(node,
                         "Method does not have a return type but return statement returns value.");
                 }
 
                 // lambda :S
+
                 BuilderResult resultRaw = makeExpression(node->children.front()->as<ExpressionNode>());
-                std::optional<BuilderResult> resultConverted = convert(resultRaw, *function.type.returnType);
+                std::optional<BuilderResult> resultConverted = convert(resultRaw, *function->type.returnType);
 
                 if (!resultConverted.has_value()) {
                     throw VerifyError(node,
                         "Cannot return {} from a function that returns {}.",
                         toString(resultRaw.type),
-                        toString(*function.type.returnType));
+                        toString(*function->type.returnType));
                 }
 
-                BuilderResult result = std::move(*resultConverted);
+                BuilderResult result = pass(*resultConverted);
 
-                current->CreateStore(get(result), function.returnValue);
+                current->CreateStore(get(result), function->returnValue);
             }
 
             statementContext.commit(currentBlock);

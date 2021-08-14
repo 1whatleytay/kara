@@ -15,4 +15,6 @@ namespace search::exclusive {
     const Node *scope(const Node *origin, const Checker &checker);
     const Node *parents(const Node *origin, const Checker &checker);
     const Node *scopeFrom(const Node *origin, const Checker &checker);
+
+    const Node *root(const Node *of);
 }
