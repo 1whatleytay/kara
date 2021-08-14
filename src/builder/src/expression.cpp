@@ -24,7 +24,7 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
             assert(node->as<SpecialNode>()->type == SpecialNode::Type::Null);
 
             return BuilderResult(
-                BuilderResult::Kind::Raw,
+                BuilderResult::FlagTemporary,
                 ConstantPointerNull::get(Type::getInt8PtrTy(builder.context)),
                 PrimitiveTypename { PrimitiveType::Null },
                 &statementContext
@@ -33,7 +33,7 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
 
         case Kind::Bool:
             return BuilderResult(
-                BuilderResult::Kind::Raw,
+                BuilderResult::FlagTemporary,
                 ConstantInt::get(Type::getInt1Ty(builder.context), node->as<BoolNode>()->value),
                 PrimitiveTypename { PrimitiveType::Bool },
                 &statementContext
@@ -65,7 +65,7 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
             }
 
             return BuilderResult(
-                BuilderResult::Kind::Raw,
+                BuilderResult::FlagTemporary,
                 ptr,
 
                 ReferenceTypename {
@@ -127,7 +127,7 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
             }
 
             return BuilderResult(
-                BuilderResult::Kind::Literal,
+                BuilderResult::FlagTemporary | BuilderResult::FlagReference,
                 value,
                 type,
                 &statementContext
@@ -143,7 +143,7 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
 
                 BuilderResult operator()(int64_t s) {
                     return BuilderResult {
-                        BuilderResult::Kind::Raw,
+                        BuilderResult::FlagTemporary,
                         ConstantInt::getSigned(Type::getInt64Ty(context), s),
                         PrimitiveTypename { PrimitiveType::Long },
                         statementContext
@@ -152,7 +152,7 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
 
                 BuilderResult operator()(uint64_t u) {
                     return BuilderResult {
-                        BuilderResult::Kind::Raw,
+                        BuilderResult::FlagTemporary,
                         ConstantInt::get(Type::getInt64Ty(context), u),
                         PrimitiveTypename { PrimitiveType::ULong },
                         statementContext
@@ -161,7 +161,7 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
 
                 BuilderResult operator()(double f) {
                     return BuilderResult {
-                        BuilderResult::Kind::Raw,
+                        BuilderResult::FlagTemporary,
                         ConstantFP::get(Type::getDoubleTy(context), f),
                         PrimitiveTypename { PrimitiveType::Double },
                         statementContext
@@ -198,7 +198,7 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
             auto callNames = callNode->names();
             auto callParameters = callNode->parameters();
 
-            assert(result.kind == BuilderResult::Kind::Unresolved);
+            assert(!result.isSet(BuilderResult::FlagUnresolved));
 
             size_t extraParameter = result.implicit ? 1 : 0;
 
@@ -294,9 +294,8 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
                     }
 
                     return BuilderResult(
-                        sub.kind == BuilderResult::Kind::Reference
-                            ? BuilderResult::Kind::Reference
-                            : BuilderResult::Kind::Literal,
+                        (sub.flags & (BuilderResult::FlagMutable | BuilderResult::FlagTemporary))
+                            | BuilderResult::FlagReference,
                         current ? current->CreateStructGEP(structRef, index, refNode->name) : nullptr,
                         builder.resolveTypename(varNode->fixedType()),
                         &statementContext
@@ -369,9 +368,8 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
             };
 
             return BuilderResult(
-                sub.kind == BuilderResult::Kind::Reference
-                    ? BuilderResult::Kind::Reference
-                    : BuilderResult::Kind::Literal,
+                (sub.flags & (BuilderResult::FlagMutable | BuilderResult::FlagTemporary))
+                    | BuilderResult::FlagReference,
                 indexArray(),
                 *arrayType->value,
                 &statementContext
@@ -405,7 +403,7 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
                         throw VerifyError(operation.op, "Source type for not expression must be convertible to bool.");
 
                     return BuilderResult(
-                        BuilderResult::Kind::Raw,
+                        BuilderResult::FlagTemporary,
                         current ? current->CreateNot(get(converted.value())) : nullptr,
                         PrimitiveTypename { PrimitiveType::Bool },
                         &statementContext
@@ -419,7 +417,7 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
                         throw VerifyError(operation.op, "Source type for operation must be signed or float.");
 
                     return BuilderResult(
-                        BuilderResult::Kind::Raw,
+                        BuilderResult::FlagTemporary,
                         current
                             ? typePrim->isFloat()
                                 ? current->CreateFNeg(get(value))
@@ -431,26 +429,27 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
                 }
 
                 case UnaryNode::Operation::Reference:
-                    if (value.kind != BuilderResult::Kind::Reference)
+                    if (value.isSet(BuilderResult::FlagReference))
                         throw VerifyError(operation.op, "Cannot get reference of temporary.");
 
                     return BuilderResult(
-                        BuilderResult::Kind::Raw,
+                        BuilderResult::FlagTemporary,
                         value.value,
                         ReferenceTypename { std::make_shared<Typename>(value.type) },
                         &statementContext
                     );
 
                 case UnaryNode::Operation::Fetch: {
-                    if (!std::holds_alternative<ReferenceTypename>(value.type))
+                    if (auto refType = std::get_if<ReferenceTypename>(&value.type)) {
+                        return BuilderResult(
+                            BuilderResult::FlagReference | (refType->isMutable ? BuilderResult::FlagMutable : 0),
+                            get(value),
+                            *std::get<ReferenceTypename>(value.type).value,
+                            &statementContext
+                            );
+                    } else {
                         throw VerifyError(operation.op, "Cannot dereference value of non reference.");
-
-                    return BuilderResult(
-                        BuilderResult::Kind::Reference,
-                        get(value),
-                        *std::get<ReferenceTypename>(value.type).value,
-                        &statementContext
-                    );
+                    }
                 }
 
                 default:
@@ -510,7 +509,7 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
             }
 
             return BuilderResult(
-                BuilderResult::Kind::Literal,
+                BuilderResult::FlagTemporary | BuilderResult::FlagReference,
                 literal,
                 onTrue.type,
                 &statementContext
@@ -586,7 +585,7 @@ BuilderResult BuilderScope::combine(const BuilderResult &left, const BuilderResu
             needs({ asInt });
 
             return BuilderResult(
-                BuilderResult::Kind::Raw,
+                BuilderResult::FlagTemporary,
                 current
                     ? aPrim->isFloat()
                     ? current->CreateFAdd(get(a), get(b))
@@ -600,7 +599,7 @@ BuilderResult BuilderScope::combine(const BuilderResult &left, const BuilderResu
             needs({ asInt });
 
             return BuilderResult(
-                BuilderResult::Kind::Raw,
+                BuilderResult::FlagTemporary,
                 current
                     ? aPrim->isFloat()
                     ? current->CreateFSub(get(a), get(b))
@@ -614,7 +613,7 @@ BuilderResult BuilderScope::combine(const BuilderResult &left, const BuilderResu
             needs({ asInt });
 
             return BuilderResult(
-                BuilderResult::Kind::Raw,
+                BuilderResult::FlagTemporary,
                 current
                     ? aPrim->isFloat()
                     ? current->CreateFMul(get(a), get(b))
@@ -628,7 +627,7 @@ BuilderResult BuilderScope::combine(const BuilderResult &left, const BuilderResu
             needs({ asInt });
 
             return BuilderResult(
-                BuilderResult::Kind::Raw,
+                BuilderResult::FlagTemporary,
                 current
                     ? aPrim->isFloat()
                     ? current->CreateFDiv(get(a), get(b))
@@ -644,7 +643,7 @@ BuilderResult BuilderScope::combine(const BuilderResult &left, const BuilderResu
             needs({ asInt });
 
             return BuilderResult(
-                BuilderResult::Kind::Raw,
+                BuilderResult::FlagTemporary,
                 current
                     ? aPrim->isFloat()
                     ? current->CreateFRem(get(a), get(b))
@@ -660,7 +659,7 @@ BuilderResult BuilderScope::combine(const BuilderResult &left, const BuilderResu
             needs({ asInt, asRef });
 
             return BuilderResult(
-                BuilderResult::Kind::Raw,
+                BuilderResult::FlagTemporary,
                 current
                     ? (asRef.first() || !aPrim->isFloat())
                     ? current->CreateICmpEQ(get(a), get(b))
@@ -674,7 +673,7 @@ BuilderResult BuilderScope::combine(const BuilderResult &left, const BuilderResu
             needs({ asInt, asRef });
 
             return BuilderResult(
-                BuilderResult::Kind::Raw,
+                BuilderResult::FlagTemporary,
                 current
                     ? (asRef.first() || !aPrim->isFloat())
                     ? current->CreateICmpNE(get(a), get(b))
@@ -688,7 +687,7 @@ BuilderResult BuilderScope::combine(const BuilderResult &left, const BuilderResu
             needs({ asInt });
 
             return BuilderResult(
-                BuilderResult::Kind::Raw,
+                BuilderResult::FlagTemporary,
                 current
                     ? aPrim->isFloat()
                     ? current->CreateFCmpOGT(get(a), get(b))
@@ -704,7 +703,7 @@ BuilderResult BuilderScope::combine(const BuilderResult &left, const BuilderResu
             needs({ asInt });
 
             return BuilderResult(
-                BuilderResult::Kind::Raw,
+                BuilderResult::FlagTemporary,
                 current
                     ? aPrim->isFloat()
                     ? current->CreateFCmpOGE(get(a), get(b))
@@ -720,7 +719,7 @@ BuilderResult BuilderScope::combine(const BuilderResult &left, const BuilderResu
             needs({ asInt });
 
             return BuilderResult(
-                BuilderResult::Kind::Raw,
+                BuilderResult::FlagTemporary,
                 current
                     ? aPrim->isFloat()
                     ? current->CreateFCmpOLT(get(a), get(b))
@@ -736,7 +735,7 @@ BuilderResult BuilderScope::combine(const BuilderResult &left, const BuilderResu
             needs({ asInt });
 
             return BuilderResult(
-                BuilderResult::Kind::Raw,
+                BuilderResult::FlagTemporary,
                 current
                     ? aPrim->isFloat()
                     ? current->CreateFCmpOLE(get(a), get(b))

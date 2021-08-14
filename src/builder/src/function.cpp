@@ -40,7 +40,7 @@ MatchResult BuilderScope::match(const std::vector<const VariableNode *> &paramet
         }
 
         assert(var->hasFixedType);
-        assert(value->kind != BuilderResult::Kind::Unresolved);
+        assert(!value->isSet(BuilderResult::FlagUnresolved));
 
         auto type = builder.resolveTypename(var->fixedType());
 
@@ -215,7 +215,7 @@ std::variant<BuilderResult, MatchCallError> BuilderScope::call(
             }
 
             return BuilderResult(
-                BuilderResult::Kind::Raw,
+                BuilderResult::FlagTemporary,
                 irBuilder ? irBuilder->CreateCall(builderFunction->function, passParameters) : nullptr,
                 *builderFunction->type.returnType,
                 &statementContext
@@ -248,14 +248,14 @@ std::variant<BuilderResult, MatchCallError> BuilderScope::call(
                 }
 
                 return BuilderResult(
-                    BuilderResult::Kind::Literal,
+                    BuilderResult::FlagReference | BuilderResult::FlagTemporary,
                     value,
                     type,
                     &statementContext
                 );
             } else {
                 return BuilderResult(
-                    BuilderResult::Kind::Literal,
+                    BuilderResult::FlagReference | BuilderResult::FlagTemporary,
                     nullptr,
                     type,
                     &statementContext

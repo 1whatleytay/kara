@@ -35,7 +35,7 @@ Value *BuilderScope::get(const BuilderResult &result) {
 }
 
 Value *BuilderScope::get(const BuilderResult &result, IRBuilder<> &irBuilder) const {
-    return result.kind != BuilderResult::Kind::Raw ? irBuilder.CreateLoad(result.value) : result.value;
+    return result.isSet(BuilderResult::FlagReference) ? irBuilder.CreateLoad(result.value) : result.value;
 }
 
 Value *BuilderScope::ref(const BuilderResult &result) {
@@ -46,7 +46,9 @@ Value *BuilderScope::ref(const BuilderResult &result) {
 }
 
 Value *BuilderScope::ref(const BuilderResult &result, IRBuilder<> &irBuilder) const {
-    if (result.kind == BuilderResult::Kind::Raw) {
+    if (result.isSet(BuilderResult::FlagReference)) {
+        return result.value;
+    } else {
         assert(function);
 
         Value *ref = function->entry.CreateAlloca(function->builder.makeTypename(result.type));
@@ -54,8 +56,6 @@ Value *BuilderScope::ref(const BuilderResult &result, IRBuilder<> &irBuilder) co
         irBuilder.CreateStore(result.value, ref);
 
         return ref;
-    } else {
-        return result.value;
     }
 }
 
@@ -178,7 +178,7 @@ BuilderScope::BuilderScope(const Node *node, BuilderFunction &function, BuilderS
                         auto var = std::make_unique<BuilderVariable>(child->as<VariableNode>(), *this);
 
                         invokeDestroy(BuilderResult {
-                            BuilderResult::Kind::Reference,
+                            BuilderResult::FlagReference | (var->node->isMutable ? BuilderResult::FlagMutable : 0),
                             var->value,
                             var->type,
                             &statementContext // safe to put, is reference dw
@@ -264,7 +264,7 @@ BuilderScope::BuilderScope(const Node *node, BuilderFunction &function, BuilderS
                 assert(var->hasFixedType);
 
                 auto result = BuilderResult(
-                    BuilderResult::Kind::Reference,
+                    BuilderResult::FlagReference, // TODO might need mutable/immutable versions of implicit destructors
                     current->CreateStructGEP(arg, index),
                     builder.resolveTypename(var->fixedType()),
                     &statementContext // might as well

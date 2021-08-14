@@ -15,7 +15,7 @@ void BuilderStatementContext::consider(const BuilderResult &result) {
     auto typeRef = std::get_if<ReferenceTypename>(&result.type);
 
     if (parent.current
-        && (result.kind == BuilderResult::Kind::Raw || result.kind == BuilderResult::Kind::Literal)
+        && (result.isSet(BuilderResult::FlagTemporary))
         && std::holds_alternative<PrimitiveTypename>(result.type)
         && (!typeRef || typeRef->kind != ReferenceKind::Regular)) {
         assert(!lock);
@@ -61,6 +61,10 @@ void BuilderStatementContext::commit(BasicBlock *block) {
 
 BuilderStatementContext::BuilderStatementContext(BuilderScope &parent) : parent(parent) { }
 
+bool BuilderResult::isSet(Flags flag) const {
+    return flags & flag;
+}
+
 const Node *BuilderResult::first(::Kind nodeKind) {
     auto iterator = std::find_if(references.begin(), references.end(), [nodeKind](const Node *node) {
         return node->is(nodeKind);
@@ -70,9 +74,9 @@ const Node *BuilderResult::first(::Kind nodeKind) {
 }
 
 // oh dear
-BuilderResult::BuilderResult(Kind kind, Value *value, Typename type,
+BuilderResult::BuilderResult(uint32_t flags, Value *value, Typename type,
     BuilderStatementContext *statementContext, std::unique_ptr<BuilderResult> implicit)
-    : kind(kind), value(value), type(std::move(type)), implicit(std::move(implicit)) {
+    : flags(flags), value(value), type(std::move(type)), implicit(std::move(implicit)) {
 
     if (statementContext) {
         statementUID = statementContext->getNextUID();
@@ -82,7 +86,7 @@ BuilderResult::BuilderResult(Kind kind, Value *value, Typename type,
 
 BuilderResult::BuilderResult(const Node *from, std::vector<const Node *> references,
     BuilderStatementContext *statementContext, std::unique_ptr<BuilderResult> implicit)
-    : kind(BuilderResult::Kind::Unresolved), value(nullptr), from(from), references(std::move(references)),
+    : flags(FlagUnresolved), value(nullptr), from(from), references(std::move(references)),
     type(PrimitiveTypename { PrimitiveType::Unresolved }), implicit(std::move(implicit)) {
 
     if (statementContext) {

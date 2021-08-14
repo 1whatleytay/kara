@@ -23,7 +23,7 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const
     if (force) {
         if (typeRef && resultRef) {
             return BuilderResult(
-                BuilderResult::Kind::Raw,
+                BuilderResult::FlagTemporary,
                 current ? current->CreateBitCast(get(result), builder.makeTypename(type)) : nullptr,
                 type,
                 &statementContext
@@ -32,7 +32,7 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const
 
         if (typePrim && resultRef && typePrim->type == PrimitiveType::ULong) {
             return BuilderResult(
-                BuilderResult::Kind::Raw,
+                BuilderResult::FlagTemporary,
                 current ? current->CreatePtrToInt(get(result), builder.makeTypename(type)) : nullptr,
                 type,
                 &statementContext
@@ -41,7 +41,7 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const
 
         if (typeRef && resultPrim && resultPrim->type == PrimitiveType::ULong) {
             return BuilderResult(
-                BuilderResult::Kind::Raw,
+                BuilderResult::FlagTemporary,
                 current ? current->CreateIntToPtr(get(result), builder.makeTypename(type)) : nullptr,
                 type,
                 &statementContext
@@ -52,7 +52,7 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const
     // Demote reference
     if (resultRef && *resultRef->value == type) {
         return BuilderResult(
-            BuilderResult::Kind::Reference,
+            BuilderResult::FlagReference | (resultRef->isMutable ? BuilderResult::FlagMutable : 0),
             get(result),
             type,
             &statementContext
@@ -60,23 +60,26 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const
     }
 
     // Promote reference
-    if (typeRef && *typeRef->value == result.type && typeRef->kind == ReferenceKind::Regular) {
+    if (typeRef
+        && *typeRef->value == result.type
+        && typeRef->kind == ReferenceKind::Regular
+        && (!typeRef->isMutable || result.isSet(BuilderResult::FlagMutable))) {
         // dont promote to unique or shared
         return BuilderResult(
-            BuilderResult::Kind::Raw,
+            BuilderResult::FlagTemporary,
             ref(result),
             type,
             &statementContext
         );
     }
 
-    if (typeRef && !resultRef && result.kind != BuilderResult::Kind::Raw) {
+    if (typeRef && !resultRef && result.isSet(BuilderResult::FlagReference)) {
         result = BuilderResult(
-            BuilderResult::Kind::Raw,
+            BuilderResult::FlagTemporary,
             result.value,
             ReferenceTypename {
                 std::make_shared<Typename>(result.type),
-                result.kind == BuilderResult::Kind::Reference
+                result.isSet(BuilderResult::FlagMutable)
             },
             &statementContext
         );
@@ -88,7 +91,7 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const
     if (typeRef && resultRef) {
         if (*typeRef->value == PrimitiveTypename::from(PrimitiveType::Any)) {
             return BuilderResult(
-                BuilderResult::Kind::Raw,
+                BuilderResult::FlagTemporary,
                 current ? current->CreatePointerCast(get(result), builder.makeTypename(type)) : nullptr,
                 type,
                 &statementContext
@@ -100,7 +103,7 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const
         if (typeArray && typeArray->kind == ArrayKind::Unbounded) {
             if (*typeArray->value == *resultRef->value) {
                 return BuilderResult(
-                    BuilderResult::Kind::Raw,
+                    BuilderResult::FlagTemporary,
                     get(result),
                     type,
                     &statementContext
@@ -112,7 +115,7 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const
             if (resultArray && *typeArray->value == *resultArray->value
                 && resultArray->kind == ArrayKind::FixedSize) {
                 return BuilderResult(
-                    BuilderResult::Kind::Raw,
+                    BuilderResult::FlagTemporary,
                     current ? current->CreateStructGEP(get(result), 0) : nullptr,
                     type,
                     &statementContext
@@ -123,7 +126,7 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const
 
     if (result.type == PrimitiveTypename::from(PrimitiveType::Null) && typeRef) {
         return BuilderResult(
-            BuilderResult::Kind::Raw,
+            BuilderResult::FlagTemporary,
             current ? current->CreatePointerCast(get(result), builder.makeTypename(type)) : nullptr,
             type,
             &statementContext
@@ -132,7 +135,7 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const
 
     if (type == PrimitiveTypename::from(PrimitiveType::Bool) && resultRef) {
         return BuilderResult(
-            BuilderResult::Kind::Raw,
+            BuilderResult::FlagTemporary,
             current ? current->CreateIsNotNull(get(result)) : nullptr,
             type,
             &statementContext
@@ -145,7 +148,7 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const
 
             if (resultPrim->isInteger() && typePrim->isFloat()) { // int -> float
                 return BuilderResult(
-                    BuilderResult::Kind::Raw,
+                    BuilderResult::FlagTemporary,
                     current
                         ? resultPrim->isSigned()
                         ? current->CreateSIToFP(get(result), dest)
@@ -158,7 +161,7 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const
 
             if (resultPrim->isFloat() && typePrim->isInteger()) { // float -> int
                 return BuilderResult(
-                    BuilderResult::Kind::Raw,
+                    BuilderResult::FlagTemporary,
                     current
                         ? typePrim->isSigned()
                         ? current->CreateFPToSI(get(result), dest)
@@ -171,7 +174,7 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const
 
             // promote or demote
             return BuilderResult(
-                BuilderResult::Kind::Raw,
+                BuilderResult::FlagTemporary,
                 current
                     ? typePrim->isFloat()
                     ? resultPrim->priority() > typePrim->priority()
@@ -296,7 +299,7 @@ void BuilderScope::invokeDestroy(const BuilderResult &result, IRBuilder<> &irBui
 
             // alternative is keep Kind::Reference but only CreateLoad(result.value)
             auto containedValue = BuilderResult(
-                BuilderResult::Kind::Raw,
+                BuilderResult::FlagTemporary,
                 irBuilder.CreateLoad(get(result), "invokeDestroy_load"),
                 *referenceTypename->value,
                 nullptr // dont do it!! &statementContext would be here but i want raw
@@ -343,19 +346,10 @@ BuilderResult BuilderScope::unpack(const BuilderResult &result) {
     while (auto *r = std::get_if<ReferenceTypename>(&value.type)) {
         value.implicit = nullptr;
 
-        switch (value.kind) {
-            case BuilderResult::Kind::Raw:
-                value.kind = BuilderResult::Kind::Reference;
-                break;
-            case BuilderResult::Kind::Literal:
-            case BuilderResult::Kind::Reference:
-                value.kind = BuilderResult::Kind::Reference;
-                value.value = current ? current->CreateLoad(value.value) : nullptr;
-                break;
+        value.flags |= BuilderResult::FlagReference;
 
-            default:
-                throw;
-        }
+        if (value.isSet(BuilderResult::FlagReference))
+            value.value = current ? current->CreateLoad(value.value) : nullptr;
 
         value.type = *r->value;
     }
@@ -365,7 +359,7 @@ BuilderResult BuilderScope::unpack(const BuilderResult &result) {
 
 // remove from statement scope or call move operator
 BuilderResult BuilderScope::pass(const BuilderResult &result) {
-    assert(result.kind != BuilderResult::Kind::Unresolved);
+    assert(!result.isSet(BuilderResult::FlagUnresolved));
 
     auto reference = std::get_if<ReferenceTypename>(&result.type);
 
@@ -377,7 +371,7 @@ BuilderResult BuilderScope::pass(const BuilderResult &result) {
 }
 
 BuilderResult BuilderScope::infer(const BuilderResult &result) {
-    if (result.kind == BuilderResult::Kind::Unresolved) {
+    if (result.isSet(BuilderResult::FlagUnresolved)) {
         // First variable in scope search will be lowest in scope.
         auto varIterator = std::find_if(result.references.begin(), result.references.end(), [](const Node *node) {
             return node->is(Kind::Variable);
@@ -397,7 +391,7 @@ BuilderResult BuilderScope::infer(const BuilderResult &result) {
                 throw VerifyError(var, "Cannot find variable reference.");
 
             return BuilderResult(
-                BuilderResult::Kind::Reference,
+                BuilderResult::FlagReference | (info->node->isMutable ? BuilderResult::FlagMutable : 0),
 
                 info->value,
                 info->type,
@@ -443,7 +437,7 @@ BuilderResult BuilderScope::infer(const BuilderResult &result) {
             params.push_back(get(*result.implicit));
 
         return BuilderResult(
-            BuilderResult::Kind::Raw,
+            BuilderResult::FlagTemporary,
             current ? current->CreateCall(reinterpret_cast<Function *>(result.value), params) : nullptr,
             *functionTypename->returnType,
             &statementContext
@@ -464,7 +458,7 @@ BuilderResult BuilderScope::makeNew(const NewNode *node) {
     auto constant = ConstantInt::get(Type::getInt64Ty(builder.context), bytes);
 
     return BuilderResult(
-        BuilderResult::Kind::Raw,
+        BuilderResult::FlagTemporary,
 
         current ? current->CreatePointerCast(current->CreateCall(malloc, { constant }), pointerType) : nullptr,
         ReferenceTypename { std::make_shared<Typename>(type), true, ReferenceKind::Unique },
@@ -485,15 +479,14 @@ void BuilderScope::makeAssign(const AssignNode *node) {
 
     BuilderResult source = std::move(*sourceConverted);
 
-    if (destination.kind != BuilderResult::Kind::Reference) {
-        throw VerifyError(node, "Left side of assign expression must be some variable or reference.");
+    if (!destination.isSet(BuilderResult::FlagReference) || !destination.isSet(BuilderResult::FlagMutable)) {
+        throw VerifyError(node, "Left side of assign expression must be a mutable variable.");
     }
 
     if (current) {
         Value *result;
 
         try {
-
             if (node->op == AssignNode::Operator::Assign) {
                 result = get(pass(source));
             } else {

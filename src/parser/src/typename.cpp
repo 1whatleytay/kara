@@ -60,7 +60,7 @@ ReferenceTypenameNode::ReferenceTypenameNode(Node *parent, bool external) : Node
         kind = ReferenceKind::Shared;
     }
 
-    isMutable = decide({ { "let", false }, { "var", true } }, false, true);
+    isMutable = decide({ { "let", false }, { "var", true } }, kind != ReferenceKind::Regular, true);
 
     pushTypename(this);
 }
@@ -145,7 +145,11 @@ bool FunctionTypename::operator!=(const FunctionTypename &other) const {
 }
 
 bool ReferenceTypename::operator==(const ReferenceTypename &other) const {
-    return *value == *other.value && kind == other.kind;
+    return *value == *other.value && isMutable == other.isMutable && kind == other.kind;
+}
+
+bool ReferenceTypename::operator!=(const ReferenceTypename &other) const {
+    return !operator==(other);
 }
 
 bool OptionalTypename::operator==(const OptionalTypename &other) const {
@@ -153,10 +157,6 @@ bool OptionalTypename::operator==(const OptionalTypename &other) const {
 }
 
 bool OptionalTypename::operator!=(const OptionalTypename &other) const {
-    return !operator==(other);
-}
-
-bool ReferenceTypename::operator!=(const ReferenceTypename &other) const {
     return !operator==(other);
 }
 

@@ -1,28 +1,10 @@
-import 'print.kara'
-
-type X { a int }
-
-destroy(x &X) {
-    x.a.print
-    'X Destroyed'.puts
-}
-
-type Pizza {
-    x X
-    name &string
-    flavor int
-}
-
-make *Pizza {
-    return *Pizza(X(0), 'hey', 8)
+p(k &var int) {
+  @k = 7
 }
 
 main int {
-    let a = Pizza(X(1), 'wow', 4)
-    let b = make
-
-    a.name.puts
-    b.name.puts
+    let z int
+    z = 4
 
     return 0
 }

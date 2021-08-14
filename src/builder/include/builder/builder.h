@@ -40,15 +40,33 @@ struct BuilderFunction;
 struct BuilderStatementContext;
 
 struct BuilderResult {
-    enum class Kind {
-        Raw,
-        Reference,
-        Literal,
-
-        Unresolved
+    // yeah bitwise time
+    // valid flag layouts: unspecified | (reference, temporary | mutable | variable)
+    enum Flags : uint32_t {
+        FlagTemporary = 1u << 0u,
+        FlagMutable = 1u << 1u,
+        FlagReference = 1u << 2u,
+        FlagUnresolved = 1u << 3u,
     };
 
-    Kind kind = Kind::Raw;
+//    enum class Kind {
+//        Raw,
+//        Reference,
+//        Literal,
+//
+//        Unresolved
+//    };
+//
+//    Kind kind = Kind::Raw;
+
+//    bool temporary = false; // temporary, if false this value is owned by variable (::Reference)
+//    bool isMutable = false; // true if the underlying type can be on the left side of =
+//    bool referenced = false; // true if the value is actually a pointer to the underlying type
+//    bool unresolved = false; // if true, the variable has no Value, instead must be infer'd
+
+    uint32_t flags = 0;
+    [[nodiscard]] bool isSet(Flags flag) const;
+
     Value *value = nullptr;
     Typename type;
 
@@ -61,7 +79,7 @@ struct BuilderResult {
 
     const Node *first(::Kind nodeKind);
 
-    BuilderResult(Kind kind, Value *value, Typename type, BuilderStatementContext *statementContext,
+    BuilderResult(uint32_t flags, Value *value, Typename type, BuilderStatementContext *statementContext,
         std::unique_ptr<BuilderResult> implicit = nullptr);
     BuilderResult(const Node *from, std::vector<const Node *> references, BuilderStatementContext *statementContext,
         std::unique_ptr<BuilderResult> implicit = nullptr);

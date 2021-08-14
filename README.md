@@ -22,7 +22,7 @@ Until `1.0`.
  - [x] `let`/`var` `name` = `value`
  - [x] Explicit Type After Name
  - [x] Implicit Type Deduction
- - [ ] Mutability Checking
+ - [x] Mutability Checking
 
 ### Types
  - [x] Declaration `type Name { field1 Type1, field2 Type2 }`
