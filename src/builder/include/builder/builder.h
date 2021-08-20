@@ -40,7 +40,6 @@ struct BuilderFunction;
 struct BuilderStatementContext;
 
 struct BuilderResult {
-    // yeah bitwise time
     // valid flag layouts: unspecified | (reference, temporary | mutable | variable)
     enum Flags : uint32_t {
         FlagTemporary = 1u << 0u,
@@ -48,21 +47,6 @@ struct BuilderResult {
         FlagReference = 1u << 2u,
         FlagUnresolved = 1u << 3u,
     };
-
-//    enum class Kind {
-//        Raw,
-//        Reference,
-//        Literal,
-//
-//        Unresolved
-//    };
-//
-//    Kind kind = Kind::Raw;
-
-//    bool temporary = false; // temporary, if false this value is owned by variable (::Reference)
-//    bool isMutable = false; // true if the underlying type can be on the left side of =
-//    bool referenced = false; // true if the value is actually a pointer to the underlying type
-//    bool unresolved = false; // if true, the variable has no Value, instead must be infer'd
 
     uint32_t flags = 0;
     [[nodiscard]] bool isSet(Flags flag) const;
@@ -159,6 +143,12 @@ struct BuilderScope {
 
     std::set<ExitPoint> requiredPoints = { ExitPoint::Regular };
     std::unordered_map<ExitPoint, BasicBlock *> destinations;
+
+    // For types, might need to be cleared occasionally. For ArrayKind::UnboundedSize mostly.
+    std::unordered_map<const ExpressionNode *, BuilderResult> expressionCache;
+
+    Value *makeAlloca(const Typename &type, const std::string &name = "");
+    Value *makeMalloc(const Typename &type, const std::string &name = "");
 
     void commit();
     void exit(ExitPoint point, BasicBlock *from = nullptr);

@@ -73,7 +73,9 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
                         ArrayKind::Unbounded,
 
                         std::make_shared<Typename>(PrimitiveTypename { PrimitiveType::Byte })
-                    })
+                    }),
+
+                    false
                 },
 
                 &statementContext
@@ -176,13 +178,6 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
             auto *e = node->as<NewNode>();
 
             return BuilderResult(e, { e }, &statementContext);
-
-//            auto type = builder.resolveTypename(e->type());
-//            auto llvmType = builder.makeTypename(type);
-//
-//            size_t size = builder.file.manager.target.layout->getTypeStoreSize(llvmType);
-//
-//            fmt::print("Will alloc {} bytes for type {}.\n", size, toString(type));
         }
 
         default:
@@ -360,6 +355,7 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
                         });
 
                     case ArrayKind::Unbounded:
+                    case ArrayKind::UnboundedSized: // TODO: no good for stack allocated arrays
                         return current->CreateGEP(ref(sub), get(index));
 
                     default:
@@ -429,7 +425,7 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
                 }
 
                 case UnaryNode::Operation::Reference:
-                    if (value.isSet(BuilderResult::FlagReference))
+                    if (!value.isSet(BuilderResult::FlagReference))
                         throw VerifyError(operation.op, "Cannot get reference of temporary.");
 
                     return BuilderResult(

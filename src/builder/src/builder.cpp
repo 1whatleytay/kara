@@ -169,6 +169,80 @@ Function *Builder::getFree() {
     return freeCache;
 }
 
+Value *BuilderScope::makeAlloca(const Typename &type, const std::string &name) {
+    assert(function);
+
+    if (auto array = std::get_if<ArrayTypename>(&type)) {
+        if (array->kind == ArrayKind::Unbounded)
+            throw std::runtime_error(
+                fmt::format("Attempt to allocate type {} on stack.", toString(type)));
+
+        if (array->kind == ArrayKind::UnboundedSized)
+            throw std::runtime_error(
+                fmt::format("VLA unsupported for type {0}. Use *{0} for allocation instead.", toString(type)));
+    }
+
+    return function->entry.CreateAlloca(builder.makeTypename(type), nullptr, name);
+}
+
+Value *BuilderScope::makeMalloc(const Typename &type, const std::string &name) {
+    Value *arraySize = nullptr;
+
+    if (auto array = std::get_if<ArrayTypename>(&type)) {
+        if (array->kind == ArrayKind::Unbounded)
+            throw std::runtime_error(
+                fmt::format("Attempt to allocate type {} on heap.", toString(type)));
+
+        if (array->kind == ArrayKind::UnboundedSized) {
+            assert(array->expression);
+
+            auto it = expressionCache.find(array->expression);
+            if (it != expressionCache.end()) {
+                arraySize = get(it->second);
+            } else {
+                auto converted = convert(makeExpression(array->expression), PrimitiveTypename { PrimitiveType::ULong });
+
+                if (!converted)
+                    throw VerifyError(array->expression, "Expression cannot be converted to ulong for size for array.");
+
+                auto &result = *converted;
+
+                expressionCache.insert({ array->expression, result });
+
+                arraySize = get(result);
+            }
+
+            // TODO: needs recursive implementation of sizes to account for [[int:50]:50]
+            // ^ probably would be done in the great refactor
+
+
+            auto llvmElementType = builder.makeTypename(*array->value);
+            size_t elementSize = builder.file.manager.target.layout->getTypeStoreSize(llvmElementType);
+
+            Constant *llvmElementSize = ConstantInt::get(Type::getInt64Ty(builder.context), elementSize);
+
+            if (current)
+                arraySize = current->CreateMul(llvmElementSize, arraySize);
+        }
+    }
+
+    if (!current)
+        return nullptr;
+
+    auto llvmType = builder.makeTypename(type);
+    auto pointerType = PointerType::get(llvmType, 0);
+
+    size_t bytes = builder.file.manager.target.layout->getTypeStoreSize(llvmType);
+    auto malloc = builder.getMalloc();
+
+    // if statement above can adjust size...
+    if (!arraySize) {
+        arraySize = ConstantInt::get(Type::getInt64Ty(builder.context), bytes);
+    }
+
+    return current->CreatePointerCast(current->CreateCall(malloc, { arraySize }), pointerType, name);
+}
+
 Builder::Builder(const ManagerFile &file, const Options &opts)
     : root(file.root.get()), file(file), dependencies(file.resolve()),
     context(*file.manager.context), options(opts) {

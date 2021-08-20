@@ -89,6 +89,18 @@ std::optional<BuilderResult> BuilderScope::convert(const BuilderResult &r, const
     }
 
     if (typeRef && resultRef) {
+        // YIKEs
+        if (*typeRef->value == *resultRef->value
+            && typeRef->kind == ReferenceKind::Regular
+            && resultRef->isMutable) {
+            return BuilderResult(
+                BuilderResult::FlagTemporary,
+                get(result),
+                type,
+                &statementContext
+            );
+        }
+
         if (*typeRef->value == PrimitiveTypename::from(PrimitiveType::Any)) {
             return BuilderResult(
                 BuilderResult::FlagTemporary,
@@ -346,6 +358,8 @@ BuilderResult BuilderScope::unpack(const BuilderResult &result) {
     while (auto *r = std::get_if<ReferenceTypename>(&value.type)) {
         value.implicit = nullptr;
 
+        value.flags &= ~(BuilderResult::FlagMutable);
+        value.flags |= r->isMutable ? BuilderResult::FlagMutable : 0;
         value.flags |= BuilderResult::FlagReference;
 
         if (value.isSet(BuilderResult::FlagReference))
@@ -449,18 +463,11 @@ BuilderResult BuilderScope::infer(const BuilderResult &result) {
 
 BuilderResult BuilderScope::makeNew(const NewNode *node) {
     auto type = builder.resolveTypename(node->type());
-    auto llvmType = builder.makeTypename(type);
-    auto pointerType = PointerType::get(llvmType, 0);
-
-    size_t bytes = builder.file.manager.target.layout->getTypeStoreSize(llvmType);
-    auto malloc = builder.getMalloc();
-
-    auto constant = ConstantInt::get(Type::getInt64Ty(builder.context), bytes);
 
     return BuilderResult(
         BuilderResult::FlagTemporary,
 
-        current ? current->CreatePointerCast(current->CreateCall(malloc, { constant }), pointerType) : nullptr,
+        makeMalloc(type),
         ReferenceTypename { std::make_shared<Typename>(type), true, ReferenceKind::Unique },
         &statementContext
     );

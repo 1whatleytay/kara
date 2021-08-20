@@ -94,7 +94,7 @@ BuilderVariable::BuilderVariable(const VariableNode *node, BuilderScope &scope) 
     }
 
     if (scope.current) {
-        value = function.entry.CreateAlloca(function.builder.makeTypename(type), nullptr, node->name);
+        value = scope.makeAlloca(type, node->name);
 
         if (possibleDefault)
             scope.current->CreateStore(scope.get(*possibleDefault), value);
@@ -112,8 +112,7 @@ BuilderVariable::BuilderVariable(const VariableNode *node, Value *input, Builder
     type = function.builder.resolveTypename(node->fixedType());
 
     if (scope.current) {
-        value = function.entry.CreateAlloca(
-            function.builder.makeTypename(type), nullptr, fmt::format("{}_value", node->name));
+        value = scope.makeAlloca(type, fmt::format("{}_value", node->name));
         function.entry.CreateStore(input, value);
     }
 }

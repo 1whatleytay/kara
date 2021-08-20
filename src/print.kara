@@ -4,7 +4,7 @@ import (c) 'string.h'
 type char = byte
 type string = [char:]
 
-sub(a &char) => ((a as ulong) - +1) as &char
+sub(a &var char) => ((a as ulong) - +1) as &var char
 toChar(a &string) => a[0]
 
 abs(a int) => a >= 0 ? a : -a

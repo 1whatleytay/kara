@@ -67,7 +67,8 @@ Typename Builder::resolveTypename(const Node *node) {
 
                 std::make_shared<Typename>(resolveTypename(e->body())),
 
-                e->type == ArrayKind::FixedSize ? std::visit(visitor, e->fixedSize()->value) : 0
+                e->type == ArrayKind::FixedSize ? std::visit(visitor, e->fixedSize()->value) : 0,
+                e->type == ArrayKind::UnboundedSized ? e->variableSize() : nullptr
             };
         }
 
@@ -131,6 +132,7 @@ Type *Builder::makeTypename(const Typename &type) {
                 case ArrayKind::FixedSize:
                     return ArrayType::get(builder.makeTypename(*type.value), type.size);
                 case ArrayKind::Unbounded:
+                case ArrayKind::UnboundedSized: // some thinking probably needs to be done here too
                     return builder.makeTypename(*type.value);
                 default:
                     throw std::runtime_error(fmt::format("Type {} is unimplemented.", toString(type)));

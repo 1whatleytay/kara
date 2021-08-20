@@ -41,6 +41,7 @@ Until `1.0`.
  - [ ] Dynamic Arrays `[T]`
  - [ ] Hybrid Arrays (sso) `[T,50]`
  - [x] Fixed Size Arrays `[T:50]`
+ - [x] Unbounded Sized Arrays `[T:expr]`
  - [x] Unbound Arrays (unsafe) `[T:]`
  - [ ] Contiguous Array Iterators `[T::]`
  - [ ] Dynamic Array Iterators (for lists) `[dyn T::]`
@@ -69,6 +70,7 @@ Until `1.0`.
  - [x] Arithmetic Operators
  - [x] Statements, `return`/`break`/`continue`
  - [x] Control `if`/`for`
+ - [ ] VLA for Unbounded Sized Arrays `let x [T:expr]`
  - [ ] Match Statement `match x { 1 => value1, 2 => value2 }`
  - [ ] Match Statement Fallback on `operator==`
  - [ ] Match Statement for Unpacking of Variant or Bubbling Optionals
@@ -96,6 +98,7 @@ Until `1.0`.
  - [ ] Select Levels through Keywords `global.f` vs `scope.f`
  - [x] Casting with `as`, `a as T`
  - [ ] Parameter Casting (in place of inheritance), `a as T from fieldOfTThatWouldContainA`
+ - [ ] Great Refactor (better compiler)
 
 ### Standard Library
  - [ ] Stdin + Stdout

@@ -5,6 +5,7 @@
 #include <variant>
 
 struct NumberNode;
+struct ExpressionNode;
 
 enum class PrimitiveType {
     Any, Null, Nothing,
@@ -20,6 +21,7 @@ enum class ArrayKind {
     VariableSize, // [MyType]
     FixedSize, // [MyType:40]
     Unbounded, // [MyType:]
+    UnboundedSized, // [MyType:expr]
     Iterable, // [MyType::]
 };
 
@@ -63,6 +65,7 @@ struct ArrayTypenameNode : public Node {
 
     [[nodiscard]] const Node *body() const;
     [[nodiscard]] const NumberNode *fixedSize() const;
+    [[nodiscard]] const ExpressionNode *variableSize() const;
 
     explicit ArrayTypenameNode(Node *parent, bool external = false);
 };
@@ -152,7 +155,8 @@ struct ArrayTypename {
 
     std::shared_ptr<Typename> value;
 
-    size_t size = 0; // only for Kind::FixedSize
+    size_t size = 0; // only for ArrayKind::FixedSize
+    const ExpressionNode *expression = nullptr; // only for ArrayKind::UnboundedSized
 
     bool operator==(const ArrayTypename &other) const;
     bool operator!=(const ArrayTypename &other) const;

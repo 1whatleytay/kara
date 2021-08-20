@@ -2,6 +2,7 @@
 
 #include <parser/type.h>
 #include <parser/literals.h>
+#include <parser/expression.h>
 
 #include <fmt/format.h>
 
@@ -83,7 +84,11 @@ const Node *ArrayTypenameNode::body() const {
 }
 
 const NumberNode *ArrayTypenameNode::fixedSize() const {
-    return type == ArrayKind::FixedSize ? children[1]->as<NumberNode>() : nullptr;
+    return type == ArrayKind::FixedSize ? children[1].get()->as<NumberNode>() : nullptr;
+}
+
+const ExpressionNode *ArrayTypenameNode::variableSize() const {
+    return type == ArrayKind::UnboundedSized ? children[1].get()->as<ExpressionNode>() : nullptr;
 }
 
 ArrayTypenameNode::ArrayTypenameNode(Node *parent, bool external) : Node(parent, Kind::ArrayTypename) {
@@ -100,8 +105,20 @@ ArrayTypenameNode::ArrayTypenameNode(Node *parent, bool external) : Node(parent,
         if (next(":")) {
             type = ArrayKind::Iterable;
         } else {
-            if (push<NumberNode>(true))
-                type = ArrayKind::FixedSize;
+            if (push<NumberNode, ExpressionNode>(true)) {
+                switch (children.back()->is<Kind>()) {
+                    case Kind::Number:
+                        type = ArrayKind::FixedSize;
+                        break;
+
+                    case Kind::Expression:
+                        type = ArrayKind::UnboundedSized;
+                        break;
+
+                    default:
+                        throw;
+                }
+            }
         }
     }
 
@@ -163,7 +180,8 @@ bool OptionalTypename::operator!=(const OptionalTypename &other) const {
 bool ArrayTypename::operator==(const ArrayTypename &other) const {
     return *value == *other.value
         && kind == other.kind
-        && size == other.size;
+        && size == other.size
+        && expression == other.expression;
 }
 
 bool ArrayTypename::operator!=(const ArrayTypename &other) const {
@@ -172,11 +190,22 @@ bool ArrayTypename::operator!=(const ArrayTypename &other) const {
 
 
 std::string toString(const ArrayTypename &type) {
-    return fmt::format("[{}{}]", toString(*type.value),
-        type.kind == ArrayKind::Unbounded ? ":" :
-            type.kind == ArrayKind::Iterable ? "::" :
-                type.kind == ArrayKind::FixedSize ? fmt::format(":{}", type.size) :
-                    "");
+    std::string end = ([&type]() -> std::string {
+        switch (type.kind) {
+            case ArrayKind::Unbounded:
+                return ":";
+            case ArrayKind::Iterable:
+                return "::";
+            case ArrayKind::FixedSize:
+                return fmt::format(":{}", type.size);
+            case ArrayKind::UnboundedSized:
+                return fmt::format(":()");
+            case ArrayKind::VariableSize:
+                return "";
+        }
+    })();
+
+    return fmt::format("[{}{}]", toString(*type.value), end);
 }
 
 std::string toString(const PrimitiveTypename &type) {
