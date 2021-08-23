@@ -356,8 +356,6 @@ BuilderResult BuilderScope::unpack(const BuilderResult &result) {
     BuilderResult value = result;
 
     while (auto *r = std::get_if<ReferenceTypename>(&value.type)) {
-        value.implicit = nullptr;
-
         value.flags &= ~(BuilderResult::FlagMutable);
         value.flags |= r->isMutable ? BuilderResult::FlagMutable : 0;
         value.flags |= BuilderResult::FlagReference;
@@ -373,8 +371,6 @@ BuilderResult BuilderScope::unpack(const BuilderResult &result) {
 
 // remove from statement scope or call move operator
 BuilderResult BuilderScope::pass(const BuilderResult &result) {
-    assert(!result.isSet(BuilderResult::FlagUnresolved));
-
     auto reference = std::get_if<ReferenceTypename>(&result.type);
 
     if (reference && reference->kind != ReferenceKind::Regular) {
@@ -384,81 +380,88 @@ BuilderResult BuilderScope::pass(const BuilderResult &result) {
     return result;
 }
 
-BuilderResult BuilderScope::infer(const BuilderResult &result) {
-    if (result.isSet(BuilderResult::FlagUnresolved)) {
-        // First variable in scope search will be lowest in scope.
-        auto varIterator = std::find_if(result.references.begin(), result.references.end(), [](const Node *node) {
-            return node->is(Kind::Variable);
-        });
+template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
+template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
 
-        if (varIterator != result.references.end()) {
-            auto var = (*varIterator)->as<VariableNode>();
+BuilderResult BuilderScope::infer(const BuilderWrapped &result) {
+    return std::visit(overloaded {
+        [&](const BuilderUnresolved &result) -> BuilderResult {
+            // First variable in scope search will be lowest in scope.
+            auto varIterator = std::find_if(result.references.begin(), result.references.end(), [](const Node *node) {
+                return node->is(Kind::Variable);
+            });
 
-            BuilderVariable *info;
+            if (varIterator != result.references.end()) {
+                auto var = (*varIterator)->as<VariableNode>();
 
-            if (var->parent->is(Kind::Root))
-                info = builder.makeGlobal(var); // AH THIS WONT WORK FOR EXTERNAL
-            else
-                info = findVariable(var);
+                BuilderVariable *info;
 
-            if (!info)
-                throw VerifyError(var, "Cannot find variable reference.");
+                if (var->parent->is(Kind::Root))
+                    info = builder.makeGlobal(var); // AH THIS WONT WORK FOR EXTERNAL
+                else
+                    info = findVariable(var);
 
-            return BuilderResult(
-                BuilderResult::FlagReference | (info->node->isMutable ? BuilderResult::FlagMutable : 0),
+                if (!info)
+                    throw VerifyError(var, "Cannot find variable reference.");
 
-                info->value,
-                info->type,
-                &statementContext
-            );
+                return BuilderResult(
+                    BuilderResult::FlagReference | (info->node->isMutable ? BuilderResult::FlagMutable : 0),
+
+                    info->value,
+                    info->type,
+                    &statementContext
+                );
+            }
+
+            auto newIterator = std::find_if(result.references.begin(), result.references.end(), [](const Node *node) {
+                return node->is(Kind::New);
+            });
+
+            if (newIterator != result.references.end())
+                return makeNew((*newIterator)->as<NewNode>());
+
+            std::vector<const Node *> functions;
+
+            auto callable = [](const Node *n) { return n->is(Kind::Function) || n->is(Kind::Type); };
+
+            std::copy_if(result.references.begin(), result.references.end(),
+                std::back_inserter(functions), callable);
+
+            if (!functions.empty()) {
+                std::vector<const BuilderResult *> params;
+
+                if (result.implicit)
+                    params.push_back(result.implicit.get());
+
+                return callUnpack(call(functions, { params, { } }), result.from);
+            } else {
+                throw VerifyError(result.from, "Reference does not implicitly resolve to anything.");
+            }
+
+            // if variable, return first
+            // if function, find one with 0 params or infer params, e.g. some version of match is needed
+        },
+        [&](const BuilderResult &result) -> BuilderResult {
+            const FunctionTypename *functionTypename = std::get_if<FunctionTypename>(&result.type);
+
+            if (functionTypename && functionTypename->kind == FunctionTypename::Kind::Pointer) {
+                throw; // unimplemented
+//                std::vector<Value *> params;
+//
+//                if (result.implicit)
+//                    params.push_back(get(*result.implicit));
+//
+//                return BuilderResult(
+//                    BuilderResult::FlagTemporary,
+//                    current ? current->CreateCall(reinterpret_cast<Function *>(result.value), params) : nullptr,
+//                    *functionTypename->returnType,
+//                    &statementContext
+//                );
+            }
+
+            return result;
         }
-
-        auto newIterator = std::find_if(result.references.begin(), result.references.end(), [](const Node *node) {
-            return node->is(Kind::New);
-        });
-
-        if (newIterator != result.references.end())
-            return makeNew((*newIterator)->as<NewNode>());
-
-        std::vector<const Node *> functions;
-
-        auto callable = [](const Node *n) { return n->is(Kind::Function) || n->is(Kind::Type); };
-
-        std::copy_if(result.references.begin(), result.references.end(),
-            std::back_inserter(functions), callable);
-
-        if (!functions.empty()) {
-            std::vector<const BuilderResult *> params;
-
-            if (result.implicit)
-                params.push_back(result.implicit.get());
-
-            return callUnpack(call(functions, { params, { } }), result.from);
-        } else {
-            throw VerifyError(result.from, "Reference does not implicitly resolve to anything.");
-        }
-
-        // if variable, return first
-        // if function, find one with 0 params or infer params, e.g. some version of match is needed
-    }
-
-    const FunctionTypename *functionTypename = std::get_if<FunctionTypename>(&result.type);
-
-    if (functionTypename && functionTypename->kind == FunctionTypename::Kind::Pointer) {
-        std::vector<Value *> params;
-
-        if (result.implicit)
-            params.push_back(get(*result.implicit));
-
-        return BuilderResult(
-            BuilderResult::FlagTemporary,
-            current ? current->CreateCall(reinterpret_cast<Function *>(result.value), params) : nullptr,
-            *functionTypename->returnType,
-            &statementContext
-        );
-    }
-
-    return result;
+    }, result);
 }
 
 BuilderResult BuilderScope::makeNew(const NewNode *node) {

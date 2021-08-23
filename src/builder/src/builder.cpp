@@ -25,17 +25,6 @@ void BuilderStatementContext::consider(const BuilderResult &result) {
 }
 
 void BuilderStatementContext::commit(BasicBlock *block) {
-//    if (instructions && block) {
-//        // no more, need BR refactor
-//        auto &instIn = instructions->getInstList();
-//
-//        while (!instIn.empty()) {
-//            instIn.front().moveBefore(*block, block->end());
-//        }
-//
-//        instIn.clear();
-//    }
-
     if (!parent.current)
         return;
 
@@ -65,7 +54,7 @@ bool BuilderResult::isSet(Flags flag) const {
     return flags & flag;
 }
 
-const Node *BuilderResult::first(::Kind nodeKind) {
+const Node *BuilderUnresolved::first(Kind nodeKind) {
     auto iterator = std::find_if(references.begin(), references.end(), [nodeKind](const Node *node) {
         return node->is(nodeKind);
     });
@@ -74,9 +63,12 @@ const Node *BuilderResult::first(::Kind nodeKind) {
 }
 
 // oh dear
-BuilderResult::BuilderResult(uint32_t flags, Value *value, Typename type,
-    BuilderStatementContext *statementContext, std::unique_ptr<BuilderResult> implicit)
-    : flags(flags), value(value), type(std::move(type)), implicit(std::move(implicit)) {
+BuilderResult::BuilderResult(
+    uint32_t flags,
+    Value *value,
+    Typename type,
+    BuilderStatementContext *statementContext)
+    : flags(flags), value(value), type(std::move(type)){
 
     if (statementContext) {
         statementUID = statementContext->getNextUID();
@@ -84,15 +76,11 @@ BuilderResult::BuilderResult(uint32_t flags, Value *value, Typename type,
     }
 }
 
-BuilderResult::BuilderResult(const Node *from, std::vector<const Node *> references,
-    BuilderStatementContext *statementContext, std::unique_ptr<BuilderResult> implicit)
-    : flags(FlagUnresolved), value(nullptr), from(from), references(std::move(references)),
-    type(PrimitiveTypename { PrimitiveType::Unresolved }), implicit(std::move(implicit)) {
-
-    if (statementContext) {
-        statementUID = statementContext->getNextUID();
-        statementContext->consider(*this); // register
-    }
+BuilderUnresolved::BuilderUnresolved(
+    const Node *from,
+    std::vector<const Node *> references,
+    std::unique_ptr<BuilderResult> implicit)
+    : from(from), references(std::move(references)), implicit(std::move(implicit)) {
 }
 
 BuilderType *Builder::makeType(const TypeNode *node) {

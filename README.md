@@ -99,6 +99,11 @@ Until `1.0`.
  - [x] Casting with `as`, `a as T`
  - [ ] Parameter Casting (in place of inheritance), `a as T from fieldOfTThatWouldContainA`
  - [ ] Great Refactor (better compiler)
+   - [x] Split BuilderResult/Unresolved, infer for unpack
+   - [ ] Operations (Call, Add, etc.) Independent from BuilderScope
+   - [ ] Chain Expanding for Alloca, Malloc, Move, Copy, etc. + Predicate
+   - [ ] Reorganize Headers and Source Names and Locations to Something Sane
+   - [ ] Namespace Builder
 
 ### Standard Library
  - [ ] Stdin + Stdout
