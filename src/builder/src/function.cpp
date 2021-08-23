@@ -40,7 +40,6 @@ MatchResult BuilderScope::match(const std::vector<const VariableNode *> &paramet
         }
 
         assert(var->hasFixedType);
-        assert(!value->isSet(BuilderResult::FlagUnresolved));
 
         auto type = builder.resolveTypename(var->fixedType());
 

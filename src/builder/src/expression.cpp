@@ -9,7 +9,7 @@
 #include <parser/operator.h>
 #include <parser/variable.h>
 
-BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
+BuilderWrapped BuilderScope::makeExpressionNounContent(const Node *node) {
     switch (node->is<Kind>()) {
         case Kind::Parentheses:
             return makeExpression(node->as<ParenthesesNode>()->body());
@@ -17,7 +17,7 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
         case Kind::Reference: {
             auto e = node->as<ReferenceNode>();
 
-            return BuilderResult(e, builder.findAll(e), &statementContext);
+            return BuilderUnresolved(e, builder.findAll(e));
         }
 
         case Kind::Special: {
@@ -177,7 +177,7 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
         case Kind::New: {
             auto *e = node->as<NewNode>();
 
-            return BuilderResult(e, { e }, &statementContext);
+            return BuilderUnresolved(e, { e });
         }
 
         default:
@@ -185,7 +185,7 @@ BuilderResult BuilderScope::makeExpressionNounContent(const Node *node) {
     }
 }
 
-BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const BuilderResult &result) {
+BuilderWrapped BuilderScope::makeExpressionNounModifier(const Node *node, const BuilderWrapped &result) {
     switch (node->is<Kind>()) {
         case Kind::Call: {
             auto callNode = node->as<CallNode>();
@@ -193,15 +193,17 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
             auto callNames = callNode->names();
             auto callParameters = callNode->parameters();
 
-            assert(!result.isSet(BuilderResult::FlagUnresolved));
+            assert(std::holds_alternative<BuilderUnresolved>(result));
 
-            size_t extraParameter = result.implicit ? 1 : 0;
+            auto &unresolved = std::get<BuilderUnresolved>(result);
+
+            size_t extraParameter = unresolved.implicit ? 1 : 0;
 
             MatchInput callInput;
             callInput.parameters.resize(callParameters.size() + extraParameter);
 
-            if (result.implicit)
-                callInput.parameters[0] = result.implicit.get();
+            if (unresolved.implicit)
+                callInput.parameters[0] = unresolved.implicit.get();
 
             std::vector<BuilderResult> resultLifetimes;
             resultLifetimes.reserve(callParameters.size());
@@ -215,9 +217,9 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
             callInput.names = callNode->namesStripped();
 
             auto isNewNode = [](const Node *n) { return n->is(Kind::New); };
-            auto newIt = std::find_if(result.references.begin(), result.references.end(), isNewNode);
+            auto newIt = std::find_if(unresolved.references.begin(), unresolved.references.end(), isNewNode);
 
-            if (newIt != result.references.end()) {
+            if (newIt != unresolved.references.end()) {
                 auto newNode = (*newIt)->as<NewNode>();
                 auto type = builder.resolveTypename(newNode->type());
 
@@ -226,7 +228,7 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
                 if (!typeNode)
                     throw VerifyError(newNode, "New parameters may only be passed to a type/struct.");
 
-                auto value = callUnpack(call({ typeNode->type }, callInput), result.from);
+                auto value = callUnpack(call({ typeNode->type }, callInput), unresolved.from);
 
                 auto output = makeNew(newNode);
 
@@ -240,13 +242,13 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
 
             auto callable = [](const Node *n) { return n->is(Kind::Function) || n->is(Kind::Type); };
 
-            std::copy_if(result.references.begin(), result.references.end(),
+            std::copy_if(unresolved.references.begin(), unresolved.references.end(),
                 std::back_inserter(functions), callable);
 
             if (functions.empty())
                 throw VerifyError(node, "Reference did not resolve to any functions to call.");
 
-            return callUnpack(call(functions, callInput), result.from);
+            return callUnpack(call(functions, callInput), unresolved.from);
         }
 
         case Kind::Dot: {
@@ -316,7 +318,7 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
             if (n.empty())
                 throw VerifyError(node, "Could not find method or field with name {}.", refNode->name);
 
-            return BuilderResult(node, n, &statementContext, std::make_unique<BuilderResult>(sub));
+            return BuilderUnresolved(node, n, std::make_unique<BuilderResult>(std::move(sub)));
         }
 
         case Kind::Index: {
@@ -377,8 +379,8 @@ BuilderResult BuilderScope::makeExpressionNounModifier(const Node *node, const B
     }
 }
 
-BuilderResult BuilderScope::makeExpressionNoun(const ExpressionNoun &noun) {
-    BuilderResult result = makeExpressionNounContent(noun.content);
+BuilderWrapped BuilderScope::makeExpressionNoun(const ExpressionNoun &noun) {
+    BuilderWrapped result = makeExpressionNounContent(noun.content);
 
     for (const Node *modifier : noun.modifiers)
         result = makeExpressionNounModifier(modifier, result);
@@ -386,7 +388,7 @@ BuilderResult BuilderScope::makeExpressionNoun(const ExpressionNoun &noun) {
     return result;
 }
 
-BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &operation) {
+BuilderWrapped BuilderScope::makeExpressionOperation(const ExpressionOperation &operation) {
     BuilderResult value = infer(makeExpressionResult(*operation.a));
 
     switch (operation.op->is<Kind>()) {
@@ -534,8 +536,7 @@ BuilderResult BuilderScope::makeExpressionOperation(const ExpressionOperation &o
 }
 
 BuilderResult BuilderScope::combine(const BuilderResult &left, const BuilderResult &right, OperatorNode::Operation op) {
-    auto results = convert(infer(left), infer(right))
-        ;
+    auto results = convert(left, right);
 
     if (!results.has_value()) {
         throw std::runtime_error(fmt::format(
@@ -748,30 +749,30 @@ BuilderResult BuilderScope::combine(const BuilderResult &left, const BuilderResu
     }
 }
 
-BuilderResult BuilderScope::makeExpressionCombinator(const ExpressionCombinator &combinator) {
+BuilderWrapped BuilderScope::makeExpressionCombinator(const ExpressionCombinator &combinator) {
     try {
         return combine(
-            makeExpressionResult(*combinator.a),
-            makeExpressionResult(*combinator.b),
+            infer(makeExpressionResult(*combinator.a)),
+            infer(makeExpressionResult(*combinator.b)),
             combinator.op->op);
     } catch (const std::runtime_error &e) {
         throw VerifyError(combinator.op, "{}", e.what());
     }
 }
 
-BuilderResult BuilderScope::makeExpressionResult(const ExpressionResult &result) {
+BuilderWrapped BuilderScope::makeExpressionResult(const ExpressionResult &result) {
     struct {
         BuilderScope &scope;
 
-        BuilderResult operator()(const ExpressionNoun &result) {
+        BuilderWrapped operator()(const ExpressionNoun &result) {
             return scope.makeExpressionNoun(result);
         }
 
-        BuilderResult operator()(const ExpressionOperation &result) {
+        BuilderWrapped operator()(const ExpressionOperation &result) {
             return scope.makeExpressionOperation(result);
         }
 
-        BuilderResult operator()(const ExpressionCombinator &result) {
+        BuilderWrapped operator()(const ExpressionCombinator &result) {
             return scope.makeExpressionCombinator(result);
         }
     } visitor { *this };

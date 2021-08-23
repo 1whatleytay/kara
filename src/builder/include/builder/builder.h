@@ -40,40 +40,51 @@ struct BuilderFunction;
 struct BuilderStatementContext;
 
 struct BuilderResult {
-    // valid flag layouts: unspecified | (reference, temporary | mutable | variable)
+    // valid flag layouts: reference, temporary | mutable | variable
     enum Flags : uint32_t {
         FlagTemporary = 1u << 0u,
         FlagMutable = 1u << 1u,
-        FlagReference = 1u << 2u,
-        FlagUnresolved = 1u << 3u,
+        FlagReference = 1u << 2u
     };
 
     uint32_t flags = 0;
     [[nodiscard]] bool isSet(Flags flag) const;
 
+    uint64_t statementUID = 0; // copied when needed, for reference in move without refactor
+
     Value *value = nullptr;
     Typename type;
 
-    std::shared_ptr<BuilderResult> implicit;
+    BuilderResult(
+        uint32_t flags,
+        Value *value,
+        Typename type,
+        BuilderStatementContext *statementContext
+    );
+};
 
+struct BuilderUnresolved {
     const Node *from = nullptr;
     std::vector<const Node *> references;
 
-    uint64_t statementUID = 0; // copied when needed, for reference in move without refactor
+    std::shared_ptr<BuilderResult> implicit;
 
-    const Node *first(::Kind nodeKind);
+    const Node *first(Kind nodeKind);
 
-    BuilderResult(uint32_t flags, Value *value, Typename type, BuilderStatementContext *statementContext,
-        std::unique_ptr<BuilderResult> implicit = nullptr);
-    BuilderResult(const Node *from, std::vector<const Node *> references, BuilderStatementContext *statementContext,
-        std::unique_ptr<BuilderResult> implicit = nullptr);
+    BuilderUnresolved(
+        const Node *from,
+        std::vector<const Node *> references,
+        std::unique_ptr<BuilderResult> implicit = nullptr
+    );
 };
 
+using BuilderWrapped = std::variant<BuilderResult, BuilderUnresolved>;
 
 // Thinking struct for destroying objects when a statement is done.
 struct BuilderStatementContext {
     // COUPLING AHH T_T I'm sorry...
     // I need it to use invokeDestroy for now, would be best to separate everything to global scope but...
+    // DW i got u - future taylor
     BuilderScope &parent;
 
     uint64_t nextUID = 1;
@@ -183,7 +194,7 @@ struct BuilderScope {
     std::optional<std::pair<BuilderResult, BuilderResult>> convert(
         const BuilderResult &a, const BuilderResult &b);
 
-    BuilderResult infer(const BuilderResult &result);
+    BuilderResult infer(const BuilderWrapped &result);
     BuilderResult unpack(const BuilderResult &result);
     BuilderResult pass(const BuilderResult &result);
 
@@ -198,12 +209,12 @@ struct BuilderScope {
 
     BuilderResult combine(const BuilderResult &a, const BuilderResult &b, OperatorNode::Operation op);
 
-    BuilderResult makeExpressionNounContent(const Node *node);
-    BuilderResult makeExpressionNounModifier(const Node *node, const BuilderResult &result);
-    BuilderResult makeExpressionNoun(const ExpressionNoun &noun);
-    BuilderResult makeExpressionOperation(const ExpressionOperation &operation);
-    BuilderResult makeExpressionCombinator(const ExpressionCombinator &combinator);
-    BuilderResult makeExpressionResult(const ExpressionResult &result);
+    BuilderWrapped makeExpressionNounContent(const Node *node);
+    BuilderWrapped makeExpressionNounModifier(const Node *node, const BuilderWrapped &result);
+    BuilderWrapped makeExpressionNoun(const ExpressionNoun &noun);
+    BuilderWrapped makeExpressionOperation(const ExpressionOperation &operation);
+    BuilderWrapped makeExpressionCombinator(const ExpressionCombinator &combinator);
+    BuilderWrapped makeExpressionResult(const ExpressionResult &result);
     BuilderResult makeExpression(const ExpressionNode *node);
 
     BuilderResult makeNew(const NewNode *node);
