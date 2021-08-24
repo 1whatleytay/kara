@@ -5,58 +5,60 @@
 #include <vector>
 #include <variant>
 
-struct ExpressionNode;
+namespace kara::parser {
+    struct Expression;
 
-struct ParenthesesNode : public Node {
-    [[nodiscard]] const ExpressionNode *body() const;
+    struct Parentheses : public hermes::Node {
+        [[nodiscard]] const Expression *body() const;
 
-    explicit ParenthesesNode(Node *parent);
-};
-
-struct SpecialNode : public Node {
-    enum class Type {
-        Any, Nothing, Null
+        explicit Parentheses(Node *parent);
     };
 
-    Type type = Type::Any;
+    struct Special : public hermes::Node {
+        enum class Type {
+            Any, Nothing, Null
+        };
 
-    explicit SpecialNode(Node *parent);
-};
+        Type type = Type::Any;
 
-struct BoolNode : public Node {
-    bool value = false;
+        explicit Special(Node *parent);
+    };
 
-    explicit BoolNode(Node *parent);
-};
+    struct Bool : public hermes::Node {
+        bool value = false;
 
-struct NumberNode : public Node {
-    std::variant<int64_t, uint64_t, double> value;
+        explicit Bool(Node *parent);
+    };
 
-    explicit NumberNode(Node *parent, bool external = false);
-};
+    struct Number : public hermes::Node {
+        std::variant<int64_t, uint64_t, double> value;
 
-struct StringNode : public Node {
-    std::vector<size_t> inserts;
+        explicit Number(Node *parent, bool external = false);
+    };
 
-    std::string text;
+    struct String : public hermes::Node {
+        std::vector<size_t> inserts;
 
-    explicit StringNode(Node *parent);
-};
+        std::string text;
 
-struct ArrayNode : public Node {
-    [[nodiscard]] std::vector<const ExpressionNode *> elements() const;
+        explicit String(Node *parent);
+    };
 
-    explicit ArrayNode(Node *parent);
-};
+    struct Array : public hermes::Node {
+        [[nodiscard]] std::vector<const Expression *> elements() const;
 
-struct ReferenceNode : public Node {
-    std::string name;
+        explicit Array(Node *parent);
+    };
 
-    explicit ReferenceNode(Node *parent);
-};
+    struct Reference : public hermes::Node {
+        std::string name;
 
-struct NewNode : public Node {
-    [[nodiscard]] const Node *type() const;
+        explicit Reference(Node *parent);
+    };
 
-    explicit NewNode(Node *parent);
-};
+    struct New : public hermes::Node {
+        [[nodiscard]] const Node *type() const;
+
+        explicit New(Node *parent);
+    };
+}

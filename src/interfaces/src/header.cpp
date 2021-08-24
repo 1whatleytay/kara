@@ -17,7 +17,7 @@
 
 using namespace clang;
 
-namespace interfaces::header {
+namespace kara::interfaces::header {
     template <typename T, typename ...Args>
     T *grab(Node *node, Args ... args) {
         auto t = node->pick<T>(false, args...);
@@ -49,17 +49,17 @@ namespace interfaces::header {
                 llvm::APInt ap(64, 0);
                 parser.GetIntegerValue(ap);
 
-                auto varNode = std::make_unique<VariableNode>(factory.node, false, true);
+                auto varNode = std::make_unique<parser::Variable>(factory.node, false, true);
 
                 varNode->name = name;
                 varNode->isMutable = false;
                 varNode->hasFixedType = true;
                 varNode->hasConstantValue = true;
 
-                auto primNode = std::make_unique<PrimitiveTypenameNode>(varNode.get(), true);
-                primNode->type = parser.isUnsigned ? PrimitiveType::ULong : PrimitiveType::Long;
+                auto primNode = std::make_unique<parser::PrimitiveTypename>(varNode.get(), true);
+                primNode->type = parser.isUnsigned ? utils::PrimitiveType::ULong : utils::PrimitiveType::Long;
 
-                auto numberNode = std::make_unique<NumberNode>(varNode.get(), true);
+                auto numberNode = std::make_unique<parser::Number>(varNode.get(), true);
                 if (parser.isUnsigned)
                     numberNode->value = ap.getZExtValue();
                 else
@@ -102,7 +102,7 @@ namespace interfaces::header {
             } else {
                 auto fields = record->fields();
 
-                auto typeNode = std::make_unique<TypeNode>(factory->node, true);
+                auto typeNode = std::make_unique<parser::Type>(factory->node, true);
 
                 typeNode->name = record->getNameAsString();
                 if (typeNode->name.empty())
@@ -111,7 +111,7 @@ namespace interfaces::header {
                 factory->prebuiltTypes[record] = typeNode->name;
 
                 for (auto field : fields) {
-                    auto varNode = std::make_unique<VariableNode>(typeNode.get(), false, true);
+                    auto varNode = std::make_unique<parser::Variable>(typeNode.get(), false, true);
 
                     varNode->name = field->getNameAsString();
                     varNode->isMutable = true;
@@ -131,7 +131,7 @@ namespace interfaces::header {
                 factory->node->children.push_back(std::move(typeNode));
             }
 
-            auto named = std::make_unique<NamedTypenameNode>(parent, true);
+            auto named = std::make_unique<parser::NamedTypename>(parent, true);
             named->name = typeName;
 
             return named;
@@ -148,10 +148,10 @@ namespace interfaces::header {
 
             assert(inStruct);
 
-            auto arr = std::make_unique<ArrayTypenameNode>(parent, true);
-            arr->type = ArrayKind::FixedSize;
+            auto arr = std::make_unique<parser::ArrayTypename>(parent, true);
+            arr->type = utils::ArrayKind::FixedSize;
 
-            auto num = std::make_unique<NumberNode>(arr.get(), true);
+            auto num = std::make_unique<parser::Number>(arr.get(), true);
             num->value = size;
 
             arr->children.push_back(make(arr.get(), constant->getElementType(), true));
@@ -165,27 +165,27 @@ namespace interfaces::header {
 
             auto pointee = e->getPointeeType();
 
-            auto ref = std::make_unique<ReferenceTypenameNode>(parent, true);
+            auto ref = std::make_unique<parser::ReferenceTypename>(parent, true);
 
             if (type.isVoidPointerType()) {
-                auto prim = std::make_unique<PrimitiveTypenameNode>(ref.get(), true);
+                auto prim = std::make_unique<parser::PrimitiveTypename>(ref.get(), true);
 
-                prim->type = PrimitiveType::Any;
+                prim->type = utils::PrimitiveType::Any;
                 ref->children.push_back(std::move(prim));
 
                 return ref;
             }
 
-            ArrayTypenameNode *arr = nullptr;
+            parser::ArrayTypename *arr = nullptr;
 
             {
-                auto arrPtr = std::make_unique<ArrayTypenameNode>(ref.get(), true);
+                auto arrPtr = std::make_unique<parser::ArrayTypename>(ref.get(), true);
                 arr = arrPtr.get();
 
                 ref->children.push_back(std::move(arrPtr));
             }
 
-            arr->type = ArrayKind::Unbounded;
+            arr->type = utils::ArrayKind::Unbounded;
             ref->isMutable = !pointee.isConstQualified();
 
             auto subtype = make(arr, pointee);
@@ -193,8 +193,8 @@ namespace interfaces::header {
             if (subtype) {
                 arr->children.push_back(std::move(subtype));
             } else {
-                auto prim = std::make_unique<PrimitiveTypenameNode>(arr, true);
-                prim->type = PrimitiveType::Nothing;
+                auto prim = std::make_unique<parser::PrimitiveTypename>(arr, true);
+                prim->type = utils::PrimitiveType::Nothing;
 
                 arr->children.push_back(std::move(prim));
             }
@@ -208,34 +208,34 @@ namespace interfaces::header {
             BuiltinType::Kind kind = e->getKind();
             size_t size = context.getTypeSize(wrapper);
 
-            auto prim = std::make_unique<PrimitiveTypenameNode>(parent, true);
+            auto prim = std::make_unique<parser::PrimitiveTypename>(parent, true);
 
             if (kind == BuiltinType::Kind::Void) {
-                prim->type = PrimitiveType::Nothing;
+                prim->type = utils::PrimitiveType::Nothing;
             } else if (kind == BuiltinType::Kind::Bool) {
-                prim->type = PrimitiveType::Bool;
+                prim->type = utils::PrimitiveType::Bool;
             } else if (type.isIntegerType()) {
                 if (type.isSignedIntegerType()) {
                     switch (size) {
-                        case 8: prim->type = PrimitiveType::Byte; break;
-                        case 16: prim->type = PrimitiveType::Short; break;
-                        case 32: prim->type = PrimitiveType::Int; break;
-                        case 64: prim->type = PrimitiveType::Long; break;
+                        case 8: prim->type = utils::PrimitiveType::Byte; break;
+                        case 16: prim->type = utils::PrimitiveType::Short; break;
+                        case 32: prim->type = utils::PrimitiveType::Int; break;
+                        case 64: prim->type = utils::PrimitiveType::Long; break;
                         default: return die();
                     }
                 } else {
                     switch (size) {
-                        case 8: prim->type = PrimitiveType::UByte; break;
-                        case 16: prim->type = PrimitiveType::UShort; break;
-                        case 32: prim->type = PrimitiveType::UInt; break;
-                        case 64: prim->type = PrimitiveType::ULong; break;
+                        case 8: prim->type = utils::PrimitiveType::UByte; break;
+                        case 16: prim->type = utils::PrimitiveType::UShort; break;
+                        case 32: prim->type = utils::PrimitiveType::UInt; break;
+                        case 64: prim->type = utils::PrimitiveType::ULong; break;
                         default: return die();
                     }
                 }
             } else if (type.isRealFloatingType()) {
                 switch (size) {
-                    case 32: prim->type = PrimitiveType::Float; break;
-                    case 64: prim->type = PrimitiveType::Double; break;
+                    case 32: prim->type = utils::PrimitiveType::Float; break;
+                    case 64: prim->type = utils::PrimitiveType::Double; break;
                     default: return die();
                 }
             } else {
@@ -261,7 +261,7 @@ namespace interfaces::header {
             return true;
         }
 
-        auto var = std::make_unique<VariableNode>(factory->node, false, true);
+        auto var = std::make_unique<parser::Variable>(factory->node, false, true);
 
         var->name = decl->getNameAsString();
         assert(!var->name.empty());
@@ -285,7 +285,7 @@ namespace interfaces::header {
     }
 
     [[maybe_unused]] bool TranslateVisitor::VisitTypedefDecl(TypedefDecl *decl) const {
-        auto type = std::make_unique<TypeNode>(factory->node, true);
+        auto type = std::make_unique<parser::Type>(factory->node, true);
 
         type->name = decl->getNameAsString();
         type->isAlias = true;
@@ -307,7 +307,7 @@ namespace interfaces::header {
         auto name = decl->getNameAsString();
         auto parameters = decl->parameters();
 
-        auto function = std::make_unique<FunctionNode>(factory->node, true);
+        auto function = std::make_unique<parser::Function>(factory->node, true);
 
         auto returnType = make(function.get(), decl->getReturnType());
 
@@ -327,7 +327,7 @@ namespace interfaces::header {
             auto paramName = param->getNameAsString();
 
             // huh, useless function
-            auto *var = grab<VariableNode>(function.get(), true, true);
+            auto *var = grab<parser::Variable>(function.get(), true, true);
 
             auto optional = make(var, param->getType());
 
@@ -378,7 +378,7 @@ namespace interfaces::header {
         return std::make_unique<TranslateAction>(this);
     }
 
-    TranslateFactory::TranslateFactory(RootNode *node) : node(node) { }
+    TranslateFactory::TranslateFactory(parser::Root *node) : node(node) { }
 
     InterfaceResult create(int count, const char **args) {
         auto parser = clang::tooling::CommonOptionsParser::create(
@@ -389,7 +389,7 @@ namespace interfaces::header {
         clang::tooling::ClangTool tool(parser->getCompilations(), parser->getSourcePathList());
 
         auto state = std::make_unique<State>("");
-        auto node = std::make_unique<RootNode>(*state, true);
+        auto node = std::make_unique<parser::Root>(*state, true);
 
         interfaces::header::TranslateFactory factory(node.get());
 

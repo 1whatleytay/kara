@@ -4,146 +4,148 @@
 #include <parser/literals.h>
 #include <parser/expression.h>
 
-const Node *AsNode::type() const {
-    return children.front().get();
-}
+namespace kara::parser {
+    const hermes::Node *As::type() const {
+        return children.front().get();
+    }
 
-AsNode::AsNode(Node *parent) : Node(parent, Kind::As) {
-    match("as");
+    As::As(Node *parent) : Node(parent, Kind::As) {
+        match("as");
 
-    pushTypename(this);
-}
+        pushTypename(this);
+    }
 
-CallParameterNameNode::CallParameterNameNode(Node *parent) : Node(parent, Kind::CallParameterName) {
-    name = token();
+    CallParameterName::CallParameterName(Node *parent) : Node(parent, Kind::CallParameterName) {
+        name = token();
 
-    match(":");
-}
+        match(":");
+    }
 
-std::vector<const ExpressionNode *> CallNode::parameters() const {
-    std::vector<const ExpressionNode *> result;
+    std::vector<const Expression *> Call::parameters() const {
+        std::vector<const Expression *> result;
 
-    for (const auto &c : children) {
-        if (c->is(Kind::Expression)) {
-            result.push_back(c->as<ExpressionNode>());
+        for (const auto &c : children) {
+            if (c->is(Kind::Expression)) {
+                result.push_back(c->as<Expression>());
+            }
         }
+
+        return result;
     }
 
-    return result;
-}
+    std::unordered_map<size_t, const CallParameterName *> Call::names() const {
+        std::unordered_map<size_t, const CallParameterName *> result;
 
-std::unordered_map<size_t, const CallParameterNameNode *> CallNode::names() const {
-    std::unordered_map<size_t, const CallParameterNameNode *> result;
+        size_t index = 0;
 
-    size_t index = 0;
+        for (const auto &c : children) {
+            if (c->is(Kind::Expression))
+                index++;
 
-    for (const auto &c : children) {
-        if (c->is(Kind::Expression))
-            index++;
+            if (c->is(Kind::CallParameterName))
+                result[index] = c->as<CallParameterName>();
+        }
 
-        if (c->is(Kind::CallParameterName))
-            result[index] = c->as<CallParameterNameNode>();
+        return result;
     }
 
-    return result;
-}
+    std::unordered_map<size_t, std::string> Call::namesStripped() const {
+        std::unordered_map<size_t, std::string> result;
 
-std::unordered_map<size_t, std::string> CallNode::namesStripped() const {
-    std::unordered_map<size_t, std::string> result;
+        auto v = names();
 
-    auto v = names();
+        for (const auto &c : v)
+            result[c.first] = c.second->name;
 
-    for (const auto &c : v)
-        result[c.first] = c.second->name;
-
-    return result;
-}
-
-CallNode::CallNode(Node *parent) : Node(parent, Kind::Call) {
-    match("(");
-
-    bool first = true;
-    while (!end() && !peek(")")) {
-        if (!first)
-            needs(",");
-        else
-            first = false;
-
-        push<CallParameterNameNode>(true);
-        push<ExpressionNode>();
+        return result;
     }
 
-    needs(")");
-}
+    Call::Call(Node *parent) : Node(parent, Kind::Call) {
+        match("(");
 
-const ReferenceNode *DotNode::reference() const {
-    return children.front()->as<ReferenceNode>();
-}
+        bool first = true;
+        while (!end() && !peek(")")) {
+            if (!first)
+                needs(",");
+            else
+                first = false;
 
-DotNode::DotNode(Node *parent) : Node(parent, Kind::Dot) {
-    match(".");
+            push<CallParameterName>(true);
+            push<Expression>();
+        }
 
-    push<ReferenceNode>();
-}
+        needs(")");
+    }
 
-const ExpressionNode *IndexNode::index() const {
-    return children.front()->as<ExpressionNode>();
-}
+    const Reference *Dot::reference() const {
+        return children.front()->as<Reference>();
+    }
 
-IndexNode::IndexNode(Node *parent) : Node(parent, Kind::Index) {
-    match("[");
+    Dot::Dot(Node *parent) : Node(parent, Kind::Dot) {
+        match(".");
 
-    push<ExpressionNode>();
+        push<Reference>();
+    }
 
-    needs("]");
-}
+    const Expression *Index::index() const {
+        return children.front()->as<Expression>();
+    }
 
-const ExpressionNode *TernaryNode::onTrue() const {
-    return children[0]->as<ExpressionNode>();
-}
+    Index::Index(Node *parent) : Node(parent, Kind::Index) {
+        match("[");
 
-const ExpressionNode *TernaryNode::onFalse() const {
-    return children[1]->as<ExpressionNode>();
-}
+        push<Expression>();
 
-TernaryNode::TernaryNode(Node *parent) : Node(parent, Kind::Ternary) {
-    match("?");
+        needs("]");
+    }
 
-    push<ExpressionNode>();
+    const Expression *Ternary::onTrue() const {
+        return children[0]->as<Expression>();
+    }
 
-    needs(":");
+    const Expression *Ternary::onFalse() const {
+        return children[1]->as<Expression>();
+    }
 
-    push<ExpressionNode>();
-}
+    Ternary::Ternary(Node *parent) : Node(parent, Kind::Ternary) {
+        match("?");
 
-UnaryNode::UnaryNode(Node *parent) : Node(parent, Kind::Unary) {
-    op = select<Operation>({
-        { "!", Operation::Not },
-        { "-", Operation::Negative },
-        { "&", Operation::Reference },
-        { "@", Operation::Fetch }
-    });
-}
+        push<Expression>();
 
-OperatorNode::OperatorNode(Node *parent) : Node(parent, Kind::Operator) {
-    std::vector<std::string> doNotCapture = { "+=", "-=", "*=", "/=", "%=" };
+        needs(":");
 
-    if (maybe<bool>({ { "+=", true }, { "-=", true }, { "*=", true }, { "/=", true }, { "%=", true } }, false))
-        error("Operator cannot capture this text.");
+        push<Expression>();
+    }
 
-    op = select<Operation>({
-        { "+", Operation::Add },
-        { "-", Operation::Sub },
-        { "*", Operation::Mul },
-        { "/", Operation::Div },
-        { "%", Operation::Mod },
-        { "==", Operation::Equals },
-        { "!=", Operation::NotEquals },
-        { ">=", Operation::GreaterEqual },
-        { "<=", Operation::LesserEqual },
-        { ">", Operation::Greater },
-        { "<", Operation::Lesser },
-        { "&&", Operation::And },
-        { "||", Operation::Or },
-    });
+    Unary::Unary(Node *parent) : Node(parent, Kind::Unary) {
+        op = select<utils::UnaryOperation>({
+            { "!", utils::UnaryOperation::Not },
+            { "-", utils::UnaryOperation::Negative },
+            { "&", utils::UnaryOperation::Reference },
+            { "@", utils::UnaryOperation::Fetch }
+        });
+    }
+
+    Operator::Operator(Node *parent) : Node(parent, Kind::Operator) {
+        std::vector<std::string> doNotCapture = { "+=", "-=", "*=", "/=", "%=" };
+
+        if (maybe<bool>({ { "+=", true }, { "-=", true }, { "*=", true }, { "/=", true }, { "%=", true } }, false))
+            error("Operator cannot capture this text.");
+
+        op = select<utils::BinaryOperation>({
+            { "+", utils::BinaryOperation::Add },
+            { "-", utils::BinaryOperation::Sub },
+            { "*", utils::BinaryOperation::Mul },
+            { "/", utils::BinaryOperation::Div },
+            { "%", utils::BinaryOperation::Mod },
+            { "==", utils::BinaryOperation::Equals },
+            { "!=", utils::BinaryOperation::NotEquals },
+            { ">=", utils::BinaryOperation::GreaterEqual },
+            { "<=", utils::BinaryOperation::LesserEqual },
+            { ">", utils::BinaryOperation::Greater },
+            { "<", utils::BinaryOperation::Lesser },
+            { "&&", utils::BinaryOperation::And },
+            { "||", utils::BinaryOperation::Or },
+        });
+    }
 }

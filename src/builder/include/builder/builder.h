@@ -1,323 +1,328 @@
 #pragma once
+
 #include <options/options.h>
 
-#include <parser/root.h>
-#include <parser/typename.h>
-#include <parser/expression.h>
+#include <utils/typename.h>
+#include <utils/expression.h>
 
 #include <llvm/IR/Module.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
 
+#include <set>
 #include <queue>
 #include <optional>
-#include <unordered_set>
 #include <unordered_map>
+#include <unordered_set>
 
-using namespace llvm;
+namespace kara::parser {
+    struct If;
+    struct For;
+    struct New;
+    struct Code;
+    struct Root;
+    struct Type;
+    struct Block;
+    struct Assign;
+    struct Import;
+    struct Function;
+    struct Variable;
+    struct Reference;
+    struct Statement;
+    struct Expression;
 
-struct IfNode;
-struct ForNode;
-struct NewNode;
-struct CodeNode;
-struct TypeNode;
-struct BlockNode;
-struct AssignNode;
-struct ImportNode;
-struct FunctionNode;
-struct VariableNode;
-struct ReferenceNode;
-struct StatementNode;
-struct ExpressionNode;
+    enum class Kind;
+}
 
-struct Manager;
-struct ManagerFile;
+namespace kara::builder {
+    struct Manager;
+    struct ManagerFile;
 
-struct Builder;
-struct BuilderScope;
-struct BuilderResult;
-struct BuilderFunction;
-struct BuilderStatementContext;
+    struct Builder;
 
-struct BuilderResult {
-    // valid flag layouts: reference, temporary | mutable | variable
-    enum Flags : uint32_t {
-        FlagTemporary = 1u << 0u,
-        FlagMutable = 1u << 1u,
-        FlagReference = 1u << 2u
+    struct Scope;
+    struct Result;
+    struct Function;
+    struct StatementContext;
+
+    struct Result {
+        // valid flag layouts: reference, temporary | mutable | variable
+        enum Flags : uint32_t {
+            FlagTemporary = 1u << 0u,
+            FlagMutable = 1u << 1u,
+            FlagReference = 1u << 2u
+        };
+
+        uint32_t flags = 0;
+        [[nodiscard]] bool isSet(Flags flag) const;
+
+        uint64_t statementUID = 0; // copied when needed, for reference in move without refactor
+
+        llvm::Value *value = nullptr;
+        utils::Typename type;
+
+        Result(
+            uint32_t flags,
+            llvm::Value *value,
+            utils::Typename type,
+            StatementContext *statementContext);
     };
 
-    uint32_t flags = 0;
-    [[nodiscard]] bool isSet(Flags flag) const;
+    struct Unresolved {
+        const hermes::Node *from = nullptr;
+        std::vector<const hermes::Node *> references;
 
-    uint64_t statementUID = 0; // copied when needed, for reference in move without refactor
+        std::shared_ptr<Result> implicit;
 
-    Value *value = nullptr;
-    Typename type;
-
-    BuilderResult(
-        uint32_t flags,
-        Value *value,
-        Typename type,
-        BuilderStatementContext *statementContext
-    );
-};
-
-struct BuilderUnresolved {
-    const Node *from = nullptr;
-    std::vector<const Node *> references;
-
-    std::shared_ptr<BuilderResult> implicit;
-
-    const Node *first(Kind nodeKind);
-
-    BuilderUnresolved(
-        const Node *from,
-        std::vector<const Node *> references,
-        std::unique_ptr<BuilderResult> implicit = nullptr
-    );
-};
-
-using BuilderWrapped = std::variant<BuilderResult, BuilderUnresolved>;
-
-// Thinking struct for destroying objects when a statement is done.
-struct BuilderStatementContext {
-    // COUPLING AHH T_T I'm sorry...
-    // I need it to use invokeDestroy for now, would be best to separate everything to global scope but...
-    // DW i got u - future taylor
-    BuilderScope &parent;
-
-    uint64_t nextUID = 1;
-    uint64_t getNextUID();
-
-    bool lock = false; // for debugging consider/commit loops
-
-    std::queue<BuilderResult> toDestroy;
-    std::unordered_set<uint64_t> avoidDestroy;
-
-    void consider(const BuilderResult &result);
-
-    void commit(BasicBlock *block);
-
-    explicit BuilderStatementContext(BuilderScope &parent);
-};
-
-struct BuilderVariable {
-    const VariableNode *node = nullptr;
-    Typename type;
-
-    Value *value = nullptr;
-
-    BuilderVariable(const VariableNode *node, Builder &builder); // global variable
-    BuilderVariable(const VariableNode *node, BuilderScope &scope); // regular variable
-    BuilderVariable(const VariableNode *node, Value *input, BuilderScope &scope); // function parameter
-};
-
-struct MatchResult {
-    std::optional<std::string> failed;
-    std::vector<const BuilderResult *> map;
-
-    size_t numImplicit = 0;
-};
-
-struct MatchInput {
-    std::vector<const BuilderResult *> parameters;
-    std::unordered_map<size_t, std::string> names;
-};
-
-struct MatchCallError {
-    std::string problem;
-    std::vector<std::string> messages;
-};
-
-struct BuilderScope {
-    Builder &builder;
-    BuilderScope *parent = nullptr;
-    BuilderFunction *function = nullptr;
-
-    BuilderStatementContext statementContext;
-
-    BasicBlock *openingBlock = nullptr;
-    BasicBlock *currentBlock = nullptr;
-
-    BasicBlock *lastBlock = nullptr;
-
-    Value *exitChainType = nullptr;
-    BasicBlock *exitChainBegin = nullptr;
-
-    enum class ExitPoint {
-        Regular,
-        Return,
-        Break,
-        Continue
+        Unresolved(
+            const hermes::Node *from,
+            std::vector<const hermes::Node *> references,
+            std::unique_ptr<Result> implicit = nullptr);
     };
 
-    std::set<ExitPoint> requiredPoints = { ExitPoint::Regular };
-    std::unordered_map<ExitPoint, BasicBlock *> destinations;
+    using Wrapped = std::variant<Result, Unresolved>;
 
-    // For types, might need to be cleared occasionally. For ArrayKind::UnboundedSize mostly.
-    std::unordered_map<const ExpressionNode *, BuilderResult> expressionCache;
+    // Thinking struct for destroying objects when a statement is done.
+    struct StatementContext {
+        // COUPLING AHH T_T I'm sorry...
+        // I need it to use invokeDestroy for now, would be best to separate everything to global scope but...
+        // DW i got u - future taylor
+        Scope &parent;
 
-    Value *makeAlloca(const Typename &type, const std::string &name = "");
-    Value *makeMalloc(const Typename &type, const std::string &name = "");
+        uint64_t nextUID = 1;
+        uint64_t getNextUID();
 
-    void commit();
-    void exit(ExitPoint point, BasicBlock *from = nullptr);
+        bool lock = false; // for debugging consider/commit loops
 
-    std::optional<IRBuilder<>> current;
+        std::queue<Result> toDestroy;
+        std::unordered_set<uint64_t> avoidDestroy;
 
-    // For ExpressionNode scopes, product is stored here
-    std::optional<BuilderResult> product;
+        void consider(const Result &result);
 
-    // separate for now... for data efficiency - use findVariable function
-    std::unordered_map<const VariableNode *, std::shared_ptr<BuilderVariable>> variables;
+        void commit(llvm::BasicBlock *block);
 
-    MatchResult match(
-        const std::vector<const VariableNode *> &variables, const MatchInput &input);
-    std::variant<BuilderResult, MatchCallError> call(
-        const std::vector<const Node *> &options, const MatchInput &input);
-    std::variant<BuilderResult, MatchCallError> call(
-        const std::vector<const Node *> &options, const MatchInput &input, IRBuilder<> *builder);
-
-    static BuilderResult callUnpack(const std::variant<BuilderResult, MatchCallError> &result, const Node *node);
-
-    BuilderVariable *findVariable(const VariableNode *node) const;
-
-    // Node for search scope.
-    static std::optional<Typename> negotiate(const Typename &left, const Typename &right);
-
-    std::optional<BuilderResult> convert(
-        const BuilderResult &result, const Typename &type, bool force = false);
-    static std::optional<std::pair<BuilderResult, BuilderResult>> convert(
-        const BuilderResult &a, BuilderScope &aScope,
-        const BuilderResult &b, BuilderScope &bScope);
-    std::optional<std::pair<BuilderResult, BuilderResult>> convert(
-        const BuilderResult &a, const BuilderResult &b);
-
-    BuilderResult infer(const BuilderWrapped &result);
-    BuilderResult unpack(const BuilderResult &result);
-    BuilderResult pass(const BuilderResult &result);
-
-    void invokeDestroy(const BuilderResult &result);
-    void invokeDestroy(const BuilderResult &result, IRBuilder<> &builder);
-    void invokeDestroy(const BuilderResult &result, BasicBlock *block);
-
-    Value *get(const BuilderResult &result);
-    Value *ref(const BuilderResult &result);
-    Value *get(const BuilderResult &result, IRBuilder<> &builder) const;
-    Value *ref(const BuilderResult &result, IRBuilder<> &builder) const;
-
-    BuilderResult combine(const BuilderResult &a, const BuilderResult &b, OperatorNode::Operation op);
-
-    BuilderWrapped makeExpressionNounContent(const Node *node);
-    BuilderWrapped makeExpressionNounModifier(const Node *node, const BuilderWrapped &result);
-    BuilderWrapped makeExpressionNoun(const ExpressionNoun &noun);
-    BuilderWrapped makeExpressionOperation(const ExpressionOperation &operation);
-    BuilderWrapped makeExpressionCombinator(const ExpressionCombinator &combinator);
-    BuilderWrapped makeExpressionResult(const ExpressionResult &result);
-    BuilderResult makeExpression(const ExpressionNode *node);
-
-    BuilderResult makeNew(const NewNode *node);
-
-    void makeIf(const IfNode *node);
-    void makeFor(const ForNode *node);
-    void makeBlock(const BlockNode *node);
-    void makeAssign(const AssignNode *node);
-    void makeStatement(const StatementNode *node);
-
-    BuilderScope(const Node *node, BuilderScope &parent, bool doCodeGen = true);
-    BuilderScope(const Node *node, BuilderFunction &function, bool doCodeGen = true);
-
-private:
-    void makeParameters();
-
-    BuilderScope(const Node *node, BuilderFunction &function, BuilderScope *parent, bool doCodeGen = true);
-};
-
-struct BuilderType {
-    Builder &builder;
-    const TypeNode *node = nullptr;
-
-    StructType *type = nullptr;
-
-    std::unordered_map<const VariableNode *, size_t> indices;
-
-    BuilderFunction *implicitDestructor = nullptr;
-
-    // for avoiding recursive problems
-    void build();
-
-    explicit BuilderType(const TypeNode *node, Builder &builder);
-};
-
-struct BuilderFunction {
-    enum class Purpose {
-        UserFunction,
-        TypeDestructor,
+        explicit StatementContext(Scope &parent);
     };
 
-    Purpose purpose = Purpose::UserFunction;
+    struct Variable {
+        const parser::Variable *node = nullptr;
+        utils::Typename type;
 
-    Builder &builder;
+        llvm::Value *value = nullptr;
 
-    const Node *node = nullptr;
+        Variable(const parser::Variable *node, Builder &builder); // global variable
+        Variable(const parser::Variable *node, Scope &scope); // regular variable
+        Variable(const parser::Variable *node, llvm::Value *input, Scope &scope); // function parameter
+    };
 
-    BasicBlock *entryBlock = nullptr;
-    BasicBlock *exitBlock = nullptr;
+    struct MatchResult {
+        std::optional<std::string> failed;
+        std::vector<const Result *> map;
 
-    IRBuilder<> entry;
-    IRBuilder<> exit;
+        size_t numImplicit = 0;
+    };
 
-    Type *returnType = nullptr;
-    Value *returnValue = nullptr;
+    struct MatchInput {
+        std::vector<const Result *> parameters;
+        std::unordered_map<size_t, std::string> names;
+    };
 
-    FunctionTypename type;
-    Function *function = nullptr;
+    struct MatchCallError {
+        std::string problem;
+        std::vector<std::string> messages;
+    };
 
-    void build();
+    struct Scope {
+        Builder &builder;
+        Scope *parent = nullptr;
+        Function *function = nullptr;
 
-    BuilderFunction(const Node *node, Builder &builder);
-};
+        StatementContext statementContext;
 
-struct Builder {
-    const RootNode *root = nullptr;
+        llvm::BasicBlock *openingBlock = nullptr;
+        llvm::BasicBlock *currentBlock = nullptr;
 
-    const ManagerFile &file;
-    const Options &options;
+        llvm::BasicBlock *lastBlock = nullptr;
 
-    Function *mallocCache = nullptr;
-    Function *freeCache = nullptr;
+        llvm::Value *exitChainType = nullptr;
+        llvm::BasicBlock *exitChainBegin = nullptr;
 
-    std::set<const ManagerFile *> dependencies;
+        enum class ExitPoint {
+            Regular,
+            Return,
+            Break,
+            Continue
+        };
 
-    LLVMContext &context;
-    std::unique_ptr<Module> module;
+        std::set<ExitPoint> requiredPoints = { ExitPoint::Regular };
+        std::unordered_map<ExitPoint, llvm::BasicBlock *> destinations;
 
-    std::vector<const Node *> destroyInvokables;
+        // For types, might need to be cleared occasionally. For ArrayKind::UnboundedSize mostly.
+        std::unordered_map<const parser::Expression *, Result> expressionCache;
 
-    std::unordered_map<const TypeNode *, std::unique_ptr<BuilderFunction>> implicitDestructors;
+        llvm::Value *makeAlloca(const utils::Typename &type, const std::string &name = "");
+        llvm::Value *makeMalloc(const utils::Typename &type, const std::string &name = "");
 
-    std::unordered_map<const TypeNode *, std::unique_ptr<BuilderType>> types;
-    std::unordered_map<const VariableNode *, std::unique_ptr<BuilderVariable>> globals;
-    std::unordered_map<const FunctionNode *, std::unique_ptr<BuilderFunction>> functions;
+        void commit();
+        void exit(ExitPoint point, llvm::BasicBlock *from = nullptr);
 
-    BuilderType *makeType(const TypeNode *node);
-    BuilderVariable *makeGlobal(const VariableNode *node);
-    BuilderFunction *makeFunction(const FunctionNode *node);
+        std::optional<llvm::IRBuilder<>> current;
 
-    Function *getMalloc();
-    Function *getFree();
+        // For ExpressionNode scopes, product is stored here
+        std::optional<Result> product;
 
-    const Node *find(const ReferenceNode *node);
-    std::vector<const Node *> findAll(const ReferenceNode *node);
+        // separate for now... for data efficiency - use findVariable function
+        std::unordered_map<const parser::Variable *, std::shared_ptr<Variable>> variables;
 
-    const Node *searchDependencies(const std::function<bool(Node *)> &match);
-    std::vector<const Node *> searchAllDependencies(const std::function<bool(Node *)> &match);
+        MatchResult match(
+            const std::vector<const parser::Variable *> &variables, const MatchInput &input);
+        std::variant<Result, MatchCallError> call(
+            const std::vector<const hermes::Node *> &options, const MatchInput &input);
+        std::variant<Result, MatchCallError> call(
+            const std::vector<const hermes::Node *> &options, const MatchInput &input, llvm::IRBuilder<> *builder);
 
-    Typename resolveTypename(const Node *node);
+        static Result callUnpack(const std::variant<Result, MatchCallError> &result, const hermes::Node *node);
 
-    Type *makeTypename(const Typename &type);
-    [[nodiscard]] Type *makePrimitiveType(PrimitiveType type) const;
+        Variable *findVariable(const parser::Variable *node) const;
 
-    Builder(const ManagerFile &file, const Options &opts);
-};
+        // Node for search scope.
+        static std::optional<utils::Typename> negotiate(const utils::Typename &left, const utils::Typename &right);
+
+        std::optional<Result> convert(
+            const Result &result, const utils::Typename &type, bool force = false);
+        static std::optional<std::pair<Result, Result>> convert(
+            const Result &a, Scope &aScope,
+            const Result &b, Scope &bScope);
+        std::optional<std::pair<Result, Result>> convert(
+            const Result &a, const Result &b);
+
+        Result infer(const Wrapped &result);
+        Result unpack(const Result &result);
+        Result pass(const Result &result);
+
+        void invokeDestroy(const builder::Result &result);
+        void invokeDestroy(const builder::Result &result, llvm::IRBuilder<> &builder);
+        void invokeDestroy(const builder::Result &result, llvm::BasicBlock *block);
+
+        llvm::Value *get(const builder::Result &result);
+        llvm::Value *ref(const builder::Result &result);
+        llvm::Value *get(const builder::Result &result, llvm::IRBuilder<> &builder) const;
+        llvm::Value *ref(const builder::Result &result, llvm::IRBuilder<> &builder) const;
+
+        Result combine(const Result &a, const Result &b, utils::BinaryOperation op);
+
+        Wrapped makeExpressionNounContent(const hermes::Node *node);
+        Wrapped makeExpressionNounModifier(const hermes::Node *node, const Wrapped &result);
+        Wrapped makeExpressionNoun(const utils::ExpressionNoun &noun);
+        Wrapped makeExpressionOperation(const utils::ExpressionOperation &operation);
+        Wrapped makeExpressionCombinator(const utils::ExpressionCombinator &combinator);
+        Wrapped makeExpressionResult(const utils::ExpressionResult &result);
+        Result makeExpression(const parser::Expression *node);
+
+        Result makeNew(const parser::New *node);
+
+        void makeIf(const parser::If *node);
+        void makeFor(const parser::For *node);
+        void makeBlock(const parser::Block *node);
+        void makeAssign(const parser::Assign *node);
+        void makeStatement(const parser::Statement *node);
+
+        Scope(const hermes::Node *node, Scope &parent, bool doCodeGen = true);
+        Scope(const hermes::Node *node, Function &function, bool doCodeGen = true);
+
+    private:
+        void makeParameters();
+
+        Scope(const hermes::Node *node, Function &function, Scope *parent, bool doCodeGen = true);
+    };
+
+    struct Type {
+        Builder &builder;
+        const parser::Type *node = nullptr;
+
+        llvm::StructType *type = nullptr;
+
+        std::unordered_map<const parser::Variable *, size_t> indices;
+
+        Function *implicitDestructor = nullptr;
+
+        // for avoiding recursive problems
+        void build();
+
+        explicit Type(const parser::Type *node, Builder &builder);
+    };
+
+    struct Function {
+        enum class Purpose {
+            UserFunction,
+            TypeDestructor,
+        };
+
+        Purpose purpose = Purpose::UserFunction;
+
+        Builder &builder;
+
+        const hermes::Node *node = nullptr;
+
+        llvm::BasicBlock *entryBlock = nullptr;
+        llvm::BasicBlock *exitBlock = nullptr;
+
+        llvm::IRBuilder<> entry;
+        llvm::IRBuilder<> exit;
+
+        llvm::Type *returnType = nullptr;
+        llvm::Value *returnValue = nullptr;
+
+        utils::FunctionTypename type;
+        llvm::Function *function = nullptr;
+
+        void build();
+
+        Function(const hermes::Node *node, Builder &builder);
+    };
+
+    struct Builder {
+        const parser::Root *root = nullptr;
+
+        const ManagerFile &file;
+        const options::Options &options;
+
+        llvm::Function *mallocCache = nullptr;
+        llvm::Function *freeCache = nullptr;
+
+        std::unordered_set<const ManagerFile *> dependencies;
+
+        llvm::LLVMContext &context;
+        std::unique_ptr<llvm::Module> module;
+
+        std::vector<const hermes::Node *> destroyInvokables;
+
+        std::unordered_map<const parser::Type *, std::unique_ptr<Function>> implicitDestructors;
+
+        std::unordered_map<const parser::Type *, std::unique_ptr<builder::Type>> types;
+        std::unordered_map<const parser::Variable *, std::unique_ptr<builder::Variable>> globals;
+        std::unordered_map<const parser::Function *, std::unique_ptr<builder::Function>> functions;
+
+        builder::Type *makeType(const parser::Type *node);
+        builder::Variable *makeGlobal(const parser::Variable *node);
+        builder::Function *makeFunction(const parser::Function *node);
+
+        llvm::Function *getMalloc();
+        llvm::Function *getFree();
+
+        const hermes::Node *find(const parser::Reference *node);
+        std::vector<const hermes::Node *> findAll(const parser::Reference *node);
+
+        using SearchChecker = std::function<bool(const hermes::Node *)>;
+
+        const hermes::Node *searchDependencies(const SearchChecker &match);
+        std::vector<const hermes::Node *> searchAllDependencies(const SearchChecker &match);
+
+        utils::Typename resolveTypename(const hermes::Node *node);
+
+        llvm::Type *makeTypename(const utils::Typename &type);
+        [[nodiscard]] llvm::Type *makePrimitiveType(utils::PrimitiveType type) const;
+
+        Builder(const ManagerFile &file, const options::Options &opts);
+    };
+}

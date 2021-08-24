@@ -4,115 +4,118 @@
 
 #include <parser/literals.h>
 #include <parser/variable.h>
+#include <parser/expression.h>
 
 #include <fmt/format.h>
 
-BuilderVariable::BuilderVariable(const VariableNode *node, Builder &builder) : node(node) {
-//    if (node->isMutable)
-//        throw VerifyError(node, "Global variables cannot be mutable.");
+namespace kara::builder {
+    Variable::Variable(const parser::Variable *node, builder::Builder &builder) : node(node) {
+        if (node->isMutable)
+            throw VerifyError(node, "Global variables cannot be mutable.");
 
-    if (!node->hasFixedType)
-        throw VerifyError(node, "Global variables must have a fixed type.");
+        if (!node->hasFixedType)
+            throw VerifyError(node, "Global variables must have a fixed type.");
 
-    if (node->value())
-        throw VerifyError(node, "Global variables cannot be initialized.");
+        if (node->value())
+            throw VerifyError(node, "Global variables cannot be initialized.");
 
-    type = builder.resolveTypename(node->fixedType());
+        type = builder.resolveTypename(node->fixedType());
 
-    using L = GlobalVariable::LinkageTypes;
+        using L = llvm::GlobalVariable::LinkageTypes;
 
-    assert(!node->hasInitialValue);
+        assert(!node->hasInitialValue);
 
-    Constant *defaultValue = nullptr;
+        llvm::Constant *defaultValue = nullptr;
 
-    if (node->hasConstantValue) {
-        assert(node->hasFixedType);
+        if (node->hasConstantValue) {
+            assert(node->hasFixedType);
 
-        auto numberNode = node->constantValue();
+            auto numberNode = node->constantValue();
 
-        Type *resolvedType = node->hasFixedType
-            ? builder.makeTypename(builder.resolveTypename(node->fixedType())) : nullptr;
+            llvm::Type *resolvedType = node->hasFixedType
+                ? builder.makeTypename(builder.resolveTypename(node->fixedType())) : nullptr;
 
-        struct {
-            Builder &builder;
-            Type *resolvedType;
+            struct {
+                builder::Builder &builder;
+                llvm::Type *resolvedType;
 
-            Constant *operator()(uint64_t v) {
-                return ConstantInt::get(resolvedType ? resolvedType : Type::getInt64Ty(builder.context), v);
-            }
+                llvm::Constant *operator()(uint64_t v) {
+                    return llvm::ConstantInt::get(resolvedType ? resolvedType : llvm::Type::getInt64Ty(builder.context), v);
+                }
 
-            Constant *operator()(int64_t v) {
-                return ConstantInt::getSigned(resolvedType ? resolvedType : Type::getInt64Ty(builder.context), v);
-            }
+                llvm::Constant *operator()(int64_t v) {
+                    return llvm::ConstantInt::getSigned(resolvedType ? resolvedType :llvm::Type::getInt64Ty(builder.context), v);
+                }
 
-            Constant *operator()(double v) {
-                return ConstantFP::get(resolvedType ? resolvedType : Type::getDoubleTy(builder.context), v);
-            }
-        } visitor { builder, resolvedType };
+                llvm::Constant *operator()(double v) {
+                    return llvm::ConstantFP::get(resolvedType ? resolvedType : llvm::Type::getDoubleTy(builder.context), v);
+                }
+            } visitor { builder, resolvedType };
 
-        defaultValue = std::visit(visitor, numberNode->value);
-    }
-
-    value = new GlobalVariable(
-        *builder.module, builder.makeTypename(type), node->isMutable,
-        node->isExternal ? L::ExternalLinkage : L::PrivateLinkage, defaultValue, node->name);
-}
-
-BuilderVariable::BuilderVariable(const VariableNode *node, BuilderScope &scope) : node(node) {
-    assert(scope.function);
-
-    BuilderFunction &function = *scope.function;
-
-    assert(node->hasFixedType || node->value());
-
-    std::optional<BuilderResult> possibleDefault;
-
-    if (node->hasInitialValue) {
-        BuilderResult result = scope.makeExpression(node->value());
-
-        if (node->hasFixedType) {
-            auto fixedType = function.builder.resolveTypename(node->fixedType());
-
-            std::optional<BuilderResult> resultConverted = scope.convert(result, fixedType);
-
-            if (!resultConverted) {
-                throw VerifyError(node->value(),
-                    "Cannot convert from type {} to variable fixed type {}.",
-                    toString(result.type),
-                    toString(fixedType));
-            }
-
-            result = *resultConverted;
+            defaultValue = std::visit(visitor, numberNode->value);
         }
 
-        result = scope.pass(result);
+        value = new llvm::GlobalVariable(
+            *builder.module, builder.makeTypename(type), node->isMutable,
+            node->isExternal ? L::ExternalLinkage : L::PrivateLinkage, defaultValue, node->name);
+    }
 
-        type = result.type;
-        possibleDefault = result; // copy :|
-    } else {
+    Variable::Variable(const parser::Variable *node, builder::Scope &scope) : node(node) {
+        assert(scope.function);
+
+        builder::Function &function = *scope.function;
+
+        assert(node->hasFixedType || node->value());
+
+        std::optional<builder::Result> possibleDefault;
+
+        if (node->hasInitialValue) {
+            builder::Result result = scope.makeExpression(node->value());
+
+            if (node->hasFixedType) {
+                auto fixedType = function.builder.resolveTypename(node->fixedType());
+
+                std::optional<builder::Result> resultConverted = scope.convert(result, fixedType);
+
+                if (!resultConverted) {
+                    throw VerifyError(node->value(),
+                        "Cannot convert from type {} to variable fixed type {}.",
+                        toString(result.type),
+                        toString(fixedType));
+                }
+
+                result = *resultConverted;
+            }
+
+            result = scope.pass(result);
+
+            type = result.type;
+            possibleDefault = result; // copy :|
+        } else {
+            type = function.builder.resolveTypename(node->fixedType());
+        }
+
+        if (scope.current) {
+            value = scope.makeAlloca(type, node->name);
+
+            if (possibleDefault)
+                scope.current->CreateStore(scope.get(*possibleDefault), value);
+        }
+    }
+
+    Variable::Variable(const parser::Variable *node, llvm::Value *input, builder::Scope &scope) : node(node) {
+        assert(scope.function);
+
+        builder::Function &function = *scope.function;
+
+        if (!node->hasFixedType || node->value())
+            throw VerifyError(node, "A function parameter must have fixed type and no default value, unimplemented.");
+
         type = function.builder.resolveTypename(node->fixedType());
-    }
 
-    if (scope.current) {
-        value = scope.makeAlloca(type, node->name);
-
-        if (possibleDefault)
-            scope.current->CreateStore(scope.get(*possibleDefault), value);
-    }
-}
-
-BuilderVariable::BuilderVariable(const VariableNode *node, Value *input, BuilderScope &scope) : node(node) {
-    assert(scope.function);
-
-    BuilderFunction &function = *scope.function;
-
-    if (!node->hasFixedType || node->value())
-        throw VerifyError(node, "A function parameter must have fixed type and no default value, unimplemented.");
-
-    type = function.builder.resolveTypename(node->fixedType());
-
-    if (scope.current) {
-        value = scope.makeAlloca(type, fmt::format("{}_value", node->name));
-        function.entry.CreateStore(input, value);
+        if (scope.current) {
+            value = scope.makeAlloca(type, fmt::format("{}_value", node->name));
+            function.entry.CreateStore(input, value);
+        }
     }
 }

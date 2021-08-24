@@ -2,47 +2,15 @@
 
 #include <parser/kinds.h>
 
-#include <parser/operator.h>
+#include <utils/expression.h>
 
-#include <variant>
+namespace kara::parser {
+    struct Expression : public hermes::Node {
+        utils::ExpressionResult result;
 
-struct ExpressionNoun;
-struct ExpressionOperation;
-struct ExpressionCombinator;
-using ExpressionResult = std::variant<ExpressionNoun, ExpressionOperation, ExpressionCombinator>;
+        // Just to keep it alive for result.
+        std::unique_ptr<Node> postfix;
 
-struct ExpressionNoun {
-    const Node *content = nullptr;
-
-    std::vector<const Node *> modifiers;
-
-    void push(const Node *node);
-};
-
-struct ExpressionOperation {
-    std::unique_ptr<ExpressionResult> a;
-
-    Node *op = nullptr;
-
-    ExpressionOperation(std::unique_ptr<ExpressionResult> a, Node *op);
-};
-
-struct ExpressionCombinator {
-    std::unique_ptr<ExpressionResult> a;
-    std::unique_ptr<ExpressionResult> b;
-
-    OperatorNode *op = nullptr;
-
-    ExpressionCombinator(
-        std::unique_ptr<ExpressionResult> a, std::unique_ptr<ExpressionResult> b, OperatorNode *op);
-};
-
-
-struct ExpressionNode : public Node {
-    ExpressionResult result;
-
-    // Just to keep it alive for result.
-    std::unique_ptr<Node> postfix;
-
-    explicit ExpressionNode(Node *parent, bool placeholder = false);
-};
+        explicit Expression(Node *parent, bool placeholder = false);
+    };
+}

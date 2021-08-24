@@ -3,29 +3,31 @@
 #include <set>
 #include <string>
 
-struct OptionsError : std::exception {
-    std::string reason;
+namespace kara::options {
+    struct OptionsError : std::exception {
+        std::string reason;
 
-    [[nodiscard]] const char *what() const noexcept override;
+        [[nodiscard]] const char *what() const noexcept override;
 
-    explicit OptionsError(std::string reason);
-};
+        explicit OptionsError(std::string reason);
+    };
 
-struct Options {
-    std::set<std::string> inputs;
-    std::string output;
+    struct Options {
+        std::set<std::string> inputs;
+        std::string output;
 
-    std::string triple;
+        std::string triple;
 
-    std::set<std::string> libraries;
+        std::set<std::string> libraries;
 
-    bool printIR = false;
-    bool optimize = false;
-    bool interpret = false;
+        bool printIR = false;
+        bool optimize = false;
+        bool interpret = false;
 
-    std::string malloc = "malloc";
-    std::string free = "free";
+        std::string malloc = "malloc";
+        std::string free = "free";
 
-    Options() = default;
-    Options(int count, const char **args);
-};
+        Options() = default;
+        Options(int count, const char **args);
+    };
+}

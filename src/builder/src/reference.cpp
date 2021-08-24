@@ -11,87 +11,89 @@
 
 #include <unordered_set>
 
-const Node *Builder::searchDependencies(const std::function<bool(Node *)> &match) {
-    for (const ManagerFile *f : dependencies) {
-        for (const auto &c : f->root->children) {
-            if (match(c.get())) {
-                return c.get();
+namespace kara::builder {
+    const hermes::Node *Builder::searchDependencies(const SearchChecker &match) {
+        for (const ManagerFile *f : dependencies) {
+            for (const auto &c : f->root->children) {
+                if (match(c.get())) {
+                    return c.get();
+                }
             }
         }
+
+        return nullptr;
     }
 
-    return nullptr;
-}
+    std::vector<const hermes::Node *> Builder::searchAllDependencies(const SearchChecker &match) {
+        std::vector<const hermes::Node *> result;
 
-std::vector<const Node *> Builder::searchAllDependencies(const std::function<bool(Node *)> &match) {
-    std::vector<const Node *> result;
-
-    for (const ManagerFile *f : dependencies) {
-        for (const auto &c : f->root->children) {
-            if (match(c.get())) {
-                result.push_back(c.get());
+        for (const ManagerFile *f : dependencies) {
+            for (const auto &c : f->root->children) {
+                if (match(c.get())) {
+                    result.push_back(c.get());
+                }
             }
         }
+
+        return result;
     }
 
-    return result;
-}
+    const hermes::Node *Builder::find(const parser::Reference *node) {
+        auto matchVariable = [node](const hermes::Node *value) -> bool {
+            return (value->is(parser::Kind::Variable) && value->as<parser::Variable>()->name == node->name);
+        };
 
-const Node *Builder::find(const ReferenceNode *node) {
-    auto matchVariable = [node](const Node *value) -> bool {
-        return (value->is(Kind::Variable) && value->as<VariableNode>()->name == node->name);
-    };
+        auto match = [node](const hermes::Node *value) -> bool {
+            return (value->is(parser::Kind::Variable) && value->as<parser::Variable>()->name == node->name)
+            || (value->is(parser::Kind::Function) && value->as<parser::Function>()->name == node->name)
+            || (value->is(parser::Kind::Type) && value->as<parser::Type>()->name == node->name);
+        };
 
-    auto match = [node](const Node *value) -> bool {
-        return (value->is(Kind::Variable) && value->as<VariableNode>()->name == node->name)
-            || (value->is(Kind::Function) && value->as<FunctionNode>()->name == node->name)
-            || (value->is(Kind::Type) && value->as<TypeNode>()->name == node->name);
-    };
+        const hermes::Node *result = parser::search::exclusive::scopeFrom(node, matchVariable);
 
-    const Node *result = search::exclusive::scopeFrom(node, matchVariable);
+        if (!result)
+            result = searchDependencies(match);
 
-    if (!result)
-        result = searchDependencies(match);
+        if (!result)
+            throw VerifyError(node, "Reference does not evaluate to anything.");
 
-    if (!result)
-        throw VerifyError(node, "Reference does not evaluate to anything.");
+        return result;
+    }
 
-    return result;
-}
+    std::vector<const hermes::Node *> Builder::findAll(const parser::Reference *node) {
+        auto matchVariable = [node](const hermes::Node *value) -> bool {
+            return (value->is(parser::Kind::Variable) && value->as<parser::Variable>()->name == node->name);
+        };
 
-std::vector<const Node *> Builder::findAll(const ReferenceNode *node) {
-    auto matchVariable = [node](const Node *value) -> bool {
-        return (value->is(Kind::Variable) && value->as<VariableNode>()->name == node->name);
-    };
+        auto match = [node](const hermes::Node *value) -> bool {
+            return (value->is(parser::Kind::Variable) && value->as<parser::Variable>()->name == node->name)
+            || (value->is(parser::Kind::Function) && value->as<parser::Function>()->name == node->name)
+            || (value->is(parser::Kind::Type) && value->as<parser::Type>()->name == node->name);
+        };
 
-    auto match = [node](const Node *value) -> bool {
-        return (value->is(Kind::Variable) && value->as<VariableNode>()->name == node->name)
-            || (value->is(Kind::Function) && value->as<FunctionNode>()->name == node->name)
-            || (value->is(Kind::Type) && value->as<TypeNode>()->name == node->name);
-    };
+        std::unordered_set<const hermes::Node *> unique;
+        std::vector<const hermes::Node *> combine;
 
-    std::set<const Node *> unique;
-    std::vector<const Node *> combine;
+        auto add = [&unique, &combine](const std::vector<const hermes::Node *> &r) {
+            for (auto k : r) {
+                auto it = unique.find(k);
 
-    auto add = [&unique, &combine](const std::vector<const Node *> &r) {
-        for (auto k : r) {
-            auto it = unique.find(k);
-
-            if (it == unique.end()) {
-                unique.insert(k);
-                combine.push_back(k);
+                if (it == unique.end()) {
+                    unique.insert(k);
+                    combine.push_back(k);
+                }
             }
-        }
-    };
+        };
 
-    std::vector<const Node *> result = search::scopeFrom(node, matchVariable);
-    std::vector<const Node *> more = searchAllDependencies(match);
+        std::vector<const hermes::Node *> result = parser::search::scopeFrom(node, matchVariable);
+        std::vector<const hermes::Node *> more = searchAllDependencies(match);
 
-    add(result);
-    add(more);
+        add(result);
+        add(more);
 
-    if (combine.empty())
-        throw VerifyError(node, "Reference does not evaluate to anything.");
+        if (combine.empty())
+            throw VerifyError(node, "Reference does not evaluate to anything.");
 
-    return combine;
+        return combine;
+    }
 }

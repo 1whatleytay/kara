@@ -6,20 +6,22 @@
 
 #include <vector>
 
-struct VariableNode;
+namespace kara::parser {
+    struct Variable;
 
-struct FunctionNode : public Node {
-    std::string name;
+    struct Function : public hermes::Node {
+        std::string name;
 
-    size_t parameterCount = 0;
+        size_t parameterCount = 0;
 
-    bool isExtern = false;
-    bool hasFixedType = false;
+        bool isExtern = false;
+        bool hasFixedType = false;
 
-    std::vector<const VariableNode *> parameters() const;
+        [[nodiscard]] std::vector<const Variable *> parameters() const;
 
-    const Node *fixedType() const;
-    const Node *body() const;
+        [[nodiscard]] const Node *fixedType() const;
+        [[nodiscard]] const Node *body() const;
 
-    explicit FunctionNode(Node *parent, bool external = false);
-};
+        explicit Function(Node *parent, bool external = false);
+    };
+}

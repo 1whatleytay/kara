@@ -6,273 +6,203 @@
 #include <parser/type.h>
 #include <parser/function.h>
 #include <parser/variable.h>
+#include <parser/expression.h>
 
 #include <llvm/Support/Host.h>
 
-uint64_t BuilderStatementContext::getNextUID() { return nextUID++; }
+namespace kara::builder {
+    builder::Type *Builder::makeType(const parser::Type *node) {
+        auto iterator = types.find(node);
 
-void BuilderStatementContext::consider(const BuilderResult &result) {
-    auto typeRef = std::get_if<ReferenceTypename>(&result.type);
+        if (iterator == types.end()) {
+            auto ptr = std::make_unique<builder::Type>(node, *this);
 
-    if (parent.current
-        && (result.isSet(BuilderResult::FlagTemporary))
-        && std::holds_alternative<PrimitiveTypename>(result.type)
-        && (!typeRef || typeRef->kind != ReferenceKind::Regular)) {
-        assert(!lock);
+            builder::Type *result = ptr.get();
+            types[node] = std::move(ptr);
+            result->build(); // needed to avoid recursive problems
 
-        toDestroy.push(result);
-    }
-}
-
-void BuilderStatementContext::commit(BasicBlock *block) {
-    if (!parent.current)
-        return;
-
-    IRBuilder<> builder(block);
-
-    lock = true;
-
-    while (!toDestroy.empty()) {
-        const BuilderResult &destroy = toDestroy.front();
-
-        if (avoidDestroy.find(destroy.statementUID) != avoidDestroy.end())
-            continue;
-
-        parent.invokeDestroy(destroy, builder);
-
-        toDestroy.pop();
-    }
-
-    lock = false;
-
-    avoidDestroy.clear();
-}
-
-BuilderStatementContext::BuilderStatementContext(BuilderScope &parent) : parent(parent) { }
-
-bool BuilderResult::isSet(Flags flag) const {
-    return flags & flag;
-}
-
-const Node *BuilderUnresolved::first(Kind nodeKind) {
-    auto iterator = std::find_if(references.begin(), references.end(), [nodeKind](const Node *node) {
-        return node->is(nodeKind);
-    });
-
-    return iterator == references.end() ? nullptr : *iterator;
-}
-
-// oh dear
-BuilderResult::BuilderResult(
-    uint32_t flags,
-    Value *value,
-    Typename type,
-    BuilderStatementContext *statementContext)
-    : flags(flags), value(value), type(std::move(type)){
-
-    if (statementContext) {
-        statementUID = statementContext->getNextUID();
-        statementContext->consider(*this); // register
-    }
-}
-
-BuilderUnresolved::BuilderUnresolved(
-    const Node *from,
-    std::vector<const Node *> references,
-    std::unique_ptr<BuilderResult> implicit)
-    : from(from), references(std::move(references)), implicit(std::move(implicit)) {
-}
-
-BuilderType *Builder::makeType(const TypeNode *node) {
-    auto iterator = types.find(node);
-
-    if (iterator == types.end()) {
-        auto ptr = std::make_unique<BuilderType>(node, *this);
-
-        BuilderType *result = ptr.get();
-        types[node] = std::move(ptr);
-        result->build(); // needed to avoid recursive problems
-
-        return result;
-    } else {
-        return iterator->second.get();
-    }
-}
-
-BuilderVariable *Builder::makeGlobal(const VariableNode *node) {
-    auto iterator = globals.find(node);
-
-    if (iterator == globals.end()) {
-        auto ptr = std::make_unique<BuilderVariable>(node, *this);
-
-        BuilderVariable *result = ptr.get();
-        globals[node] = std::move(ptr);
-
-        return result;
-    } else {
-        return iterator->second.get();
-    }
-}
-
-BuilderFunction *Builder::makeFunction(const FunctionNode *node) {
-    auto iterator = functions.find(node);
-
-    if (iterator == functions.end()) {
-        auto ptr = std::make_unique<BuilderFunction>(node, *this);
-
-        BuilderFunction *result = ptr.get();
-        functions[node] = std::move(ptr);
-
-        result->build();
-
-        return result;
-    } else {
-        return iterator->second.get();
-    }
-}
-
-Function *Builder::getMalloc() {
-    if (!mallocCache) {
-        auto type = FunctionType::get(
-            Type::getInt8PtrTy(context),
-            std::vector<Type *> { Type::getInt64Ty(context) },
-            false);
-
-        mallocCache = Function::Create(type, GlobalVariable::LinkageTypes::ExternalLinkage, options.malloc, *module);
-    }
-
-    return mallocCache;
-}
-
-Function *Builder::getFree() {
-    if (!freeCache) {
-        auto type = FunctionType::get(
-            Type::getVoidTy(context),
-            std::vector<Type *> { Type::getInt8PtrTy(context) },
-            false);
-
-        freeCache = Function::Create(type, GlobalVariable::LinkageTypes::ExternalLinkage, options.free, *module);
-    }
-
-    return freeCache;
-}
-
-Value *BuilderScope::makeAlloca(const Typename &type, const std::string &name) {
-    assert(function);
-
-    if (auto array = std::get_if<ArrayTypename>(&type)) {
-        if (array->kind == ArrayKind::Unbounded)
-            throw std::runtime_error(
-                fmt::format("Attempt to allocate type {} on stack.", toString(type)));
-
-        if (array->kind == ArrayKind::UnboundedSized)
-            throw std::runtime_error(
-                fmt::format("VLA unsupported for type {0}. Use *{0} for allocation instead.", toString(type)));
-    }
-
-    return function->entry.CreateAlloca(builder.makeTypename(type), nullptr, name);
-}
-
-Value *BuilderScope::makeMalloc(const Typename &type, const std::string &name) {
-    Value *arraySize = nullptr;
-
-    if (auto array = std::get_if<ArrayTypename>(&type)) {
-        if (array->kind == ArrayKind::Unbounded)
-            throw std::runtime_error(
-                fmt::format("Attempt to allocate type {} on heap.", toString(type)));
-
-        if (array->kind == ArrayKind::UnboundedSized) {
-            assert(array->expression);
-
-            auto it = expressionCache.find(array->expression);
-            if (it != expressionCache.end()) {
-                arraySize = get(it->second);
-            } else {
-                auto converted = convert(makeExpression(array->expression), PrimitiveTypename { PrimitiveType::ULong });
-
-                if (!converted)
-                    throw VerifyError(array->expression, "Expression cannot be converted to ulong for size for array.");
-
-                auto &result = *converted;
-
-                expressionCache.insert({ array->expression, result });
-
-                arraySize = get(result);
-            }
-
-            // TODO: needs recursive implementation of sizes to account for [[int:50]:50]
-            // ^ probably would be done in the great refactor
-
-
-            auto llvmElementType = builder.makeTypename(*array->value);
-            size_t elementSize = builder.file.manager.target.layout->getTypeStoreSize(llvmElementType);
-
-            Constant *llvmElementSize = ConstantInt::get(Type::getInt64Ty(builder.context), elementSize);
-
-            if (current)
-                arraySize = current->CreateMul(llvmElementSize, arraySize);
+            return result;
+        } else {
+            return iterator->second.get();
         }
     }
 
-    if (!current)
-        return nullptr;
+    builder::Variable *Builder::makeGlobal(const parser::Variable *node) {
+        auto iterator = globals.find(node);
 
-    auto llvmType = builder.makeTypename(type);
-    auto pointerType = PointerType::get(llvmType, 0);
+        if (iterator == globals.end()) {
+            auto ptr = std::make_unique<builder::Variable>(node, *this);
 
-    size_t bytes = builder.file.manager.target.layout->getTypeStoreSize(llvmType);
-    auto malloc = builder.getMalloc();
+            builder::Variable *result = ptr.get();
+            globals[node] = std::move(ptr);
 
-    // if statement above can adjust size...
-    if (!arraySize) {
-        arraySize = ConstantInt::get(Type::getInt64Ty(builder.context), bytes);
+            return result;
+        } else {
+            return iterator->second.get();
+        }
     }
 
-    return current->CreatePointerCast(current->CreateCall(malloc, { arraySize }), pointerType, name);
-}
+    builder::Function *Builder::makeFunction(const parser::Function *node) {
+        auto iterator = functions.find(node);
 
-Builder::Builder(const ManagerFile &file, const Options &opts)
+        if (iterator == functions.end()) {
+            auto ptr = std::make_unique<builder::Function>(node, *this);
+
+            builder::Function *result = ptr.get();
+            functions[node] = std::move(ptr);
+
+            result->build();
+
+            return result;
+        } else {
+            return iterator->second.get();
+        }
+    }
+
+    llvm::Function *Builder::getMalloc() {
+        if (!mallocCache) {
+            auto type = llvm::FunctionType::get(
+                llvm::Type::getInt8PtrTy(context),
+                std::vector<llvm::Type *> { llvm::Type::getInt64Ty(context) },
+                false);
+
+            mallocCache = llvm::Function::Create(type, llvm::GlobalVariable::LinkageTypes::ExternalLinkage, options.malloc, *module);
+        }
+
+        return mallocCache;
+    }
+
+    llvm::Function *Builder::getFree() {
+        if (!freeCache) {
+            auto type = llvm::FunctionType::get(
+                llvm::Type::getVoidTy(context),
+                std::vector<llvm::Type *> { llvm::Type::getInt8PtrTy(context) },
+                false);
+
+            freeCache = llvm::Function::Create(type, llvm::GlobalVariable::LinkageTypes::ExternalLinkage, options.free, *module);
+        }
+
+        return freeCache;
+    }
+
+    llvm::Value *Scope::makeAlloca(const utils::Typename &type, const std::string &name) {
+        assert(function);
+
+        if (auto array = std::get_if<utils::ArrayTypename>(&type)) {
+            if (array->kind == utils::ArrayKind::Unbounded)
+                throw std::runtime_error(
+                    fmt::format("Attempt to allocate type {} on stack.", toString(type)));
+
+            if (array->kind == utils::ArrayKind::UnboundedSized)
+                throw std::runtime_error(
+                    fmt::format("VLA unsupported for type {0}. Use *{0} for allocation instead.", toString(type)));
+        }
+
+        return function->entry.CreateAlloca(builder.makeTypename(type), nullptr, name);
+    }
+
+    llvm::Value *Scope::makeMalloc(const utils::Typename &type, const std::string &name) {
+        llvm::Value *arraySize = nullptr;
+
+        if (auto array = std::get_if<utils::ArrayTypename>(&type)) {
+            if (array->kind == utils::ArrayKind::Unbounded)
+                throw std::runtime_error(
+                    fmt::format("Attempt to allocate type {} on heap.", toString(type)));
+
+            if (array->kind == utils::ArrayKind::UnboundedSized) {
+                assert(array->expression);
+
+                auto it = expressionCache.find(array->expression);
+                if (it != expressionCache.end()) {
+                    arraySize = get(it->second);
+                } else {
+                    auto converted = convert(makeExpression(array->expression), utils::PrimitiveTypename { utils::PrimitiveType::ULong });
+
+                    if (!converted)
+                        throw VerifyError(array->expression, "Expression cannot be converted to ulong for size for array.");
+
+                    auto &result = *converted;
+
+                    expressionCache.insert({ array->expression, result });
+
+                    arraySize = get(result);
+                }
+
+                // TODO: needs recursive implementation of sizes to account for [[int:50]:50]
+                // ^ probably would be done in the great refactor
+
+
+                auto llvmElementType = builder.makeTypename(*array->value);
+                size_t elementSize = builder.file.manager.target.layout->getTypeStoreSize(llvmElementType);
+
+                llvm::Constant *llvmElementSize = llvm::ConstantInt::get(
+                    llvm::Type::getInt64Ty(builder.context), elementSize);
+
+                if (current)
+                    arraySize = current->CreateMul(llvmElementSize, arraySize);
+            }
+        }
+
+        if (!current)
+            return nullptr;
+
+        auto llvmType = builder.makeTypename(type);
+        auto pointerType = llvm::PointerType::get(llvmType, 0);
+
+        size_t bytes = builder.file.manager.target.layout->getTypeStoreSize(llvmType);
+        auto malloc = builder.getMalloc();
+
+        // if statement above can adjust size...
+        if (!arraySize) {
+            arraySize = llvm::ConstantInt::get(llvm::Type::getInt64Ty(builder.context), bytes);
+        }
+
+        return current->CreatePointerCast(current->CreateCall(malloc, { arraySize }), pointerType, name);
+    }
+
+    Builder::Builder(const ManagerFile &file, const options::Options &opts)
     : root(file.root.get()), file(file), dependencies(file.resolve()),
     context(*file.manager.context), options(opts) {
 
-    module = std::make_unique<Module>(file.path.filename().string(), context);
+        module = std::make_unique<llvm::Module>(file.path.filename().string(), context);
 
-    module->setDataLayout(*file.manager.target.layout);
-    module->setTargetTriple(file.manager.target.triple);
+        module->setDataLayout(*file.manager.target.layout);
+        module->setTargetTriple(file.manager.target.triple);
 
-    destroyInvokables = searchAllDependencies([](const Node *node) -> bool {
-        if (!node->is(Kind::Function))
-            return false;
+        destroyInvokables = searchAllDependencies([](const hermes::Node *node) -> bool {
+            if (!node->is(parser::Kind::Function))
+                return false;
 
-        auto e = node->as<FunctionNode>();
+            auto e = node->as<parser::Function>();
 
-        return e->name == "destroy" && e->parameterCount == 1;
-    });
+            return e->name == "destroy" && e->parameterCount == 1;
+        });
 
-    for (const auto &node : root->children) {
-        switch (node->is<Kind>()) {
-            case Kind::Import:
-                // Handled by ManagerFile
-                break;
+        for (const auto &node : root->children) {
+            switch (node->is<parser::Kind>()) {
+                case parser::Kind::Import:
+                    // Handled by ManagerFile
+                    break;
 
-            case Kind::Variable:
-                makeGlobal(node->as<VariableNode>());
-                break;
+                case parser::Kind::Variable:
+                    makeGlobal(node->as<parser::Variable>());
+                    break;
 
-            case Kind::Type: {
-                auto e = node->as<TypeNode>();
+                case parser::Kind::Type: {
+                    auto e = node->as<parser::Type>();
 
-                if (!e->isAlias)
-                    makeType(e);
-                break;
+                    if (!e->isAlias)
+                        makeType(e);
+                    break;
+                }
+
+                case parser::Kind::Function:
+                    makeFunction(node->as<parser::Function>());
+                    break;
+
+                default:
+                    throw VerifyError(node.get(), "Cannot build this node in root.");
             }
-
-            case Kind::Function:
-                makeFunction(node->as<FunctionNode>());
-                break;
-
-            default:
-                throw VerifyError(node.get(), "Cannot build this node in root.");
         }
     }
 }

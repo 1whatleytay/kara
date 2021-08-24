@@ -10,9 +10,11 @@
 
 using namespace hermes;
 
-struct RootNode;
+namespace kara::parser {
+    struct Root;
+}
 
-namespace interfaces::header {
+namespace kara::interfaces::header {
     struct TranslateFactory;
 
     struct TranslateVisitor : clang::RecursiveASTVisitor<TranslateVisitor> {
@@ -60,11 +62,11 @@ namespace interfaces::header {
     struct TranslateFactory : public clang::tooling::FrontendActionFactory {
         size_t id = 0;
 
-        RootNode *node;
+        parser::Root *node;
         std::unordered_map<clang::RecordDecl *, std::string> prebuiltTypes;
 
         std::unique_ptr<clang::FrontendAction> create() override;
 
-        explicit TranslateFactory(RootNode *node);
+        explicit TranslateFactory(parser::Root *node);
     };
 }

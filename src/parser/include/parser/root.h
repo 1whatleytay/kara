@@ -2,6 +2,8 @@
 
 #include <parser/kinds.h>
 
-struct RootNode : public Node {
-    explicit RootNode(State &state, bool external = false);
-};
+namespace kara::parser {
+    struct Root : public hermes::Node {
+        explicit Root(hermes::State &state, bool external = false);
+    };
+}
