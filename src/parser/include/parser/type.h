@@ -6,15 +6,17 @@
 
 #include <optional>
 
-struct VariableNode;
+namespace kara::parser {
+    struct Variable;
 
-struct TypeNode : public Node {
-    std::string name;
+    struct Type : public hermes::Node {
+        std::string name;
 
-    bool isAlias = false;
+        bool isAlias = false;
 
-    [[nodiscard]] const Node *alias() const;
-    [[nodiscard]] std::vector<const VariableNode *> fields() const;
+        [[nodiscard]] const Node *alias() const;
+        [[nodiscard]] std::vector<const Variable *> fields() const;
 
-    explicit TypeNode(Node *parent, bool external = false);
-};
+        explicit Type(Node *parent, bool external = false);
+    };
+}

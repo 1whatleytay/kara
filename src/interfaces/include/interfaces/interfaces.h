@@ -6,9 +6,11 @@
 
 #include <memory>
 
-using InterfaceResult = std::tuple<std::unique_ptr<hermes::State>, std::unique_ptr<RootNode>>;
+namespace kara::interfaces {
+    using InterfaceResult = std::tuple<std::unique_ptr<hermes::State>, std::unique_ptr<parser::Root>>;
+}
 
-namespace interfaces::header {
+namespace kara::interfaces::header {
     InterfaceResult create(int count, const char **args);
 }
 

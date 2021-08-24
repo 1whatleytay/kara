@@ -2,80 +2,61 @@
 
 #include <parser/kinds.h>
 
-struct ReferenceNode;
-struct ExpressionNode;
+#include <utils/expression.h>
 
-struct AsNode : public Node {
-    [[nodiscard]] const Node *type() const;
+namespace kara::parser {
+    struct Reference;
+    struct Expression;
 
-    explicit AsNode(Node *parent);
-};
+    struct As : public hermes::Node {
+        [[nodiscard]] const Node *type() const;
 
-struct CallParameterNameNode : public Node {
-    std::string name;
-
-    explicit CallParameterNameNode(Node *parent);
-};
-
-struct CallNode : public Node {
-    [[nodiscard]] std::vector<const ExpressionNode *> parameters() const;
-    [[nodiscard]] std::unordered_map<size_t, const CallParameterNameNode *> names() const;
-
-    [[nodiscard]] std::unordered_map<size_t, std::string> namesStripped() const;
-
-    explicit CallNode(Node *parent);
-};
-
-struct DotNode : public Node {
-    [[nodiscard]] const ReferenceNode *reference() const;
-
-    explicit DotNode(Node *parent);
-};
-
-struct IndexNode : public Node {
-    [[nodiscard]] const ExpressionNode *index() const;
-
-    explicit IndexNode(Node *parent);
-};
-
-struct TernaryNode : public Node {
-    [[nodiscard]] const ExpressionNode *onTrue() const;
-    [[nodiscard]] const ExpressionNode *onFalse() const;
-
-    explicit TernaryNode(Node *parent);
-};
-
-struct UnaryNode : public Node {
-    enum class Operation {
-        Not,
-        Negative,
-        Reference,
-        Fetch,
+        explicit As(Node *parent);
     };
 
-    Operation op = Operation::Not;
+    struct CallParameterName : public hermes::Node {
+        std::string name;
 
-    explicit UnaryNode(Node *parent);
-};
-
-struct OperatorNode : public Node {
-    enum class Operation {
-        Add,
-        Sub,
-        Mul,
-        Div,
-        Mod,
-        Equals,
-        NotEquals,
-        GreaterEqual,
-        LesserEqual,
-        Greater,
-        Lesser,
-        And,
-        Or,
+        explicit CallParameterName(Node *parent);
     };
 
-    Operation op = Operation::Equals;
+    struct Call : public hermes::Node {
+        [[nodiscard]] std::vector<const Expression *> parameters() const;
+        [[nodiscard]] std::unordered_map<size_t, const CallParameterName *> names() const;
 
-    explicit OperatorNode(Node *parent);
-};
+        [[nodiscard]] std::unordered_map<size_t, std::string> namesStripped() const;
+
+        explicit Call(Node *parent);
+    };
+
+    struct Dot : public hermes::Node {
+        [[nodiscard]] const Reference *reference() const;
+
+        explicit Dot(Node *parent);
+    };
+
+    struct Index : public hermes::Node {
+        [[nodiscard]] const Expression *index() const;
+
+        explicit Index(Node *parent);
+    };
+
+    struct Ternary : public hermes::Node {
+        [[nodiscard]] const Expression *onTrue() const;
+        [[nodiscard]] const Expression *onFalse() const;
+
+        explicit Ternary(Node *parent);
+    };
+
+    struct Unary : public hermes::Node {
+        utils::UnaryOperation op = utils::UnaryOperation::Not;
+
+        explicit Unary(Node *parent);
+    };
+
+    struct Operator : public hermes::Node {
+        utils::BinaryOperation op = utils::BinaryOperation::Equals;
+
+        explicit Operator(Node *parent);
+    };
+}

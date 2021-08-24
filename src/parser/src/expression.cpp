@@ -5,132 +5,121 @@
 
 #include <stdexcept>
 
-void ExpressionNoun::push(const Node *node) {
-    if (content)
-        modifiers.push_back(node);
-    else
-        content = node;
-}
+namespace kara::parser {
+    static utils::ExpressionResult applyUnary(
+        const utils::ExpressionNoun &current, const std::vector<parser::Unary *> &unary) {
+        utils::ExpressionResult value = current;
 
-ExpressionOperation::ExpressionOperation(std::unique_ptr<ExpressionResult> a, Node *op)
-    : a(std::move(a)), op(op) { }
+        for (auto a = unary.rbegin(); a < unary.rend(); a++)
+            value = utils::ExpressionOperation(std::make_unique<utils::ExpressionResult>(std::move(value)), *a);
 
-ExpressionCombinator::ExpressionCombinator(
-    std::unique_ptr<ExpressionResult> a, std::unique_ptr<ExpressionResult> b, OperatorNode *op)
-    : a(std::move(a)), b(std::move(b)), op(op) { }
-
-static ExpressionResult applyUnary(const ExpressionNoun &current, const std::vector<UnaryNode *> &unary) {
-    ExpressionResult value = current;
-
-    for (auto a = unary.rbegin(); a < unary.rend(); a++)
-        value = ExpressionOperation(std::make_unique<ExpressionResult>(std::move(value)), *a);
-
-    return value;
-}
-
-ExpressionNode::ExpressionNode(Node *parent, bool placeholder) : Node(parent, Kind::Expression) {
-    if (placeholder)
-        return;
-
-    bool exit = false;
-
-    while(!end() && !exit) {
-        while (push<UnaryNode>(true));
-
-        push<ParenthesesNode, ArrayNode, StringNode, SpecialNode, BoolNode, NumberNode, NewNode, ReferenceNode>();
-
-        while (true) {
-            if (!push<CallNode, IndexNode, DotNode, OperatorNode>(true)) {
-                exit = true;
-                break;
-            }
-
-            if (children.back()->is(Kind::Operator))
-                break;
-        }
+        return value;
     }
 
+    Expression::Expression(Node *parent, bool placeholder) : Node(parent, Kind::Expression) {
+        if (placeholder)
+            return;
 
-    // Calculate result (operator precedence).
-    std::vector<ExpressionResult> results;
-    std::vector<OperatorNode *> operators;
+        bool exit = false;
 
-    {
-        std::vector<UnaryNode *> unary;
-        ExpressionNoun current;
+        while(!end() && !exit) {
+            while (push<Unary>(true));
 
-        for (const auto &child : children) {
-            if (child->is(Kind::Operator)) {
-                operators.push_back(child->as<OperatorNode>());
+            push<Parentheses, Array, String, Special, Bool, Number, New, Reference>();
 
-                results.emplace_back(applyUnary(current, unary));
+            while (true) {
+                if (!push<Call, Index, Dot, Operator>(true)) {
+                    exit = true;
+                    break;
+                }
 
-                unary.clear();
-                current = { };
-            } else if (child->is(Kind::Unary)) {
-                unary.push_back(child->as<UnaryNode>());
-            } else {
-                current.push(child.get());
+                if (children.back()->is(Kind::Operator))
+                    break;
             }
         }
 
-        if (!current.content)
-            throw std::runtime_error("Internal expression noun issue occurred.");
 
-        results.emplace_back(applyUnary(current, unary));
-    }
+        // Calculate result (operator precedence).
+        std::vector<utils::ExpressionResult> results;
+        std::vector<Operator *> operators;
 
-    postfix = pick<TernaryNode, AsNode>(true);
+        {
+            std::vector<Unary *> unary;
+            utils::ExpressionNoun current;
 
-    std::vector<OperatorNode::Operation> operatorOrder = {
-        OperatorNode::Operation::Mul,
-        OperatorNode::Operation::Div,
-        OperatorNode::Operation::Add,
-        OperatorNode::Operation::Sub,
-        OperatorNode::Operation::Mod,
+            for (const auto &child : children) {
+                if (child->is(Kind::Operator)) {
+                    operators.push_back(child->as<Operator>());
 
-        OperatorNode::Operation::Equals,
-        OperatorNode::Operation::NotEquals,
-        OperatorNode::Operation::Greater,
-        OperatorNode::Operation::GreaterEqual,
-        OperatorNode::Operation::Lesser,
-        OperatorNode::Operation::LesserEqual,
+                    results.emplace_back(applyUnary(current, unary));
 
-        OperatorNode::Operation::And,
-        OperatorNode::Operation::Or
-    };
+                    unary.clear();
+                    current = { };
+                } else if (child->is(Kind::Unary)) {
+                    unary.push_back(child->as<Unary>());
+                } else {
+                    current.push(child.get());
+                }
+            }
 
-    while (!operators.empty()) {
-        for (auto order : operatorOrder) {
-            for (int64_t i = 0; i < operators.size(); i++) {
-                OperatorNode *op = operators[i];
+            if (!current.content)
+                throw std::runtime_error("Internal expression noun issue occurred.");
 
-                if (op->op != order)
-                    continue;
+            results.emplace_back(applyUnary(current, unary));
+        }
 
-                // Move more!!!
-                ExpressionResult a = std::move(results[i]);
-                ExpressionResult b = std::move(results[i + 1]);
+        postfix = pick<Ternary, As>(true);
 
-                results.erase(results.begin() + i, results.begin() + i + 2);
-                operators.erase(operators.begin() + i);
+        std::vector<utils::BinaryOperation> operatorOrder = {
+            utils::BinaryOperation::Mul,
+            utils::BinaryOperation::Div,
+            utils::BinaryOperation::Add,
+            utils::BinaryOperation::Sub,
+            utils::BinaryOperation::Mod,
 
-                results.insert(results.begin() + i,
-                    ExpressionCombinator(
-                        std::make_unique<ExpressionResult>(std::move(a)),
-                        std::make_unique<ExpressionResult>(std::move(b)), op));
+            utils::BinaryOperation::Equals,
+            utils::BinaryOperation::NotEquals,
+            utils::BinaryOperation::Greater,
+            utils::BinaryOperation::GreaterEqual,
+            utils::BinaryOperation::Lesser,
+            utils::BinaryOperation::LesserEqual,
+
+            utils::BinaryOperation::And,
+            utils::BinaryOperation::Or
+        };
+
+        while (!operators.empty()) {
+            for (auto order : operatorOrder) {
+                for (int64_t i = 0; i < operators.size(); i++) {
+                    Operator *op = operators[i];
+
+                    if (op->op != order)
+                        continue;
+
+                    // Move more!!!
+                    utils::ExpressionResult a = std::move(results[i]);
+                    utils::ExpressionResult b = std::move(results[i + 1]);
+
+                    results.erase(results.begin() + i, results.begin() + i + 2);
+                    operators.erase(operators.begin() + i);
+
+                    results.insert(results.begin() + i,
+                        utils::ExpressionCombinator(
+                            std::make_unique<utils::ExpressionResult>(std::move(a)),
+                            std::make_unique<utils::ExpressionResult>(std::move(b)), op));
+                }
             }
         }
-    }
 
-    if (results.size() != 1)
-        throw std::runtime_error("Internal result picker issue occurred.");
+        if (results.size() != 1)
+            throw std::runtime_error("Internal result picker issue occurred.");
 
-    result = std::move(results.front());
+        result = std::move(results.front());
 
-    if (postfix) {
-        result = ExpressionOperation(
-            std::make_unique<ExpressionResult>(std::move(result)),
-            postfix.get());
+        if (postfix) {
+            result = utils::ExpressionOperation(
+                std::make_unique<utils::ExpressionResult>(std::move(result)),
+                postfix.get());
+        }
     }
 }

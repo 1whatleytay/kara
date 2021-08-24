@@ -4,20 +4,22 @@
 
 #include <parser/expression.h>
 
-struct InsightNode : public Node {
-    [[nodiscard]] const ExpressionNode *expression();
+namespace kara::parser {
+    struct Insight : public hermes::Node {
+        [[nodiscard]] const Expression *expression();
 
-    explicit InsightNode(Node *parent);
-};
-
-struct StatementNode : public Node {
-    enum class Operation {
-        Return,
-        Break,
-        Continue
+        explicit Insight(Node *parent);
     };
 
-    explicit StatementNode(Node *parent);
+    struct Statement : public hermes::Node {
+        enum class Operation {
+            Return,
+            Break,
+            Continue
+        };
 
-    Operation op = Operation::Break;
-};
+        explicit Statement(Node *parent);
+
+        Operation op = Operation::Break;
+    };
+}

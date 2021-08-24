@@ -5,56 +5,58 @@
 #include <parser/variable.h>
 #include <parser/expression.h>
 
-std::vector<const VariableNode *> FunctionNode::parameters() const {
-    std::vector<const VariableNode *> result(parameterCount);
+namespace kara::parser {
+    std::vector<const Variable *> Function::parameters() const {
+        std::vector<const Variable *> result(parameterCount);
 
-    for (size_t a = 0; a < parameterCount; a++)
-        result[a] = children[a]->as<VariableNode>();
+        for (size_t a = 0; a < parameterCount; a++)
+            result[a] = children[a]->as<Variable>();
 
-    return result;
-}
+        return result;
+    }
 
-const Node *FunctionNode::fixedType() const {
-    return hasFixedType ? children[parameterCount].get() : nullptr;
-}
+    const hermes::Node *Function::fixedType() const {
+        return hasFixedType ? children[parameterCount].get() : nullptr;
+    }
 
-const Node *FunctionNode::body() const {
-    return isExtern ? nullptr : children[parameterCount + hasFixedType].get();
-}
+    const hermes::Node *Function::body() const {
+        return isExtern ? nullptr : children[parameterCount + hasFixedType].get();
+    }
 
-FunctionNode::FunctionNode(Node *parent, bool external) : Node(parent, Kind::Function) {
-    if (external)
-        return;
+    Function::Function(Node *parent, bool external) : Node(parent, Kind::Function) {
+        if (external)
+            return;
 
-    name = token();
+        name = token();
 
-    if (next("(")) {
-        while (!end() && !peek(")")) {
-            push<VariableNode>(false, false);
-            parameterCount++;
+        if (next("(")) {
+            while (!end() && !peek(")")) {
+                push<Variable>(false, false);
+                parameterCount++;
 
-            next(",");
+                next(",");
+            }
+
+            needs(")");
         }
 
-        needs(")");
-    }
+        if (!(peek("{") || peek("=>") || peek("external"))) {
+            pushTypename(this);
+            hasFixedType = true;
+        }
 
-    if (!(peek("{") || peek("=>") || peek("external"))) {
-        pushTypename(this);
-        hasFixedType = true;
-    }
+        if (next("external")) {
+            match();
+            isExtern = true;
+        } else if (next("=>")) {
+            match();
+            push<Expression>();
+        } else {
+            match("{");
 
-    if (next("external")) {
-        match();
-        isExtern = true;
-    } else if (next("=>")) {
-        match();
-        push<ExpressionNode>();
-    } else {
-        match("{");
+            push<Code>();
 
-        push<CodeNode>();
-
-        needs("}");
+            needs("}");
+        }
     }
 }

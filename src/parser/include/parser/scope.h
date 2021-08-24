@@ -2,49 +2,51 @@
 
 #include <parser/kinds.h>
 
-struct VariableNode;
-struct ExpressionNode;
+namespace kara::parser {
+    struct Variable;
+    struct Expression;
 
-struct CodeNode : public Node {
-    explicit CodeNode(Node *parent);
-};
-
-struct BlockNode : public Node {
-    enum class Type {
-        Regular,
-        Exit
+    struct Code : public hermes::Node {
+        explicit Code(Node *parent);
     };
 
-    Type type = Type::Regular;
+    struct Block : public hermes::Node {
+        enum class Type {
+            Regular,
+            Exit
+        };
 
-    [[nodiscard]] const CodeNode *body() const;
+        Type type = Type::Regular;
 
-    explicit BlockNode(Node *parent);
-};
+        [[nodiscard]] const Code *body() const;
 
-struct IfNode : public Node {
-    [[nodiscard]] const ExpressionNode *condition() const;
+        explicit Block(Node *parent);
+    };
 
-    [[nodiscard]] const CodeNode *onTrue() const;
-    [[nodiscard]] const Node *onFalse() const;
+    struct If : public hermes::Node {
+        [[nodiscard]] const Expression *condition() const;
 
-    explicit IfNode(Node *parent);
-};
+        [[nodiscard]] const Code *onTrue() const;
+        [[nodiscard]] const Node *onFalse() const;
 
-// Just for expression material.
-struct ForInNode : public Node {
-    [[nodiscard]] const VariableNode *name() const;
-    [[nodiscard]] const ExpressionNode *expression() const;
+        explicit If(Node *parent);
+    };
 
-    explicit ForInNode(Node *parent);
-};
+    // Just for expression material.
+    struct ForIn : public hermes::Node {
+        [[nodiscard]] const Variable *name() const;
+        [[nodiscard]] const Expression *expression() const;
 
-struct ForNode : public Node {
-    bool infinite = true;
+        explicit ForIn(Node *parent);
+    };
 
-    [[nodiscard]] const Node *condition() const;
-    [[nodiscard]] const CodeNode *body() const;
+    struct For : public hermes::Node {
+        bool infinite = true;
 
-    explicit ForNode(Node *parent);
-};
+        [[nodiscard]] const Node *condition() const;
+        [[nodiscard]] const Code *body() const;
+
+        explicit For(Node *parent);
+    };
+}
 

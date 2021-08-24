@@ -5,99 +5,101 @@
 #include <parser/statement.h>
 #include <parser/expression.h>
 
-CodeNode::CodeNode(Node *parent) : Node(parent, Kind::Code) {
-    while (!end() && !peek("}")) {
-        push<BlockNode, InsightNode, IfNode, ForNode, StatementNode, AssignNode, VariableNode, ExpressionNode>();
+namespace kara::parser {
+    Code::Code(Node *parent) : Node(parent, Kind::Code) {
+        while (!end() && !peek("}")) {
+            push<Block, Insight, If, For, Statement, Assign, Variable, Expression>();
 
-        while (next(","));
-    }
-}
-
-const CodeNode *BlockNode::body() const {
-    return children.front()->as<CodeNode>();
-}
-
-BlockNode::BlockNode(Node *parent) : Node(parent, Kind::Block) {
-    type = select<Type>({ { "block", Type::Regular }, { "exit", Type::Exit } }, true);
-    match();
-
-    needs("{");
-
-    push<CodeNode>();
-
-    needs("}");
-}
-
-const ExpressionNode *IfNode::condition() const {
-    return children.front()->as<ExpressionNode>();
-}
-
-const CodeNode *IfNode::onTrue() const {
-    return children[1]->as<CodeNode>();
-}
-
-const Node *IfNode::onFalse() const {
-    return children.size() >= 2 ? children[2].get() : nullptr;
-}
-
-IfNode::IfNode(Node *parent) : Node(parent, Kind::If) {
-    match("if", true);
-
-    push<ExpressionNode>();
-
-    needs("{");
-
-    push<CodeNode>();
-
-    needs("}");
-
-    if (next("else", true)) {
-        if (next("{")) {
-            push<CodeNode>();
-
-            needs("}");
-        } else {
-            push<IfNode>(); // recursive :D
+            while (next(","));
         }
     }
-}
 
-const VariableNode *ForInNode::name() const {
-    return children[0]->as<VariableNode>();
-}
-
-const ExpressionNode *ForInNode::expression() const {
-    return children[1]->as<ExpressionNode>();
-}
-
-ForInNode::ForInNode(Node *parent) : Node(parent, Kind::ForIn) {
-    push<VariableNode>(false);
-
-    match("in", true);
-
-    push<ExpressionNode>();
-}
-
-const Node *ForNode::condition() const {
-    return infinite ? nullptr : children[0].get();
-}
-
-const CodeNode *ForNode::body() const {
-    return children[!infinite]->as<CodeNode>();
-}
-
-ForNode::ForNode(Node *parent) : Node(parent, Kind::For) {
-    match("for", true);
-
-    if (!next("{")) {
-        infinite = false;
-
-        push<ForInNode, ExpressionNode>();
-
-        needs("{");
+    const Code *Block::body() const {
+        return children.front()->as<Code>();
     }
 
-    push<CodeNode>();
+    Block::Block(Node *parent) : Node(parent, Kind::Block) {
+        type = select<Type>({ { "block", Type::Regular }, { "exit", Type::Exit } }, true);
+        match();
 
-    needs("}");
+        needs("{");
+
+        push<Code>();
+
+        needs("}");
+    }
+
+    const Expression *If::condition() const {
+        return children.front()->as<Expression>();
+    }
+
+    const Code *If::onTrue() const {
+        return children[1]->as<Code>();
+    }
+
+    const hermes::Node *If::onFalse() const {
+        return children.size() >= 2 ? children[2].get() : nullptr;
+    }
+
+    If::If(Node *parent) : Node(parent, Kind::If) {
+        match("if", true);
+
+        push<Expression>();
+
+        needs("{");
+
+        push<Code>();
+
+        needs("}");
+
+        if (next("else", true)) {
+            if (next("{")) {
+                push<Code>();
+
+                needs("}");
+            } else {
+                push<If>(); // recursive :D
+            }
+        }
+    }
+
+    const Variable *ForIn::name() const {
+        return children[0]->as<Variable>();
+    }
+
+    const Expression *ForIn::expression() const {
+        return children[1]->as<Expression>();
+    }
+
+    ForIn::ForIn(Node *parent) : Node(parent, Kind::ForIn) {
+        push<Variable>(false);
+
+        match("in", true);
+
+        push<Expression>();
+    }
+
+    const hermes::Node *For::condition() const {
+        return infinite ? nullptr : children[0].get();
+    }
+
+    const Code *For::body() const {
+        return children[!infinite]->as<Code>();
+    }
+
+    For::For(Node *parent) : Node(parent, Kind::For) {
+        match("for", true);
+
+        if (!next("{")) {
+            infinite = false;
+
+            push<ForIn, Expression>();
+
+            needs("{");
+        }
+
+        push<Code>();
+
+        needs("}");
+    }
 }

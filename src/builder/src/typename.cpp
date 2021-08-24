@@ -8,141 +8,149 @@
 
 #include <fmt/format.h>
 
-Typename Builder::resolveTypename(const Node *node) {
-    switch (node->is<Kind>()) {
-        case Kind::NamedTypename: {
-            auto e = node->as<NamedTypenameNode>();
+namespace kara::builder {
+    utils::Typename Builder::resolveTypename(const hermes::Node *node) {
+        switch (node->is<parser::Kind>()) {
+            case parser::Kind::NamedTypename: {
+                auto e = node->as<parser::NamedTypename>();
 
-            auto match = [e](const Node *node) {
-                if (!node->is(Kind::Type))
-                    return false;
+                auto match = [e](const hermes::Node *node) {
+                    if (!node->is(parser::Kind::Type))
+                        return false;
 
-                return node->as<TypeNode>()->name == e->name;
-            };
+                    return node->as<parser::Type>()->name == e->name;
+                };
 
-            auto *type = search::exclusive::scope(node, match)->as<TypeNode>();
+                auto *type = parser::search::exclusive::scope(node, match)->as<parser::Type>();
 
-            if (!type)
-                type = searchDependencies(match)->as<TypeNode>();
+                if (!type)
+                    type = searchDependencies(match)->as<parser::Type>();
 
-            if (!type)
-                throw VerifyError(node, "Cannot find type {}.", e->name);
+                if (!type)
+                    throw VerifyError(node, "Cannot find type {}.", e->name);
 
-            if (auto alias = type->alias())
-                return resolveTypename(alias);
+                if (auto alias = type->alias())
+                    return resolveTypename(alias);
 
-            return NamedTypename { type };
-        }
-
-        case Kind::PrimitiveTypename:
-            return PrimitiveTypename { node->as<PrimitiveTypenameNode>()->type };
-
-        case Kind::OptionalTypename: {
-            auto e = node->as<OptionalTypenameNode>();
-
-            return OptionalTypename {
-                std::make_shared<Typename>(resolveTypename(e->body())), e->bubbles
-            };
-        }
-
-        case Kind::ReferenceTypename: {
-            auto e = node->as<ReferenceTypenameNode>();
-
-            return ReferenceTypename {
-                std::make_shared<Typename>(resolveTypename(e->body())), e->isMutable, e->kind
-            };
-        }
-
-        case Kind::ArrayTypename: {
-            auto e = node->as<ArrayTypenameNode>();
-
-            struct {
-                uint64_t operator()(uint64_t v) { return v; }
-                uint64_t operator()(int64_t v) { assert(v >= 0); return v; }
-                uint64_t operator()(double v) { throw; }
-            } visitor;
-
-            return ArrayTypename {
-                e->type,
-
-                std::make_shared<Typename>(resolveTypename(e->body())),
-
-                e->type == ArrayKind::FixedSize ? std::visit(visitor, e->fixedSize()->value) : 0,
-                e->type == ArrayKind::UnboundedSized ? e->variableSize() : nullptr
-            };
-        }
-
-        default:
-            throw VerifyError(node, "Expected typename node, but got something else.");
-    }
-}
-
-Type *Builder::makePrimitiveType(PrimitiveType type) const {
-    switch (type) {
-        case PrimitiveType::Any: return Type::getInt64Ty(context);
-        case PrimitiveType::Null: return Type::getInt8PtrTy(context);
-        case PrimitiveType::Nothing: return Type::getVoidTy(context);
-        case PrimitiveType::Bool: return Type::getInt1Ty(context);
-
-        case PrimitiveType::Byte:
-        case PrimitiveType::UByte:
-            return Type::getInt8Ty(context);
-
-        case PrimitiveType::Short:
-        case PrimitiveType::UShort:
-            return Type::getInt16Ty(context);
-
-        case PrimitiveType::Int:
-        case PrimitiveType::UInt:
-            return Type::getInt32Ty(context);
-
-        case PrimitiveType::Long:
-        case PrimitiveType::ULong:
-            return Type::getInt64Ty(context);
-
-        case PrimitiveType::Float: return Type::getFloatTy(context);
-        case PrimitiveType::Double: return Type::getDoubleTy(context);
-
-        default: return nullptr;
-    }
-}
-
-Type *Builder::makeTypename(const Typename &type) {
-    struct {
-        Builder &builder;
-
-        Type *operator()(const PrimitiveTypename &type) const {
-            return builder.makePrimitiveType(type.type);
-        }
-
-        Type *operator()(const NamedTypename &type) const {
-            return builder.makeType(type.type)->type;
-        }
-
-        Type *operator()(const OptionalTypename &type) const {
-            throw std::exception();
-        }
-
-        Type *operator()(const ReferenceTypename &type) const {
-            return PointerType::get(builder.makeTypename(*type.value), 0);
-        }
-
-        Type *operator()(const ArrayTypename &type) const {
-            switch (type.kind) {
-                case ArrayKind::FixedSize:
-                    return ArrayType::get(builder.makeTypename(*type.value), type.size);
-                case ArrayKind::Unbounded:
-                case ArrayKind::UnboundedSized: // some thinking probably needs to be done here too
-                    return builder.makeTypename(*type.value);
-                default:
-                    throw std::runtime_error(fmt::format("Type {} is unimplemented.", toString(type)));
+                return utils::NamedTypename { type->name, type };
             }
-        }
 
-        Type *operator()(const FunctionTypename &type) const {
-            throw std::exception();
-        }
-    } visitor { *this };
+            case parser::Kind::PrimitiveTypename:
+                return utils::PrimitiveTypename { node->as<parser::PrimitiveTypename>()->type };
 
-    return std::visit(visitor, type);
+            case parser::Kind::OptionalTypename: {
+                auto e = node->as<parser::OptionalTypename>();
+
+                return utils::OptionalTypename {
+                    std::make_shared<utils::Typename>(resolveTypename(e->body())), e->bubbles
+                };
+            }
+
+            case parser::Kind::ReferenceTypename: {
+                auto e = node->as<parser::ReferenceTypename>();
+
+                return utils::ReferenceTypename {
+                    std::make_shared<utils::Typename>(resolveTypename(e->body())), e->isMutable, e->kind
+                };
+            }
+
+            case parser::Kind::ArrayTypename: {
+                auto e = node->as<parser::ArrayTypename>();
+
+                struct {
+                    uint64_t operator()(uint64_t v) { return v; }
+                    uint64_t operator()(int64_t v) { assert(v >= 0); return v; }
+                    uint64_t operator()(double v) { throw; }
+                } visitor;
+
+                return utils::ArrayTypename {
+                    e->type,
+
+                    std::make_shared<utils::Typename>(resolveTypename(e->body())),
+
+                    e->type == utils::ArrayKind::FixedSize ? std::visit(visitor, e->fixedSize()->value) : 0,
+                    e->type == utils::ArrayKind::UnboundedSized ? e->variableSize() : nullptr
+                };
+            }
+
+            default:
+                throw VerifyError(node, "Expected typename node, but got something else.");
+        }
+    }
+
+    llvm::Type *Builder::makePrimitiveType(utils::PrimitiveType type) const {
+        switch (type) {
+            case utils::PrimitiveType::Any:
+                return llvm::Type::getInt64Ty(context);
+            case utils::PrimitiveType::Null:
+                return llvm::Type::getInt8PtrTy(context);
+            case utils::PrimitiveType::Nothing:
+                return llvm::Type::getVoidTy(context);
+            case utils::PrimitiveType::Bool:
+                return llvm::Type::getInt1Ty(context);
+
+            case utils::PrimitiveType::Byte:
+            case utils::PrimitiveType::UByte:
+                return llvm::Type::getInt8Ty(context);
+
+            case utils::PrimitiveType::Short:
+            case utils::PrimitiveType::UShort:
+                return llvm::Type::getInt16Ty(context);
+
+            case utils::PrimitiveType::Int:
+            case utils::PrimitiveType::UInt:
+                return llvm::Type::getInt32Ty(context);
+
+            case utils::PrimitiveType::Long:
+            case utils::PrimitiveType::ULong:
+                return llvm::Type::getInt64Ty(context);
+
+            case utils::PrimitiveType::Float:
+                return llvm::Type::getFloatTy(context);
+            case utils::PrimitiveType::Double:
+                return llvm::Type::getDoubleTy(context);
+
+            default: return nullptr;
+        }
+    }
+
+    llvm::Type *Builder::makeTypename(const utils::Typename &type) {
+        struct {
+            builder::Builder &builder;
+
+            llvm::Type *operator()(const utils::PrimitiveTypename &type) const {
+                return builder.makePrimitiveType(type.type);
+            }
+
+            llvm::Type *operator()(const utils::NamedTypename &type) const {
+                return builder.makeType(type.type)->type;
+            }
+
+            llvm::Type *operator()(const utils::OptionalTypename &type) const {
+                throw std::exception();
+            }
+
+            llvm::Type *operator()(const utils::ReferenceTypename &type) const {
+                return llvm::PointerType::get(builder.makeTypename(*type.value), 0);
+            }
+
+            llvm::Type *operator()(const utils::ArrayTypename &type) const {
+                switch (type.kind) {
+                    case utils::ArrayKind::FixedSize:
+                        return llvm::ArrayType::get(builder.makeTypename(*type.value), type.size);
+                    case utils::ArrayKind::Unbounded:
+                    case utils::ArrayKind::UnboundedSized: // some thinking probably needs to be done here too
+                        return builder.makeTypename(*type.value);
+                    default:
+                        throw std::runtime_error(fmt::format("Type {} is unimplemented.", toString(type)));
+                }
+            }
+
+            llvm::Type *operator()(const utils::FunctionTypename &type) const {
+                throw std::exception();
+            }
+        } visitor { *this };
+
+        return std::visit(visitor, type);
+    }
 }

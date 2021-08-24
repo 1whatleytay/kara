@@ -12,6 +12,8 @@ add_library(builder STATIC
     src/assign.cpp
     src/reference.cpp
     src/expression.cpp
+	src/result.cpp
+    src/destroy.cpp
     src/statement.cpp
     src/scope.cpp
 	src/type.cpp

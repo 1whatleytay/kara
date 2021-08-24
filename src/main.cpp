@@ -7,7 +7,7 @@
 
 int main(int count, const char **args) {
    // try {
-    std::make_unique<Manager>(Options(count, args));
+    std::make_unique<kara::builder::Manager>(kara::options::Options(count, args));
    // } catch (const std::exception &e) {
    //     return 1;
    // }

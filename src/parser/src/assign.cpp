@@ -2,26 +2,28 @@
 
 #include <parser/expression.h>
 
-const ExpressionNode *AssignNode::left() const {
-    return children[0]->as<ExpressionNode>();
-}
+namespace kara::parser {
+    const Expression *Assign::left() const {
+        return children[0]->as<Expression>();
+    }
 
-const ExpressionNode *AssignNode::right() const {
-    return children[1]->as<ExpressionNode>();
-}
+    const Expression *Assign::right() const {
+        return children[1]->as<Expression>();
+    }
 
-AssignNode::AssignNode(Node *parent) : Node(parent, Kind::Assign) {
-    push<ExpressionNode>();
+    Assign::Assign(Node *parent) : Node(parent, Kind::Assign) {
+        push<Expression>();
 
-    op = select<Operator>({
-        { "=", Operator::Assign },
-        { "+=", Operator::Plus },
-        { "-=", Operator::Minus },
-        { "*=", Operator::Multiply },
-        { "/=", Operator::Divide },
-        { "%=", Operator::Modulo },
-    });
-    match();
+        op = select<Operator>({
+            { "=", Operator::Assign },
+            { "+=", Operator::Plus },
+            { "-=", Operator::Minus },
+            { "*=", Operator::Multiply },
+            { "/=", Operator::Divide },
+            { "%=", Operator::Modulo },
+            });
+        match();
 
-    push<ExpressionNode>();
+        push<Expression>();
+    }
 }

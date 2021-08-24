@@ -6,21 +6,23 @@
 
 #include <optional>
 
-struct ExpressionNode;
+namespace kara::parser {
+    struct Expression;
 
-struct VariableNode : public Node {
-    std::string name;
+    struct Variable : public hermes::Node {
+        std::string name;
 
-    bool isMutable = false;
-    bool hasFixedType = false;
-    bool hasInitialValue = false;
-    bool hasConstantValue = false;
+        bool isMutable = false;
+        bool hasFixedType = false;
+        bool hasInitialValue = false;
+        bool hasConstantValue = false;
 
-    bool isExternal = false;
+        bool isExternal = false;
 
-    [[nodiscard]] const Node *fixedType() const;
-    [[nodiscard]] const ExpressionNode *value() const;
-    [[nodiscard]] const NumberNode *constantValue() const;
+        [[nodiscard]] const Node *fixedType() const;
+        [[nodiscard]] const Expression *value() const;
+        [[nodiscard]] const Number *constantValue() const;
 
-    explicit VariableNode(Node *parent, bool isExplicit = true, bool external = false);
-};
+        explicit Variable(Node *parent, bool isExplicit = true, bool external = false);
+    };
+}

@@ -30,4 +30,4 @@ add_library(parser STATIC
     src/import.cpp)
 
 target_include_directories(parser PUBLIC include)
-target_link_libraries(parser PUBLIC fmt hermes)
+target_link_libraries(parser PUBLIC utils fmt hermes)

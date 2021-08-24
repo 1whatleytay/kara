@@ -2,53 +2,55 @@
 
 #include <parser/variable.h>
 
-const Node *TypeNode::alias() const {
-    return isAlias ? children.front().get() : nullptr;
-}
+namespace kara::parser {
+    const hermes::Node *Type::alias() const {
+        return isAlias ? children.front().get() : nullptr;
+    }
 
-std::vector<const VariableNode *> TypeNode::fields() const {
-    std::vector<const VariableNode *> result(children.size());
+    std::vector<const Variable *> Type::fields() const {
+        std::vector<const Variable *> result(children.size());
 
-    for (size_t a = 0; a < children.size(); a++)
-        result[a] = children[a]->as<VariableNode>();
+        for (size_t a = 0; a < children.size(); a++)
+            result[a] = children[a]->as<Variable>();
 
-    return result;
-}
+        return result;
+    }
 
-TypeNode::TypeNode(Node *parent, bool external) : Node(parent, Kind::Type) {
-    if (external)
-        return;
+    Type::Type(Node *parent, bool external) : Node(parent, Kind::Type) {
+        if (external)
+            return;
 
-    match("type", true);
+        match("type", true);
 
-    name = token();
+        name = token();
 
-    enum class Operators {
-        NewClass,
-        Alias
-    };
+        enum class Operators {
+            NewClass,
+            Alias
+        };
 
-    auto check = select<Operators>({ { "{", Operators::NewClass }, { "=", Operators::Alias } });
+        auto check = select<Operators>({ { "{", Operators::NewClass }, { "=", Operators::Alias } });
 
-    switch (check) {
-        case Operators::NewClass:
-            while (!end() && !peek("}")) {
-                push<VariableNode>(false, false);
+        switch (check) {
+            case Operators::NewClass:
+                while (!end() && !peek("}")) {
+                    push<Variable>(false, false);
 
-                next(",");
-            }
+                    next(",");
+                }
 
-            needs("}");
+                needs("}");
 
-            break;
+                break;
 
-        case Operators::Alias:
-            isAlias = true;
-            pushTypename(this);
+            case Operators::Alias:
+                isAlias = true;
+                pushTypename(this);
 
-            break;
+                break;
 
-        default:
-            throw;
+            default:
+                throw;
+        }
     }
 }

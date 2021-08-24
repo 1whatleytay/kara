@@ -2,27 +2,29 @@
 
 #include <parser/expression.h>
 
-const ExpressionNode *InsightNode::expression() { return children.front()->as<ExpressionNode>(); }
+namespace kara::parser {
+    const Expression *Insight::expression() { return children.front()->as<Expression>(); }
 
-InsightNode::InsightNode(Node *parent) : Node(parent, Kind::Insight) {
-    match("insight", true);
+    Insight::Insight(Node *parent) : Node(parent, Kind::Insight) {
+        match("insight", true);
 
-    push<ExpressionNode>();
-}
+        push<Expression>();
+    }
 
-StatementNode::StatementNode(Node *parent) : Node(parent, Kind::Statement) {
-    op = select<Operation>({
-        { "return", Operation::Return },
-        { "break", Operation::Break },
-        { "continue", Operation::Continue },
-    }, true);
+    Statement::Statement(Node *parent) : Node(parent, Kind::Statement) {
+        op = select<Operation>({
+            { "return", Operation::Return },
+            { "break", Operation::Break },
+            { "continue", Operation::Continue },
+            }, true);
 
-    match();
+        match();
 
-    if (op == Operation::Return && !peek("}")) {
-        push<ExpressionNode>();
+        if (op == Operation::Return && !peek("}")) {
+            push<Expression>();
 
-        if (!peek("}"))
-            error("Must have closing bracket after return statement.");
+            if (!peek("}"))
+                error("Must have closing bracket after return statement.");
+        }
     }
 }

@@ -2,12 +2,14 @@
 
 #include <parser/kinds.h>
 
-struct StringNode;
+namespace kara::parser {
+    struct String;
 
-struct ImportNode : public Node {
-    std::string type;
+    struct Import : public hermes::Node {
+        std::string type;
 
-    const StringNode *body() const;
+        [[nodiscard]] const String *body() const;
 
-    explicit ImportNode(Node *parent);
-};
+        explicit Import(Node *parent);
+    };
+}

@@ -2,20 +2,22 @@
 
 #include <parser/literals.h>
 
-const StringNode *ImportNode::body() const {
-    return children.front()->as<StringNode>();
-}
-
-ImportNode::ImportNode(Node *parent) : Node(parent, Kind::Import) {
-    match("import", true);
-
-    if (next("(")) {
-        type = token();
-
-        needs(")");
+namespace kara::parser {
+    const String *Import::body() const {
+        return children.front()->as<String>();
     }
 
-    push<StringNode>();
+    Import::Import(Node *parent) : Node(parent, Kind::Import) {
+        match("import", true);
 
-    assert(children.back()->as<StringNode>()->inserts.empty());
+        if (next("(")) {
+            type = token();
+
+            needs(")");
+        }
+
+        push<String>();
+
+        assert(children.back()->as<String>()->inserts.empty());
+    }
 }
