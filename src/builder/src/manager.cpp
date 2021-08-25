@@ -1,33 +1,33 @@
 #include <builder/manager.h>
 
-#include <builder/error.h>
 #include <builder/builder.h>
+#include <builder/error.h>
 
 #include <parser/import.h>
 #include <parser/literals.h>
 
 #include <interfaces/interfaces.h>
 
-#include <llvm/IR/Verifier.h>
-#include <llvm/Support/Host.h>
-#include <llvm/Linker/Linker.h>
-#include <llvm/IR/LegacyPassManager.h>
-#include <llvm/Target/TargetOptions.h>
-#include <llvm/Support/TargetSelect.h>
 #include <llvm/ExecutionEngine/Orc/LLJIT.h>
+#include <llvm/IR/LegacyPassManager.h>
+#include <llvm/IR/Verifier.h>
+#include <llvm/Linker/Linker.h>
+#include <llvm/Support/Host.h>
+#include <llvm/Support/TargetSelect.h>
+#include <llvm/Target/TargetOptions.h>
 
 // Passes
 #include <llvm/Passes/PassBuilder.h>
-#include <llvm/Transforms/Utils/Mem2Reg.h>
-#include <llvm/Transforms/Utils/LowerSwitch.h>
 #include <llvm/Transforms/Scalar/SimplifyCFG.h>
+#include <llvm/Transforms/Utils/LowerSwitch.h>
+#include <llvm/Transforms/Utils/Mem2Reg.h>
 
 // Analysis
-#include <llvm/IR/Dominators.h>
-#include <llvm/Analysis/LazyValueInfo.h>
 #include <llvm/Analysis/AssumptionCache.h>
+#include <llvm/Analysis/LazyValueInfo.h>
 #include <llvm/Analysis/TargetLibraryInfo.h>
 #include <llvm/Analysis/TargetTransformInfo.h>
+#include <llvm/IR/Dominators.h>
 
 #include <rapidjson/document.h>
 
@@ -107,7 +107,9 @@ namespace kara::builder {
     }
 
     ManagerFile::ManagerFile(Manager &manager, fs::path path, std::string type, const LibraryDocument *library)
-    : manager(manager), path(std::move(path)), type(std::move(type)) {
+        : manager(manager)
+        , path(std::move(path))
+        , type(std::move(type)) {
         if (this->type.empty() || this->type == "kara") {
             std::stringstream buffer;
 
@@ -137,10 +139,11 @@ namespace kara::builder {
             arguments.reserve(arguments.size() + library->arguments.size());
 
             auto cString = [](const auto &s) { return s.c_str(); };
-            std::transform(library->arguments.begin(), library->arguments.end(), std::back_inserter(arguments), cString);
+            std::transform(
+                library->arguments.begin(), library->arguments.end(), std::back_inserter(arguments), cString);
 
-            auto [tupleState, tupleRoot] = interfaces::header::create(
-                static_cast<int>(arguments.size()), arguments.data());
+            auto [tupleState, tupleRoot]
+                = interfaces::header::create(static_cast<int>(arguments.size()), arguments.data());
 
             state = std::move(tupleState);
             root = std::move(tupleRoot);
@@ -162,10 +165,7 @@ namespace kara::builder {
         }
     }
 
-
-    bool ManagerTarget::valid() const {
-        return !triple.empty() && target && machine && layout;
-    }
+    bool ManagerTarget::valid() const { return !triple.empty() && target && machine && layout; }
 
     ManagerTarget::ManagerTarget(const std::string &suggestedTriple) {
         triple = suggestedTriple.empty() ? llvm::sys::getDefaultTargetTriple() : suggestedTriple;
@@ -242,7 +242,9 @@ namespace kara::builder {
     }
 
     Manager::Manager(const options::Options &options)
-    : context(std::make_unique<llvm::LLVMContext>()), target(options.triple), options(options) {
+        : context(std::make_unique<llvm::LLVMContext>())
+        , target(options.triple)
+        , options(options) {
 
         if (!target.valid())
             throw std::runtime_error("Could not initialize target.");
@@ -354,21 +356,20 @@ namespace kara::builder {
             if (jit->addIRModule(llvm::orc::ThreadSafeModule(std::move(base), std::move(context))))
                 throw std::runtime_error("Could not add module to jit instance.");
 
-            void (* print)(char *, int) = [](char *buffer, int a) {
+            void (*print)(char *, int) = [](char *buffer, int a) {
                 char v[200];
                 snprintf(v, 200, "%d", a);
 
                 strcat(buffer, v);
             };
 
-            auto _ = jit->getMainJITDylib().define(llvm::orc::absoluteSymbols({
-                { jit->mangleAndIntern("catInt"), llvm::JITEvaluatedSymbol::fromPointer(print) }
-            }));
+            auto _ = jit->getMainJITDylib().define(llvm::orc::absoluteSymbols(
+                { { jit->mangleAndIntern("catInt"), llvm::JITEvaluatedSymbol::fromPointer(print) } }));
 
             for (const auto &library : libraries) {
                 for (const auto &lib : library.libraries) {
-                    auto loader = llvm::orc::StaticLibraryDefinitionGenerator::Load(
-                        jit->getObjLinkingLayer(), lib.c_str());
+                    auto loader
+                        = llvm::orc::StaticLibraryDefinitionGenerator::Load(jit->getObjLinkingLayer(), lib.c_str());
 
                     if (!loader) {
                         fmt::print("Failed to load library {}.\n", lib.string());
@@ -378,8 +379,8 @@ namespace kara::builder {
                 }
 
                 for (const auto &lib : library.dynamicLibraries) {
-                    auto loader = llvm::orc::DynamicLibrarySearchGenerator::Load(
-                        lib.c_str(), target.layout->getGlobalPrefix());
+                    auto loader
+                        = llvm::orc::DynamicLibrarySearchGenerator::Load(lib.c_str(), target.layout->getGlobalPrefix());
 
                     if (!loader) {
                         fmt::print("Failed to load dynamic library {}.\n", lib.string());
@@ -393,7 +394,7 @@ namespace kara::builder {
             if (!expectedMain)
                 throw std::runtime_error("Could not find main symbol.");
 
-            auto *entry = reinterpret_cast<int(*)()>(expectedMain.get().getAddress());
+            auto *entry = reinterpret_cast<int (*)()>(expectedMain.get().getAddress());
 
             fmt::print("Returned {}.\n", entry());
         }

@@ -1,12 +1,13 @@
 #pragma once
 
-// Internal include, you'll need to link against clang-visitor to access this stuff.
+// Internal include, you'll need to link against clang-visitor to access this
+// stuff.
 
 #include <hermes/node.h>
 
 #include <clang/AST/AST.h>
-#include <clang/Tooling/Tooling.h>
 #include <clang/AST/RecursiveASTVisitor.h>
+#include <clang/Tooling/Tooling.h>
 
 using namespace hermes;
 

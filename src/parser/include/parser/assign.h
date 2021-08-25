@@ -6,14 +6,7 @@ namespace kara::parser {
     struct Expression;
 
     struct Assign : public hermes::Node {
-        enum class Operator {
-            Assign,
-            Plus,
-            Minus,
-            Multiply,
-            Divide,
-            Modulo
-        };
+        enum class Operator { Assign, Plus, Minus, Multiply, Divide, Modulo };
 
         Operator op = Operator::Assign;
 

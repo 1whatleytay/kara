@@ -2,16 +2,16 @@
 
 #include <options/options.h>
 
-#include <utils/typename.h>
 #include <utils/expression.h>
+#include <utils/typename.h>
 
-#include <llvm/IR/Module.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
+#include <llvm/IR/Module.h>
 
-#include <set>
-#include <queue>
 #include <optional>
+#include <queue>
+#include <set>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -47,11 +47,7 @@ namespace kara::builder {
 
     struct Result {
         // valid flag layouts: reference, temporary | mutable | variable
-        enum Flags : uint32_t {
-            FlagTemporary = 1u << 0u,
-            FlagMutable = 1u << 1u,
-            FlagReference = 1u << 2u
-        };
+        enum Flags : uint32_t { FlagTemporary = 1u << 0u, FlagMutable = 1u << 1u, FlagReference = 1u << 2u };
 
         uint32_t flags = 0;
         [[nodiscard]] bool isSet(Flags flag) const;
@@ -61,11 +57,7 @@ namespace kara::builder {
         llvm::Value *value = nullptr;
         utils::Typename type;
 
-        Result(
-            uint32_t flags,
-            llvm::Value *value,
-            utils::Typename type,
-            StatementContext *statementContext);
+        Result(uint32_t flags, llvm::Value *value, utils::Typename type, StatementContext *statementContext);
     };
 
     struct Unresolved {
@@ -74,9 +66,7 @@ namespace kara::builder {
 
         std::shared_ptr<Result> implicit;
 
-        Unresolved(
-            const hermes::Node *from,
-            std::vector<const hermes::Node *> references,
+        Unresolved(const hermes::Node *from, std::vector<const hermes::Node *> references,
             std::unique_ptr<Result> implicit = nullptr);
     };
 
@@ -85,8 +75,8 @@ namespace kara::builder {
     // Thinking struct for destroying objects when a statement is done.
     struct StatementContext {
         // COUPLING AHH T_T I'm sorry...
-        // I need it to use invokeDestroy for now, would be best to separate everything to global scope but...
-        // DW i got u - future taylor
+        // I need it to use invokeDestroy for now, would be best to separate
+        // everything to global scope but... DW i got u - future taylor
         Scope &parent;
 
         uint64_t nextUID = 1;
@@ -112,7 +102,8 @@ namespace kara::builder {
 
         Variable(const parser::Variable *node, Builder &builder); // global variable
         Variable(const parser::Variable *node, Scope &scope); // regular variable
-        Variable(const parser::Variable *node, llvm::Value *input, Scope &scope); // function parameter
+        Variable(const parser::Variable *node, llvm::Value *input,
+            Scope &scope); // function parameter
     };
 
     struct MatchResult {
@@ -147,17 +138,13 @@ namespace kara::builder {
         llvm::Value *exitChainType = nullptr;
         llvm::BasicBlock *exitChainBegin = nullptr;
 
-        enum class ExitPoint {
-            Regular,
-            Return,
-            Break,
-            Continue
-        };
+        enum class ExitPoint { Regular, Return, Break, Continue };
 
         std::set<ExitPoint> requiredPoints = { ExitPoint::Regular };
         std::unordered_map<ExitPoint, llvm::BasicBlock *> destinations;
 
-        // For types, might need to be cleared occasionally. For ArrayKind::UnboundedSize mostly.
+        // For types, might need to be cleared occasionally. For
+        // ArrayKind::UnboundedSize mostly.
         std::unordered_map<const parser::Expression *, Result> expressionCache;
 
         llvm::Value *makeAlloca(const utils::Typename &type, const std::string &name = "");
@@ -174,8 +161,7 @@ namespace kara::builder {
         // separate for now... for data efficiency - use findVariable function
         std::unordered_map<const parser::Variable *, std::shared_ptr<Variable>> variables;
 
-        MatchResult match(
-            const std::vector<const parser::Variable *> &variables, const MatchInput &input);
+        MatchResult match(const std::vector<const parser::Variable *> &variables, const MatchInput &input);
         std::variant<Result, MatchCallError> call(
             const std::vector<const hermes::Node *> &options, const MatchInput &input);
         std::variant<Result, MatchCallError> call(
@@ -188,13 +174,10 @@ namespace kara::builder {
         // Node for search scope.
         static std::optional<utils::Typename> negotiate(const utils::Typename &left, const utils::Typename &right);
 
-        std::optional<Result> convert(
-            const Result &result, const utils::Typename &type, bool force = false);
+        std::optional<Result> convert(const Result &result, const utils::Typename &type, bool force = false);
         static std::optional<std::pair<Result, Result>> convert(
-            const Result &a, Scope &aScope,
-            const Result &b, Scope &bScope);
-        std::optional<std::pair<Result, Result>> convert(
-            const Result &a, const Result &b);
+            const Result &a, Scope &aScope, const Result &b, Scope &bScope);
+        std::optional<std::pair<Result, Result>> convert(const Result &a, const Result &b);
 
         Result infer(const Wrapped &result);
         Result unpack(const Result &result);

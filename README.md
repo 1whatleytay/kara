@@ -10,7 +10,7 @@ Case in point, a `std::variant` error bubbling is [4x faster](https://godbolt.or
 
 ## Design Goals
 
- - Beginner friendly, code should be readable and extendable.
+ - Beginner-friendly, code should be readable and extendable.
  - For ease of mind, more complex features should be a combination of simpler features.
  - Fast, native code. Abstract common patterns quickly.
  - Encourage self documentation through various interactive builtin types.
@@ -100,10 +100,10 @@ Until `1.0`.
  - [ ] Parameter Casting (in place of inheritance), `a as T from fieldOfTThatWouldContainA`
  - [ ] Great Refactor (better compiler)
    - [x] Split BuilderResult/Unresolved, infer for unpack
-   - [ ] Operations (Call, Add, etc.) Independent from BuilderScope
+   - [ ] Operations (Call, Add, etc.) Independent of BuilderScope
    - [ ] Chain Expanding for Alloca, Malloc, Move, Copy, etc. + Predicate
    - [ ] Reorganize Headers and Source Names and Locations to Something Sane
-   - [ ] Namespace Builder
+   - [x] Namespace Builder
 
 ### Standard Library
  - [ ] Stdin + Stdout

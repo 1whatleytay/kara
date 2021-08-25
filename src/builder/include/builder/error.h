@@ -1,7 +1,7 @@
 #pragma once
 
-#include <string>
 #include <exception>
+#include <string>
 
 #include <hermes/node.h>
 
@@ -12,11 +12,11 @@ namespace kara::builder {
         std::string issue;
         const hermes::Node *node = nullptr;
 
-        [[nodiscard]] const char* what() const noexcept override;
+        [[nodiscard]] const char *what() const noexcept override;
 
         VerifyError(const hermes::Node *node, std::string message);
 
-        template <typename ...Args>
+        template <typename... Args>
         VerifyError(const hermes::Node *node, const char *format, Args... args)
             : VerifyError(node, fmt::format(format, args...)) { }
     };

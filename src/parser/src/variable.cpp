@@ -1,12 +1,10 @@
 #include <parser/variable.h>
 
-#include <parser/literals.h>
 #include <parser/expression.h>
+#include <parser/literals.h>
 
 namespace kara::parser {
-    const hermes::Node *Variable::fixedType() const {
-        return hasFixedType ? children[0].get() : nullptr;
-    }
+    const hermes::Node *Variable::fixedType() const { return hasFixedType ? children[0].get() : nullptr; }
 
     const Expression *Variable::value() const {
         return hasInitialValue ? children[hasFixedType]->as<Expression>() : nullptr;
@@ -16,7 +14,8 @@ namespace kara::parser {
         return hasConstantValue ? children[hasFixedType]->as<Number>() : nullptr;
     }
 
-    Variable::Variable(Node *parent, bool isExplicit, bool external) : Node(parent, Kind::Variable) {
+    Variable::Variable(Node *parent, bool isExplicit, bool external)
+        : Node(parent, Kind::Variable) {
         if (external)
             return;
 
@@ -26,8 +25,9 @@ namespace kara::parser {
 
         if (mutability) {
             match();
-            isMutable = mutability.value(); // analysis says "The address of a the local variable may escape the function"
-            // ^^^ i call bs
+            isMutable = mutability.value(); // analysis says "The address of a the local
+                                            // variable may escape the function"
+                                            // ^^^ i call bs
         }
 
         name = token();

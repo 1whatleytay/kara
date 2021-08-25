@@ -1,19 +1,18 @@
 #include <parser/literals.h>
 
-#include <parser/typename.h>
 #include <parser/expression.h>
+#include <parser/typename.h>
 
 #include <fmt/format.h>
 
-#include <sstream>
 #include <algorithm>
+#include <sstream>
 
 namespace kara::parser {
-    const Expression *Parentheses::body() const {
-        return children.front()->as<Expression>();
-    }
+    const Expression *Parentheses::body() const { return children.front()->as<Expression>(); }
 
-    Parentheses::Parentheses(Node *parent) : Node(parent, Kind::Parentheses) {
+    Parentheses::Parentheses(Node *parent)
+        : Node(parent, Kind::Parentheses) {
         if (next("group"))
             match();
 
@@ -24,15 +23,18 @@ namespace kara::parser {
         needs(")");
     }
 
-    Bool::Bool(Node *parent) : Node(parent, Kind::Bool) {
+    Bool::Bool(Node *parent)
+        : Node(parent, Kind::Bool) {
         value = select<bool>({ { "false", false }, { "true", true } }, true);
     }
 
-    Special::Special(Node *parent) : Node(parent, Kind::Special) {
+    Special::Special(Node *parent)
+        : Node(parent, Kind::Special) {
         type = select<Type>({ { "any", Type::Any }, { "nothing", Type::Nothing }, { "null", Type::Null } }, true);
     }
 
-    Number::Number(Node *parent, bool external) : Node(parent, Kind::Number) {
+    Number::Number(Node *parent, bool external)
+        : Node(parent, Kind::Number) {
         if (external)
             return;
 
@@ -89,12 +91,11 @@ namespace kara::parser {
             }
         } catch (const std::out_of_range &e) {
             error(fmt::format("Token {} cannot be represented by a number.", full));
-        } catch (const std::invalid_argument &e) {
-            error(fmt::format("Token {} is not a number.", full));
-        }
+        } catch (const std::invalid_argument &e) { error(fmt::format("Token {} is not a number.", full)); }
     }
 
-    String::String(Node *parent) : Node(parent, Kind::String) {
+    String::String(Node *parent)
+        : Node(parent, Kind::String) {
         auto defaultPop = spaceStoppable;
 
         // do not skip text
@@ -110,7 +111,7 @@ namespace kara::parser {
             Dollar,
             Backslash,
             Quote,
-            };
+        };
 
         enum class SpecialChars {
             NewLine,
@@ -120,12 +121,11 @@ namespace kara::parser {
             SingleQuote,
             DoubleQuote,
             Backslash,
-            };
+        };
 
         std::vector<std::string> breakChars = { "$", "\\", quote };
-        hermes::SelectMap<BreakChars> breakCharsMap = {
-            { "$", BreakChars::Dollar }, { "\\", BreakChars::Backslash }, { quote, BreakChars::Quote }
-        };
+        hermes::SelectMap<BreakChars> breakCharsMap
+            = { { "$", BreakChars::Dollar }, { "\\", BreakChars::Backslash }, { quote, BreakChars::Quote } };
 
         hermes::SelectMap<SpecialChars> specialCharsMap = {
             { "n", SpecialChars::NewLine },
@@ -135,7 +135,7 @@ namespace kara::parser {
             { "\'", SpecialChars::Backslash },
             { "\"", SpecialChars::SingleQuote },
             { "\\", SpecialChars::DoubleQuote },
-            };
+        };
 
         bool loop = true;
         while (loop) {
@@ -145,48 +145,48 @@ namespace kara::parser {
                 spaceStoppable = defaultPop;
 
             switch (select(breakCharsMap)) {
-                case BreakChars::Dollar:
-                    spaceStoppable = notSpace;
-                    needs("{");
+            case BreakChars::Dollar:
+                spaceStoppable = notSpace;
+                needs("{");
 
-                    inserts.push_back(stream.str().size());
-                    push<Expression>();
+                inserts.push_back(stream.str().size());
+                push<Expression>();
 
-                    spaceStoppable = alwaysStop;
-                    needs("}");
+                spaceStoppable = alwaysStop;
+                needs("}");
 
+                break;
+
+            case BreakChars::Backslash:
+                switch (select(specialCharsMap)) {
+                case SpecialChars::NewLine:
+                    stream << '\n';
                     break;
+                case SpecialChars::Tab:
+                    stream << '\t';
+                    break;
+                case SpecialChars::DollarSign:
+                    stream << '$';
+                    break;
+                case SpecialChars::Null:
+                    stream << '\0';
+                    break;
+                case SpecialChars::SingleQuote:
+                    stream << '\'';
+                    break;
+                case SpecialChars::DoubleQuote:
+                    stream << '\"';
+                    break;
+                case SpecialChars::Backslash:
+                    stream << '\\';
+                    break;
+                }
 
-                    case BreakChars::Backslash:
-                        switch (select(specialCharsMap)) {
-                            case SpecialChars::NewLine:
-                                stream << '\n';
-                                break;
-                            case SpecialChars::Tab:
-                                stream << '\t';
-                                break;
-                            case SpecialChars::DollarSign:
-                                stream << '$';
-                                break;
-                            case SpecialChars::Null:
-                                stream << '\0';
-                                break;
-                            case SpecialChars::SingleQuote:
-                                stream << '\'';
-                                break;
-                            case SpecialChars::DoubleQuote:
-                                stream << '\"';
-                                break;
-                            case SpecialChars::Backslash:
-                                stream << '\\';
-                                break;
-                        }
+                break;
 
-                        break;
-
-                    case BreakChars::Quote:
-                        loop = false;
-                        break;
+            case BreakChars::Quote:
+                loop = false;
+                break;
             }
         }
 
@@ -202,7 +202,8 @@ namespace kara::parser {
         return result;
     }
 
-    Array::Array(Node *parent) : Node(parent, Kind::Array) {
+    Array::Array(Node *parent)
+        : Node(parent, Kind::Array) {
         match("[");
 
         while (!end() && !peek("]")) {
@@ -214,15 +215,15 @@ namespace kara::parser {
         needs("]");
     }
 
-    Reference::Reference(Node *parent) : Node(parent, Kind::Reference) {
+    Reference::Reference(Node *parent)
+        : Node(parent, Kind::Reference) {
         name = token();
     }
 
-    const hermes::Node *New::type() const {
-        return children.front().get();
-    }
+    const hermes::Node *New::type() const { return children.front().get(); }
 
-    New::New(Node *parent) : Node(parent, Kind::New) {
+    New::New(Node *parent)
+        : Node(parent, Kind::New) {
         match("*");
 
         pushTypename(this);

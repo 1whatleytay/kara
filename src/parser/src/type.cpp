@@ -3,9 +3,7 @@
 #include <parser/variable.h>
 
 namespace kara::parser {
-    const hermes::Node *Type::alias() const {
-        return isAlias ? children.front().get() : nullptr;
-    }
+    const hermes::Node *Type::alias() const { return isAlias ? children.front().get() : nullptr; }
 
     std::vector<const Variable *> Type::fields() const {
         std::vector<const Variable *> result(children.size());
@@ -16,7 +14,8 @@ namespace kara::parser {
         return result;
     }
 
-    Type::Type(Node *parent, bool external) : Node(parent, Kind::Type) {
+    Type::Type(Node *parent, bool external)
+        : Node(parent, Kind::Type) {
         if (external)
             return;
 
@@ -24,33 +23,30 @@ namespace kara::parser {
 
         name = token();
 
-        enum class Operators {
-            NewClass,
-            Alias
-        };
+        enum class Operators { NewClass, Alias };
 
         auto check = select<Operators>({ { "{", Operators::NewClass }, { "=", Operators::Alias } });
 
         switch (check) {
-            case Operators::NewClass:
-                while (!end() && !peek("}")) {
-                    push<Variable>(false, false);
+        case Operators::NewClass:
+            while (!end() && !peek("}")) {
+                push<Variable>(false, false);
 
-                    next(",");
-                }
+                next(",");
+            }
 
-                needs("}");
+            needs("}");
 
-                break;
+            break;
 
-            case Operators::Alias:
-                isAlias = true;
-                pushTypename(this);
+        case Operators::Alias:
+            isAlias = true;
+            pushTypename(this);
 
-                break;
+            break;
 
-            default:
-                throw;
+        default:
+            throw;
         }
     }
 }

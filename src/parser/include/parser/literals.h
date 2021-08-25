@@ -2,8 +2,8 @@
 
 #include <parser/kinds.h>
 
-#include <vector>
 #include <variant>
+#include <vector>
 
 namespace kara::parser {
     struct Expression;
@@ -15,9 +15,7 @@ namespace kara::parser {
     };
 
     struct Special : public hermes::Node {
-        enum class Type {
-            Any, Nothing, Null
-        };
+        enum class Type { Any, Nothing, Null };
 
         Type type = Type::Any;
 

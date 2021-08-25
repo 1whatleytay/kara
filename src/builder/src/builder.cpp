@@ -3,10 +3,10 @@
 #include <builder/error.h>
 #include <builder/manager.h>
 
-#include <parser/type.h>
-#include <parser/function.h>
-#include <parser/variable.h>
 #include <parser/expression.h>
+#include <parser/function.h>
+#include <parser/type.h>
+#include <parser/variable.h>
 
 #include <llvm/Support/Host.h>
 
@@ -61,12 +61,11 @@ namespace kara::builder {
 
     llvm::Function *Builder::getMalloc() {
         if (!mallocCache) {
-            auto type = llvm::FunctionType::get(
-                llvm::Type::getInt8PtrTy(context),
-                std::vector<llvm::Type *> { llvm::Type::getInt64Ty(context) },
-                false);
+            auto type = llvm::FunctionType::get(llvm::Type::getInt8PtrTy(context),
+                std::vector<llvm::Type *> { llvm::Type::getInt64Ty(context) }, false);
 
-            mallocCache = llvm::Function::Create(type, llvm::GlobalVariable::LinkageTypes::ExternalLinkage, options.malloc, *module);
+            mallocCache = llvm::Function::Create(
+                type, llvm::GlobalVariable::LinkageTypes::ExternalLinkage, options.malloc, *module);
         }
 
         return mallocCache;
@@ -75,11 +74,10 @@ namespace kara::builder {
     llvm::Function *Builder::getFree() {
         if (!freeCache) {
             auto type = llvm::FunctionType::get(
-                llvm::Type::getVoidTy(context),
-                std::vector<llvm::Type *> { llvm::Type::getInt8PtrTy(context) },
-                false);
+                llvm::Type::getVoidTy(context), std::vector<llvm::Type *> { llvm::Type::getInt8PtrTy(context) }, false);
 
-            freeCache = llvm::Function::Create(type, llvm::GlobalVariable::LinkageTypes::ExternalLinkage, options.free, *module);
+            freeCache = llvm::Function::Create(
+                type, llvm::GlobalVariable::LinkageTypes::ExternalLinkage, options.free, *module);
         }
 
         return freeCache;
@@ -90,8 +88,7 @@ namespace kara::builder {
 
         if (auto array = std::get_if<utils::ArrayTypename>(&type)) {
             if (array->kind == utils::ArrayKind::Unbounded)
-                throw std::runtime_error(
-                    fmt::format("Attempt to allocate type {} on stack.", toString(type)));
+                throw std::runtime_error(fmt::format("Attempt to allocate type {} on stack.", toString(type)));
 
             if (array->kind == utils::ArrayKind::UnboundedSized)
                 throw std::runtime_error(
@@ -106,8 +103,7 @@ namespace kara::builder {
 
         if (auto array = std::get_if<utils::ArrayTypename>(&type)) {
             if (array->kind == utils::ArrayKind::Unbounded)
-                throw std::runtime_error(
-                    fmt::format("Attempt to allocate type {} on heap.", toString(type)));
+                throw std::runtime_error(fmt::format("Attempt to allocate type {} on heap.", toString(type)));
 
             if (array->kind == utils::ArrayKind::UnboundedSized) {
                 assert(array->expression);
@@ -116,10 +112,12 @@ namespace kara::builder {
                 if (it != expressionCache.end()) {
                     arraySize = get(it->second);
                 } else {
-                    auto converted = convert(makeExpression(array->expression), utils::PrimitiveTypename { utils::PrimitiveType::ULong });
+                    auto converted = convert(
+                        makeExpression(array->expression), utils::PrimitiveTypename { utils::PrimitiveType::ULong });
 
                     if (!converted)
-                        throw VerifyError(array->expression, "Expression cannot be converted to ulong for size for array.");
+                        throw VerifyError(
+                            array->expression, "Expression cannot be converted to ulong for size for array.");
 
                     auto &result = *converted;
 
@@ -128,15 +126,14 @@ namespace kara::builder {
                     arraySize = get(result);
                 }
 
-                // TODO: needs recursive implementation of sizes to account for [[int:50]:50]
-                // ^ probably would be done in the great refactor
-
+                // TODO: needs recursive implementation of sizes to account for
+                // [[int:50]:50] ^ probably would be done in the great refactor
 
                 auto llvmElementType = builder.makeTypename(*array->value);
                 size_t elementSize = builder.file.manager.target.layout->getTypeStoreSize(llvmElementType);
 
-                llvm::Constant *llvmElementSize = llvm::ConstantInt::get(
-                    llvm::Type::getInt64Ty(builder.context), elementSize);
+                llvm::Constant *llvmElementSize
+                    = llvm::ConstantInt::get(llvm::Type::getInt64Ty(builder.context), elementSize);
 
                 if (current)
                     arraySize = current->CreateMul(llvmElementSize, arraySize);
@@ -161,8 +158,11 @@ namespace kara::builder {
     }
 
     Builder::Builder(const ManagerFile &file, const options::Options &opts)
-    : root(file.root.get()), file(file), dependencies(file.resolve()),
-    context(*file.manager.context), options(opts) {
+        : root(file.root.get())
+        , file(file)
+        , dependencies(file.resolve())
+        , context(*file.manager.context)
+        , options(opts) {
 
         module = std::make_unique<llvm::Module>(file.path.filename().string(), context);
 
@@ -180,28 +180,28 @@ namespace kara::builder {
 
         for (const auto &node : root->children) {
             switch (node->is<parser::Kind>()) {
-                case parser::Kind::Import:
-                    // Handled by ManagerFile
-                    break;
+            case parser::Kind::Import:
+                // Handled by ManagerFile
+                break;
 
-                case parser::Kind::Variable:
-                    makeGlobal(node->as<parser::Variable>());
-                    break;
+            case parser::Kind::Variable:
+                makeGlobal(node->as<parser::Variable>());
+                break;
 
-                case parser::Kind::Type: {
-                    auto e = node->as<parser::Type>();
+            case parser::Kind::Type: {
+                auto e = node->as<parser::Type>();
 
-                    if (!e->isAlias)
-                        makeType(e);
-                    break;
-                }
+                if (!e->isAlias)
+                    makeType(e);
+                break;
+            }
 
-                case parser::Kind::Function:
-                    makeFunction(node->as<parser::Function>());
-                    break;
+            case parser::Kind::Function:
+                makeFunction(node->as<parser::Function>());
+                break;
 
-                default:
-                    throw VerifyError(node.get(), "Cannot build this node in root.");
+            default:
+                throw VerifyError(node.get(), "Cannot build this node in root.");
             }
         }
     }

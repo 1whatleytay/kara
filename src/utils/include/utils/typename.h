@@ -1,9 +1,9 @@
 #pragma once
 
-#include <vector>
 #include <memory>
 #include <string>
 #include <variant>
+#include <vector>
 
 namespace kara::parser {
     struct Type;
@@ -18,21 +18,24 @@ namespace kara::utils {
     struct OptionalTypename;
     struct PrimitiveTypename;
     struct ReferenceTypename;
-    using Typename = std::variant<
-        NamedTypename,
-        ArrayTypename,
-        FunctionTypename,
-        OptionalTypename,
-        PrimitiveTypename,
-        ReferenceTypename
-    >;
+    using Typename = std::variant<NamedTypename, ArrayTypename, FunctionTypename, OptionalTypename, PrimitiveTypename,
+        ReferenceTypename>;
 
     enum class PrimitiveType {
-        Any, Null, Nothing,
+        Any,
+        Null,
+        Nothing,
         Bool,
-        Byte, Short, Int, Long,
-        UByte, UShort, UInt, ULong,
-        Float, Double
+        Byte,
+        Short,
+        Int,
+        Long,
+        UByte,
+        UShort,
+        UInt,
+        ULong,
+        Float,
+        Double
     };
 
     enum class ArrayKind {

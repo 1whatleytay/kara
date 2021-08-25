@@ -12,11 +12,7 @@ namespace kara::parser {
     };
 
     struct Statement : public hermes::Node {
-        enum class Operation {
-            Return,
-            Break,
-            Continue
-        };
+        enum class Operation { Return, Break, Continue };
 
         explicit Statement(Node *parent);
 

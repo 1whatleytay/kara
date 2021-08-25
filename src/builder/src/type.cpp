@@ -24,10 +24,12 @@ namespace kara::builder {
         implicitDestructor->build();
     }
 
-    Type::Type(const parser::Type *node, builder::Builder &builder) : node(node), builder(builder) {
+    Type::Type(const parser::Type *node, builder::Builder &builder)
+        : node(node)
+        , builder(builder) {
         assert(!node->isAlias);
 
-        type = llvm::StructType::create(builder.context, { }, node->name);
+        type = llvm::StructType::create(builder.context, {}, node->name);
 
         auto ptr = std::make_unique<builder::Function>(node, builder);
         implicitDestructor = ptr.get();

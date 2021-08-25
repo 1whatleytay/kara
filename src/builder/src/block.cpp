@@ -2,15 +2,15 @@
 
 #include <builder/error.h>
 
-#include <parser/scope.h>
 #include <parser/expression.h>
+#include <parser/scope.h>
 
 namespace {
     void br(llvm::BasicBlock *block, llvm::BasicBlock *to) {
         if (!block->getTerminator())
             llvm::IRBuilder<>(block).CreateBr(to);
     }
-}
+} // namespace
 
 namespace kara::builder {
     void Scope::makeBlock(const parser::Block *node) {
@@ -20,29 +20,30 @@ namespace kara::builder {
         Scope sub(node->children.front()->as<parser::Code>(), *this);
 
         switch (node->type) {
-            case parser::Block::Type::Regular: {
-                current->CreateBr(sub.openingBlock);
+        case parser::Block::Type::Regular: {
+            current->CreateBr(sub.openingBlock);
 
-                currentBlock = llvm::BasicBlock::Create(builder.context, "", function->function, lastBlock);
-                current->SetInsertPoint(currentBlock);
+            currentBlock = llvm::BasicBlock::Create(builder.context, "", function->function, lastBlock);
+            current->SetInsertPoint(currentBlock);
 
-                sub.destinations[ExitPoint::Regular] = currentBlock;
+            sub.destinations[ExitPoint::Regular] = currentBlock;
 
-                break;
-            }
+            break;
+        }
 
-            case parser::Block::Type::Exit: {
-                sub.destinations[ExitPoint::Regular] = exitChainBegin;
+        case parser::Block::Type::Exit: {
+            sub.destinations[ExitPoint::Regular] = exitChainBegin;
 
-                // Prohibit Strange Operations, this isn't done in function root scope, idk what will happen
-                sub.destinations[ExitPoint::Break] = nullptr;
-                sub.destinations[ExitPoint::Return] = nullptr;
-                sub.destinations[ExitPoint::Continue] = nullptr;
+            // Prohibit Strange Operations, this isn't done in function root scope, idk
+            // what will happen
+            sub.destinations[ExitPoint::Break] = nullptr;
+            sub.destinations[ExitPoint::Return] = nullptr;
+            sub.destinations[ExitPoint::Continue] = nullptr;
 
-                exitChainBegin = sub.openingBlock;
+            exitChainBegin = sub.openingBlock;
 
-                break;
-            }
+            break;
+        }
         }
 
         sub.commit();
@@ -61,12 +62,12 @@ namespace kara::builder {
             currentBlock = llvm::BasicBlock::Create(builder.context, "", function->function, lastBlock);
 
             builder::Result conditionResult = makeExpression(node->children.front()->as<parser::Expression>());
-            std::optional<builder::Result> conditionConverted =
-                convert(conditionResult, utils::PrimitiveTypename { utils::PrimitiveType::Bool });
+            std::optional<builder::Result> conditionConverted
+                = convert(conditionResult, utils::PrimitiveTypename { utils::PrimitiveType::Bool });
 
             if (!conditionConverted) {
-                throw VerifyError(node->children.front().get(),
-                    "Condition for if statement must evaluate to true or false.");
+                throw VerifyError(
+                    node->children.front().get(), "Condition for if statement must evaluate to true or false.");
             }
 
             conditionResult = *conditionConverted;
@@ -81,27 +82,26 @@ namespace kara::builder {
             if (node->children.size() == 3) {
                 // has else branch
                 switch (onFalseNode->is<parser::Kind>()) {
-                    case parser::Kind::If:
-                        node = node->children[2]->as<parser::If>();
-                        break;
+                case parser::Kind::If:
+                    node = node->children[2]->as<parser::If>();
+                    break;
 
-                    case parser::Kind::Code: {
-                        scopes.push_back(std::make_unique<builder::Scope>(onFalseNode->as<parser::Code>(), *this));
-                        Scope &terminator = *scopes.back();
+                case parser::Kind::Code: {
+                    scopes.push_back(std::make_unique<builder::Scope>(onFalseNode->as<parser::Code>(), *this));
+                    Scope &terminator = *scopes.back();
 
-                        br(currentBlock, terminator.openingBlock);
+                    br(currentBlock, terminator.openingBlock);
 
-                        currentBlock = llvm::BasicBlock::Create(
-                            builder.context, "", function->function, lastBlock);
-                        current->SetInsertPoint(currentBlock);
+                    currentBlock = llvm::BasicBlock::Create(builder.context, "", function->function, lastBlock);
+                    current->SetInsertPoint(currentBlock);
 
-                        node = nullptr;
+                    node = nullptr;
 
-                        break;
-                    }
+                    break;
+                }
 
-                    default:
-                        throw;
+                default:
+                    throw;
                 }
             } else {
                 // no branch, all is good
@@ -125,7 +125,8 @@ namespace kara::builder {
         auto *code = node->body();
 
         if (!condition) {
-            if (current) { // cleanup is possible using method described in if std::vector<...> scopes
+            if (current) { // cleanup is possible using method described in if
+                // std::vector<...> scopes
                 Scope scope(code, *this, true);
 
                 current->CreateBr(scope.openingBlock);
@@ -148,7 +149,8 @@ namespace kara::builder {
                 auto converted = convert(*check.product, utils::PrimitiveTypename { utils::PrimitiveType::Bool });
 
                 if (!converted)
-                    throw VerifyError(node, "For node must have bool as expression, got {}.", toString(check.product->type));
+                    throw VerifyError(
+                        node, "For node must have bool as expression, got {}.", toString(check.product->type));
 
                 Scope scope(code, *this);
 

@@ -1,9 +1,9 @@
 #include <parser/function.h>
 
+#include <parser/expression.h>
 #include <parser/scope.h>
 #include <parser/typename.h>
 #include <parser/variable.h>
-#include <parser/expression.h>
 
 namespace kara::parser {
     std::vector<const Variable *> Function::parameters() const {
@@ -15,15 +15,14 @@ namespace kara::parser {
         return result;
     }
 
-    const hermes::Node *Function::fixedType() const {
-        return hasFixedType ? children[parameterCount].get() : nullptr;
-    }
+    const hermes::Node *Function::fixedType() const { return hasFixedType ? children[parameterCount].get() : nullptr; }
 
     const hermes::Node *Function::body() const {
         return isExtern ? nullptr : children[parameterCount + hasFixedType].get();
     }
 
-    Function::Function(Node *parent, bool external) : Node(parent, Kind::Function) {
+    Function::Function(Node *parent, bool external)
+        : Node(parent, Kind::Function) {
         if (external)
             return;
 

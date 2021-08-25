@@ -2,8 +2,8 @@
 
 #include <builder/error.h>
 
-#include <parser/statement.h>
 #include <parser/expression.h>
+#include <parser/statement.h>
 
 namespace kara::builder {
     void Scope::makeStatement(const parser::Statement *node) {
@@ -12,55 +12,55 @@ namespace kara::builder {
         auto nothing = utils::PrimitiveTypename::from(utils::PrimitiveType::Nothing);
 
         switch (node->op) {
-            case parser::Statement::Operation::Return: {
-                assert(function);
+        case parser::Statement::Operation::Return: {
+            assert(function);
 
-                if (node->children.empty()) {
-                    if (*function->type.returnType != nothing) {
-                        throw VerifyError(node,
-                            "Method is of type {} but return statement does not return anything",
-                            toString(*function->type.returnType));
-                    }
-                } else {
-                    if (!node->children.empty() && *function->type.returnType == nothing) {
-                        throw VerifyError(node,
-                            "Method does not have a return type but return statement returns value.");
-                    }
-
-                    // lambda :S
-
-                    builder::Result resultRaw = makeExpression(node->children.front()->as<parser::Expression>());
-                    std::optional<builder::Result> resultConverted = convert(resultRaw, *function->type.returnType);
-
-                    if (!resultConverted.has_value()) {
-                        throw VerifyError(node,
-                            "Cannot return {} from a function that returns {}.",
-                            toString(resultRaw.type),
-                            toString(*function->type.returnType));
-                    }
-
-                    builder::Result result = pass(*resultConverted);
-
-                    current->CreateStore(get(result), function->returnValue);
+            if (node->children.empty()) {
+                if (*function->type.returnType != nothing) {
+                    throw VerifyError(node,
+                        "Method is of type {} but return statement does not "
+                        "return anything",
+                        toString(*function->type.returnType));
+                }
+            } else {
+                if (!node->children.empty() && *function->type.returnType == nothing) {
+                    throw VerifyError(node,
+                        "Method does not have a return type but return "
+                        "statement returns value.");
                 }
 
-                statementContext.commit(currentBlock);
+                // lambda :S
 
-                exit(ExitPoint::Return);
+                builder::Result resultRaw = makeExpression(node->children.front()->as<parser::Expression>());
+                std::optional<builder::Result> resultConverted = convert(resultRaw, *function->type.returnType);
 
-                break;
+                if (!resultConverted.has_value()) {
+                    throw VerifyError(node, "Cannot return {} from a function that returns {}.",
+                        toString(resultRaw.type), toString(*function->type.returnType));
+                }
+
+                builder::Result result = pass(*resultConverted);
+
+                current->CreateStore(get(result), function->returnValue);
             }
 
-            case parser::Statement::Operation::Break:
-                exit(ExitPoint::Break);
-                break;
+            statementContext.commit(currentBlock);
 
-            case parser::Statement::Operation::Continue:
-                exit(ExitPoint::Continue);
-                break;
+            exit(ExitPoint::Return);
 
-            default:
-                throw;
+            break;
+        }
+
+        case parser::Statement::Operation::Break:
+            exit(ExitPoint::Break);
+            break;
+
+        case parser::Statement::Operation::Continue:
+            exit(ExitPoint::Continue);
+            break;
+
+        default:
+            throw;
         }
     }
 }

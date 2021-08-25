@@ -2,15 +2,15 @@
 
 #include <interfaces/interfaces.h>
 
-#include <parser/root.h>
-#include <parser/type.h>
 #include <parser/function.h>
 #include <parser/literals.h>
+#include <parser/root.h>
+#include <parser/type.h>
 #include <parser/variable.h>
 
-#include <clang/Lex/LiteralSupport.h>
-#include <clang/Frontend/FrontendAction.h>
 #include <clang/Frontend/CompilerInstance.h>
+#include <clang/Frontend/FrontendAction.h>
+#include <clang/Lex/LiteralSupport.h>
 #include <clang/Tooling/CommonOptionsParser.h>
 
 #include <fmt/printf.h>
@@ -18,8 +18,7 @@
 using namespace clang;
 
 namespace kara::interfaces::header {
-    template <typename T, typename ...Args>
-    T *grab(Node *node, Args ... args) {
+    template <typename T, typename... Args> T *grab(Node *node, Args... args) {
         auto t = node->pick<T>(false, args...);
         auto *ptr = t.get();
 
@@ -27,7 +26,6 @@ namespace kara::interfaces::header {
 
         return ptr;
     }
-
 
     void TranslatePreprocessorCallback::MacroDefined(const Token &token, const MacroDirective *macro) {
         auto name = token.getIdentifierInfo()->getName();
@@ -40,10 +38,8 @@ namespace kara::interfaces::header {
         auto t = info->getReplacementToken(0);
 
         if (t.is(tok::numeric_constant)) {
-            NumericLiteralParser parser(
-                std::string_view(t.getLiteralData(), t.getLength()), macro->getLocation(),
-                compiler.getSourceManager(), compiler.getLangOpts(),
-                compiler.getTarget(), compiler.getDiagnostics());
+            NumericLiteralParser parser(std::string_view(t.getLiteralData(), t.getLength()), macro->getLocation(),
+                compiler.getSourceManager(), compiler.getLangOpts(), compiler.getTarget(), compiler.getDiagnostics());
 
             if (!parser.isFloat) {
                 llvm::APInt ap(64, 0);
@@ -69,14 +65,16 @@ namespace kara::interfaces::header {
                 varNode->children.push_back(std::move(numberNode));
 
                 factory.node->children.push_back(std::move(varNode));
-            }// else {
-//                fmt::print("Skipping token {}, float: {}, unsigned: {}\n", name, (bool)parser.isFloat, (bool)parser.isUnsigned);
-//            }
+            } // else {
+            //                fmt::print("Skipping token {}, float: {}, unsigned: {}\n",
+            //                name, (bool)parser.isFloat, (bool)parser.isUnsigned);
+            //            }
         }
     }
 
     TranslatePreprocessorCallback::TranslatePreprocessorCallback(CompilerInstance &compiler, TranslateFactory &factory)
-        : compiler(compiler), factory(factory) { }
+        : compiler(compiler)
+        , factory(factory) { }
 
     std::unique_ptr<Node> TranslateVisitor::make( // NOLINT(misc-no-recursion)
         Node *parent, const clang::QualType &wrapper, bool inStruct) const {
@@ -217,26 +215,49 @@ namespace kara::interfaces::header {
             } else if (type.isIntegerType()) {
                 if (type.isSignedIntegerType()) {
                     switch (size) {
-                        case 8: prim->type = utils::PrimitiveType::Byte; break;
-                        case 16: prim->type = utils::PrimitiveType::Short; break;
-                        case 32: prim->type = utils::PrimitiveType::Int; break;
-                        case 64: prim->type = utils::PrimitiveType::Long; break;
-                        default: return die();
+                    case 8:
+                        prim->type = utils::PrimitiveType::Byte;
+                        break;
+                    case 16:
+                        prim->type = utils::PrimitiveType::Short;
+                        break;
+                    case 32:
+                        prim->type = utils::PrimitiveType::Int;
+                        break;
+                    case 64:
+                        prim->type = utils::PrimitiveType::Long;
+                        break;
+                    default:
+                        return die();
                     }
                 } else {
                     switch (size) {
-                        case 8: prim->type = utils::PrimitiveType::UByte; break;
-                        case 16: prim->type = utils::PrimitiveType::UShort; break;
-                        case 32: prim->type = utils::PrimitiveType::UInt; break;
-                        case 64: prim->type = utils::PrimitiveType::ULong; break;
-                        default: return die();
+                    case 8:
+                        prim->type = utils::PrimitiveType::UByte;
+                        break;
+                    case 16:
+                        prim->type = utils::PrimitiveType::UShort;
+                        break;
+                    case 32:
+                        prim->type = utils::PrimitiveType::UInt;
+                        break;
+                    case 64:
+                        prim->type = utils::PrimitiveType::ULong;
+                        break;
+                    default:
+                        return die();
                     }
                 }
             } else if (type.isRealFloatingType()) {
                 switch (size) {
-                    case 32: prim->type = utils::PrimitiveType::Float; break;
-                    case 64: prim->type = utils::PrimitiveType::Double; break;
-                    default: return die();
+                case 32:
+                    prim->type = utils::PrimitiveType::Float;
+                    break;
+                case 64:
+                    prim->type = utils::PrimitiveType::Double;
+                    break;
+                default:
+                    return die();
                 }
             } else {
                 prim = nullptr;
@@ -353,7 +374,8 @@ namespace kara::interfaces::header {
 #pragma clang diagnostic pop
 
     TranslateVisitor::TranslateVisitor(clang::ASTContext &context, TranslateFactory *factory)
-        : context(context), factory(factory) { }
+        : context(context)
+        , factory(factory) { }
 
     void TranslateConsumer::HandleTranslationUnit(clang::ASTContext &context) {
         TranslateVisitor visitor(context, factory); // if this is expensive :shrug:
@@ -361,7 +383,8 @@ namespace kara::interfaces::header {
         visitor.TraverseDecl(context.getTranslationUnitDecl());
     }
 
-    TranslateConsumer::TranslateConsumer(TranslateFactory *factory) : factory(factory) { }
+    TranslateConsumer::TranslateConsumer(TranslateFactory *factory)
+        : factory(factory) { }
 
     std::unique_ptr<clang::ASTConsumer> TranslateAction::CreateASTConsumer(
         clang::CompilerInstance &compiler, llvm::StringRef file) {
@@ -372,17 +395,19 @@ namespace kara::interfaces::header {
         return std::make_unique<TranslateConsumer>(factory);
     }
 
-    TranslateAction::TranslateAction(TranslateFactory *factory) : factory(factory) { }
+    TranslateAction::TranslateAction(TranslateFactory *factory)
+        : factory(factory) { }
 
     std::unique_ptr<clang::FrontendAction> TranslateFactory::create() {
         return std::make_unique<TranslateAction>(this);
     }
 
-    TranslateFactory::TranslateFactory(parser::Root *node) : node(node) { }
+    TranslateFactory::TranslateFactory(parser::Root *node)
+        : node(node) { }
 
     InterfaceResult create(int count, const char **args) {
-        auto parser = clang::tooling::CommonOptionsParser::create(
-            count, args, llvm::cl::GeneralCategory, llvm::cl::OneOrMore);
+        auto parser
+            = clang::tooling::CommonOptionsParser::create(count, args, llvm::cl::GeneralCategory, llvm::cl::OneOrMore);
         if (!parser)
             throw std::runtime_error(toString(parser.takeError()));
 

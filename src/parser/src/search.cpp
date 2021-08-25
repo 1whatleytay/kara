@@ -64,7 +64,6 @@ namespace kara::parser {
             return nullptr;
         }
 
-
         const hermes::Node *parents(const hermes::Node *origin, const Checker &checker) {
             const hermes::Node *parent = origin->parent;
 
@@ -98,7 +97,6 @@ namespace kara::parser {
 
             return nullptr;
         }
-
 
         const hermes::Node *root(const hermes::Node *of) {
             while (of && of->parent)

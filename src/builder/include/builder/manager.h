@@ -5,14 +5,14 @@
 #include <options/options.h>
 
 #include <llvm/IR/LLVMContext.h>
-#include <llvm/Target/TargetMachine.h>
 #include <llvm/Support/TargetRegistry.h>
+#include <llvm/Target/TargetMachine.h>
 
-#include <set>
-#include <vector>
 #include <filesystem>
+#include <set>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 namespace fs = std::filesystem;
 
