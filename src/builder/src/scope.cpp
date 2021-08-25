@@ -3,13 +3,13 @@
 #include <builder/error.h>
 #include <parser/search.h>
 
-#include <parser/type.h>
-#include <parser/scope.h>
 #include <parser/assign.h>
 #include <parser/function.h>
 #include <parser/literals.h>
-#include <parser/variable.h>
+#include <parser/scope.h>
 #include <parser/statement.h>
+#include <parser/type.h>
+#include <parser/variable.h>
 
 namespace kara::builder {
     builder::Variable *Scope::findVariable(const parser::Variable *node) const {
@@ -137,8 +137,12 @@ namespace kara::builder {
         output.CreateBr(exitChainBegin);
     }
 
-    Scope::Scope(const hermes::Node *node, builder::Function &function, builder::Scope *parent, bool doCodeGen) // NOLINT(misc-no-recursion)
-    : parent(parent), builder(function.builder), function(&function), statementContext(*this) {
+    Scope::Scope(const hermes::Node *node, builder::Function &function, builder::Scope *parent,
+        bool doCodeGen) // NOLINT(misc-no-recursion)
+        : parent(parent)
+        , builder(function.builder)
+        , function(&function)
+        , statementContext(*this) {
 
         llvm::BasicBlock *moveAfter = parent ? parent->lastBlock : function.exitBlock;
 
@@ -150,13 +154,16 @@ namespace kara::builder {
             current->SetInsertPoint(currentBlock);
 
             if (node && node->is(parser::Kind::Code)) {
-                exitChainType = function.entry.CreateAlloca(llvm::Type::getInt8Ty(function.builder.context), nullptr, "exit_type");
-                lastBlock = llvm::BasicBlock::Create(function.builder.context, "exit_scope", function.function, moveAfter);
+                exitChainType = function.entry.CreateAlloca(
+                    llvm::Type::getInt8Ty(function.builder.context), nullptr, "exit_type");
+                lastBlock
+                    = llvm::BasicBlock::Create(function.builder.context, "exit_scope", function.function, moveAfter);
                 exitChainBegin = lastBlock;
             }
         }
 
-        if (!parent && !node->is(parser::Kind::Type)) // dont bother building parameters for type destructor functions
+        if (!parent && !node->is(parser::Kind::Type)) // dont bother building parameters for type
+            // destructor functions
             makeParameters();
 
         if (!node) {
@@ -165,120 +172,119 @@ namespace kara::builder {
         }
 
         switch (node->is<parser::Kind>()) {
-            case parser::Kind::Expression:
-                product = makeExpression(node->as<parser::Expression>());
+        case parser::Kind::Expression:
+            product = makeExpression(node->as<parser::Expression>());
 
-                break;
+            break;
 
-            case parser::Kind::Code:
-                assert(doCodeGen);
+        case parser::Kind::Code:
+            assert(doCodeGen);
 
-                for (const auto &child : node->children) {
-                    switch (child->is<parser::Kind>()) {
-                        case parser::Kind::Variable: {
-                            auto var = std::make_unique<builder::Variable>(child->as<parser::Variable>(), *this);
+            for (const auto &child : node->children) {
+                switch (child->is<parser::Kind>()) {
+                case parser::Kind::Variable: {
+                    auto var = std::make_unique<builder::Variable>(child->as<parser::Variable>(), *this);
 
-                            invokeDestroy(builder::Result {
-                                builder::Result::FlagReference | (var->node->isMutable ? builder::Result::FlagMutable : 0),
-                                var->value,
-                                var->type,
-                                &statementContext // safe to put, is reference dw
-                            });
+                    invokeDestroy(builder::Result {
+                        builder::Result::FlagReference | (var->node->isMutable ? builder::Result::FlagMutable : 0),
+                        var->value, var->type,
+                        &statementContext // safe to put, is reference dw
+                    });
 
-                            variables[child->as<parser::Variable>()] = std::move(var);
+                    variables[child->as<parser::Variable>()] = std::move(var);
 
-                            break;
-                        }
-
-                        case parser::Kind::Assign:
-                            makeAssign(child->as<parser::Assign>());
-                            break;
-
-                        case parser::Kind::Statement:
-                            makeStatement(child->as<parser::Statement>());
-                            continue; // skip statementCommit.commit, makeStatement should do that at the right time
-
-                        case parser::Kind::Block:
-                            makeBlock(child->as<parser::Block>());
-                            break;
-
-                        case parser::Kind::If:
-                            makeIf(child->as<parser::If>());
-                            break;
-
-                        case parser::Kind::For:
-                            makeFor(child->as<parser::For>());
-                            break;
-
-                        case parser::Kind::Expression:
-                            makeExpression(child->as<parser::Expression>());
-                            break;
-
-                        case parser::Kind::Insight: {
-                            builder::Scope scope(child->as<parser::Insight>()->expression(), *this, false);
-                            assert(scope.product);
-
-                            fmt::print("[INSIGHT, line {}] {}\n",
-                                hermes::LineDetails(child->state.text, child->index).lineNumber, toString(scope.product->type));
-
-                            break;
-                        }
-
-                        default:
-                            throw;
-                    }
-
-                    statementContext.commit(currentBlock);
+                    break;
                 }
 
-                break;
+                case parser::Kind::Assign:
+                    makeAssign(child->as<parser::Assign>());
+                    break;
 
-                case parser::Kind::Type: { // create destructor for elements
-                    assert(function.purpose == builder::Function::Purpose::TypeDestructor); // no mistakes
+                case parser::Kind::Statement:
+                    makeStatement(child->as<parser::Statement>());
+                    continue; // skip statementCommit.commit, makeStatement should do that
+                              // at the right time
 
-                    auto e = node->as<parser::Type>();
+                case parser::Kind::Block:
+                    makeBlock(child->as<parser::Block>());
+                    break;
 
-                    if (e->isAlias)
-                        return;
+                case parser::Kind::If:
+                    makeIf(child->as<parser::If>());
+                    break;
 
-                    auto type = builder.makeType(e);
-                    auto fields = e->fields();
+                case parser::Kind::For:
+                    makeFor(child->as<parser::For>());
+                    break;
 
-                    assert(function.function->arg_size() > 0);
+                case parser::Kind::Expression:
+                    makeExpression(child->as<parser::Expression>());
+                    break;
 
-                    llvm::Argument *arg = function.function->getArg(0);
+                case parser::Kind::Insight: {
+                    builder::Scope scope(child->as<parser::Insight>()->expression(), *this, false);
+                    assert(scope.product);
 
-                    { // sanity checks
-                        auto underlyingType = arg->getType();
-                        assert(underlyingType->isPointerTy());
-
-                        auto pointeeType = underlyingType->getPointerElementType();
-                        assert(pointeeType == type->type);
-                    }
-
-                    assert(current);
-
-                    for (auto it = fields.rbegin(); it != fields.rend(); ++it) {
-                        auto var = *it;
-                        auto index = type->indices.at(var);
-
-                        assert(var->hasFixedType);
-
-                        auto result = builder::Result(
-                            builder::Result::FlagReference, // TODO might need mutable/immutable versions of implicit destructors
-                            current->CreateStructGEP(arg, index),
-                            builder.resolveTypename(var->fixedType()),
-                            &statementContext // might as well
-                            );
-
-                        invokeDestroy(result, *current);
-                    }
+                    fmt::print("[INSIGHT, line {}] {}\n",
+                        hermes::LineDetails(child->state.text, child->index).lineNumber, toString(scope.product->type));
 
                     break;
                 }
 
                 default:
-                    throw VerifyError(node, "Unsupported BuilderScope node type.");
+                    throw;
+                }
+
+                statementContext.commit(currentBlock);
+            }
+
+            break;
+
+        case parser::Kind::Type: { // create destructor for elements
+            assert(function.purpose == builder::Function::Purpose::TypeDestructor); // no mistakes
+
+            auto e = node->as<parser::Type>();
+
+            if (e->isAlias)
+                return;
+
+            auto type = builder.makeType(e);
+            auto fields = e->fields();
+
+            assert(function.function->arg_size() > 0);
+
+            llvm::Argument *arg = function.function->getArg(0);
+
+            { // sanity checks
+                auto underlyingType = arg->getType();
+                assert(underlyingType->isPointerTy());
+
+                auto pointeeType = underlyingType->getPointerElementType();
+                assert(pointeeType == type->type);
+            }
+
+            assert(current);
+
+            for (auto it = fields.rbegin(); it != fields.rend(); ++it) {
+                auto var = *it;
+                auto index = type->indices.at(var);
+
+                assert(var->hasFixedType);
+
+                auto result = builder::Result(builder::Result::FlagReference, // TODO might need mutable/immutable
+                                                                              // versions of implicit destructors
+                    current->CreateStructGEP(arg, index), builder.resolveTypename(var->fixedType()),
+                    &statementContext // might as well
+                );
+
+                invokeDestroy(result, *current);
+            }
+
+            break;
+        }
+
+        default:
+            throw VerifyError(node, "Unsupported BuilderScope node type.");
         }
     }
 

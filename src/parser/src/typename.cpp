@@ -1,20 +1,22 @@
 #include <parser/typename.h>
 
-#include <parser/type.h>
-#include <parser/literals.h>
 #include <parser/expression.h>
+#include <parser/literals.h>
+#include <parser/type.h>
 
 #include <fmt/format.h>
 
 namespace kara::parser {
-    NamedTypename::NamedTypename(Node *parent, bool external) : Node(parent, Kind::NamedTypename) {
+    NamedTypename::NamedTypename(Node *parent, bool external)
+        : Node(parent, Kind::NamedTypename) {
         if (external)
             return;
 
         name = token();
     }
 
-    PrimitiveTypename::PrimitiveTypename(Node *parent, bool external) : Node(parent, Kind::PrimitiveTypename) {
+    PrimitiveTypename::PrimitiveTypename(Node *parent, bool external)
+        : Node(parent, Kind::PrimitiveTypename) {
         if (external)
             return;
 
@@ -26,36 +28,26 @@ namespace kara::parser {
          * Float, Double
          */
 
-        type = select<utils::PrimitiveType>({
-            { "any", utils::PrimitiveType::Any },
-            { "null", utils::PrimitiveType::Null },
-            { "nothing", utils::PrimitiveType::Nothing },
-            { "bool", utils::PrimitiveType::Bool },
-            { "byte", utils::PrimitiveType::Byte },
-            { "short", utils::PrimitiveType::Short },
-            { "int", utils::PrimitiveType::Int },
-            { "long", utils::PrimitiveType::Long },
-            { "ubyte", utils::PrimitiveType::UByte },
-            { "ushort", utils::PrimitiveType::UShort },
-            { "uint", utils::PrimitiveType::UInt },
-            { "ulong", utils::PrimitiveType::ULong },
-            { "float", utils::PrimitiveType::Float },
-            { "double", utils::PrimitiveType::Double }
-        }, true);
+        type = select<utils::PrimitiveType>(
+            { { "any", utils::PrimitiveType::Any }, { "null", utils::PrimitiveType::Null },
+                { "nothing", utils::PrimitiveType::Nothing }, { "bool", utils::PrimitiveType::Bool },
+                { "byte", utils::PrimitiveType::Byte }, { "short", utils::PrimitiveType::Short },
+                { "int", utils::PrimitiveType::Int }, { "long", utils::PrimitiveType::Long },
+                { "ubyte", utils::PrimitiveType::UByte }, { "ushort", utils::PrimitiveType::UShort },
+                { "uint", utils::PrimitiveType::UInt }, { "ulong", utils::PrimitiveType::ULong },
+                { "float", utils::PrimitiveType::Float }, { "double", utils::PrimitiveType::Double } },
+            true);
     }
 
-    const hermes::Node *ReferenceTypename::body() const {
-        return children.front().get();
-    }
+    const hermes::Node *ReferenceTypename::body() const { return children.front().get(); }
 
-    ReferenceTypename::ReferenceTypename(Node *parent, bool external) : Node(parent, Kind::ReferenceTypename) {
+    ReferenceTypename::ReferenceTypename(Node *parent, bool external)
+        : Node(parent, Kind::ReferenceTypename) {
         if (external)
             return;
 
-        kind = select<utils::ReferenceKind>({
-            { "&", utils::ReferenceKind::Regular },
-            { "*", utils::ReferenceKind::Unique } },
-        false);
+        kind = select<utils::ReferenceKind>(
+            { { "&", utils::ReferenceKind::Regular }, { "*", utils::ReferenceKind::Unique } }, false);
         match();
 
         if (next("shared", true)) {
@@ -70,11 +62,10 @@ namespace kara::parser {
         pushTypename(this);
     }
 
-    const hermes::Node *OptionalTypename::body() const {
-        return children.front().get();
-    }
+    const hermes::Node *OptionalTypename::body() const { return children.front().get(); }
 
-    OptionalTypename::OptionalTypename(Node *parent, bool external) : Node(parent, Kind::OptionalTypename) {
+    OptionalTypename::OptionalTypename(Node *parent, bool external)
+        : Node(parent, Kind::OptionalTypename) {
         if (external)
             return;
 
@@ -83,9 +74,7 @@ namespace kara::parser {
         pushTypename(this);
     }
 
-    const hermes::Node *ArrayTypename::body() const {
-        return children.front().get();
-    }
+    const hermes::Node *ArrayTypename::body() const { return children.front().get(); }
 
     const Number *ArrayTypename::fixedSize() const {
         return type == utils::ArrayKind::FixedSize ? children[1].get()->as<Number>() : nullptr;
@@ -95,7 +84,8 @@ namespace kara::parser {
         return type == utils::ArrayKind::UnboundedSized ? children[1].get()->as<Expression>() : nullptr;
     }
 
-    ArrayTypename::ArrayTypename(Node *parent, bool external) : Node(parent, Kind::ArrayTypename) {
+    ArrayTypename::ArrayTypename(Node *parent, bool external)
+        : Node(parent, Kind::ArrayTypename) {
         if (external)
             return;
 
@@ -111,16 +101,16 @@ namespace kara::parser {
             } else {
                 if (push<Number, Expression>(true)) {
                     switch (children.back()->is<Kind>()) {
-                        case Kind::Number:
-                            type = utils::ArrayKind::FixedSize;
-                            break;
+                    case Kind::Number:
+                        type = utils::ArrayKind::FixedSize;
+                        break;
 
-                        case Kind::Expression:
-                            type = utils::ArrayKind::UnboundedSized;
-                            break;
+                    case Kind::Expression:
+                        type = utils::ArrayKind::UnboundedSized;
+                        break;
 
-                        default:
-                            throw;
+                    default:
+                        throw;
                     }
                 }
             }
@@ -130,12 +120,6 @@ namespace kara::parser {
     }
 
     void pushTypename(hermes::Node *parent) {
-        parent->push<
-            ReferenceTypename,
-            OptionalTypename,
-            ArrayTypename,
-            PrimitiveTypename,
-            NamedTypename
-        >();
+        parent->push<ReferenceTypename, OptionalTypename, ArrayTypename, PrimitiveTypename, NamedTypename>();
     }
 }

@@ -3,10 +3,10 @@
 #include <builder/error.h>
 #include <builder/manager.h>
 
-#include <parser/type.h>
-#include <parser/search.h>
 #include <parser/function.h>
 #include <parser/literals.h>
+#include <parser/search.h>
+#include <parser/type.h>
 #include <parser/variable.h>
 
 #include <unordered_set>
@@ -45,8 +45,8 @@ namespace kara::builder {
 
         auto match = [node](const hermes::Node *value) -> bool {
             return (value->is(parser::Kind::Variable) && value->as<parser::Variable>()->name == node->name)
-            || (value->is(parser::Kind::Function) && value->as<parser::Function>()->name == node->name)
-            || (value->is(parser::Kind::Type) && value->as<parser::Type>()->name == node->name);
+                || (value->is(parser::Kind::Function) && value->as<parser::Function>()->name == node->name)
+                || (value->is(parser::Kind::Type) && value->as<parser::Type>()->name == node->name);
         };
 
         const hermes::Node *result = parser::search::exclusive::scopeFrom(node, matchVariable);
@@ -67,8 +67,8 @@ namespace kara::builder {
 
         auto match = [node](const hermes::Node *value) -> bool {
             return (value->is(parser::Kind::Variable) && value->as<parser::Variable>()->name == node->name)
-            || (value->is(parser::Kind::Function) && value->as<parser::Function>()->name == node->name)
-            || (value->is(parser::Kind::Type) && value->as<parser::Type>()->name == node->name);
+                || (value->is(parser::Kind::Function) && value->as<parser::Function>()->name == node->name)
+                || (value->is(parser::Kind::Type) && value->as<parser::Type>()->name == node->name);
         };
 
         std::unordered_set<const hermes::Node *> unique;

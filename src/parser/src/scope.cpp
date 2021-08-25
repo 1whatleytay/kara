@@ -1,24 +1,25 @@
 #include <parser/scope.h>
 
 #include <parser/assign.h>
-#include <parser/variable.h>
-#include <parser/statement.h>
 #include <parser/expression.h>
+#include <parser/statement.h>
+#include <parser/variable.h>
 
 namespace kara::parser {
-    Code::Code(Node *parent) : Node(parent, Kind::Code) {
+    Code::Code(Node *parent)
+        : Node(parent, Kind::Code) {
         while (!end() && !peek("}")) {
             push<Block, Insight, If, For, Statement, Assign, Variable, Expression>();
 
-            while (next(","));
+            while (next(","))
+                ;
         }
     }
 
-    const Code *Block::body() const {
-        return children.front()->as<Code>();
-    }
+    const Code *Block::body() const { return children.front()->as<Code>(); }
 
-    Block::Block(Node *parent) : Node(parent, Kind::Block) {
+    Block::Block(Node *parent)
+        : Node(parent, Kind::Block) {
         type = select<Type>({ { "block", Type::Regular }, { "exit", Type::Exit } }, true);
         match();
 
@@ -29,19 +30,14 @@ namespace kara::parser {
         needs("}");
     }
 
-    const Expression *If::condition() const {
-        return children.front()->as<Expression>();
-    }
+    const Expression *If::condition() const { return children.front()->as<Expression>(); }
 
-    const Code *If::onTrue() const {
-        return children[1]->as<Code>();
-    }
+    const Code *If::onTrue() const { return children[1]->as<Code>(); }
 
-    const hermes::Node *If::onFalse() const {
-        return children.size() >= 2 ? children[2].get() : nullptr;
-    }
+    const hermes::Node *If::onFalse() const { return children.size() >= 2 ? children[2].get() : nullptr; }
 
-    If::If(Node *parent) : Node(parent, Kind::If) {
+    If::If(Node *parent)
+        : Node(parent, Kind::If) {
         match("if", true);
 
         push<Expression>();
@@ -63,15 +59,12 @@ namespace kara::parser {
         }
     }
 
-    const Variable *ForIn::name() const {
-        return children[0]->as<Variable>();
-    }
+    const Variable *ForIn::name() const { return children[0]->as<Variable>(); }
 
-    const Expression *ForIn::expression() const {
-        return children[1]->as<Expression>();
-    }
+    const Expression *ForIn::expression() const { return children[1]->as<Expression>(); }
 
-    ForIn::ForIn(Node *parent) : Node(parent, Kind::ForIn) {
+    ForIn::ForIn(Node *parent)
+        : Node(parent, Kind::ForIn) {
         push<Variable>(false);
 
         match("in", true);
@@ -79,15 +72,12 @@ namespace kara::parser {
         push<Expression>();
     }
 
-    const hermes::Node *For::condition() const {
-        return infinite ? nullptr : children[0].get();
-    }
+    const hermes::Node *For::condition() const { return infinite ? nullptr : children[0].get(); }
 
-    const Code *For::body() const {
-        return children[!infinite]->as<Code>();
-    }
+    const Code *For::body() const { return children[!infinite]->as<Code>(); }
 
-    For::For(Node *parent) : Node(parent, Kind::For) {
+    For::For(Node *parent)
+        : Node(parent, Kind::For) {
         match("for", true);
 
         if (!next("{")) {

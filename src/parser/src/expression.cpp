@@ -16,14 +16,16 @@ namespace kara::parser {
         return value;
     }
 
-    Expression::Expression(Node *parent, bool placeholder) : Node(parent, Kind::Expression) {
+    Expression::Expression(Node *parent, bool placeholder)
+        : Node(parent, Kind::Expression) {
         if (placeholder)
             return;
 
         bool exit = false;
 
-        while(!end() && !exit) {
-            while (push<Unary>(true));
+        while (!end() && !exit) {
+            while (push<Unary>(true))
+                ;
 
             push<Parentheses, Array, String, Special, Bool, Number, New, Reference>();
 
@@ -37,7 +39,6 @@ namespace kara::parser {
                     break;
             }
         }
-
 
         // Calculate result (operator precedence).
         std::vector<utils::ExpressionResult> results;
@@ -54,7 +55,7 @@ namespace kara::parser {
                     results.emplace_back(applyUnary(current, unary));
 
                     unary.clear();
-                    current = { };
+                    current = {};
                 } else if (child->is(Kind::Unary)) {
                     unary.push_back(child->as<Unary>());
                 } else {
@@ -70,23 +71,13 @@ namespace kara::parser {
 
         postfix = pick<Ternary, As>(true);
 
-        std::vector<utils::BinaryOperation> operatorOrder = {
-            utils::BinaryOperation::Mul,
-            utils::BinaryOperation::Div,
-            utils::BinaryOperation::Add,
-            utils::BinaryOperation::Sub,
-            utils::BinaryOperation::Mod,
+        std::vector<utils::BinaryOperation> operatorOrder = { utils::BinaryOperation::Mul, utils::BinaryOperation::Div,
+            utils::BinaryOperation::Add, utils::BinaryOperation::Sub, utils::BinaryOperation::Mod,
 
-            utils::BinaryOperation::Equals,
-            utils::BinaryOperation::NotEquals,
-            utils::BinaryOperation::Greater,
-            utils::BinaryOperation::GreaterEqual,
-            utils::BinaryOperation::Lesser,
-            utils::BinaryOperation::LesserEqual,
+            utils::BinaryOperation::Equals, utils::BinaryOperation::NotEquals, utils::BinaryOperation::Greater,
+            utils::BinaryOperation::GreaterEqual, utils::BinaryOperation::Lesser, utils::BinaryOperation::LesserEqual,
 
-            utils::BinaryOperation::And,
-            utils::BinaryOperation::Or
-        };
+            utils::BinaryOperation::And, utils::BinaryOperation::Or };
 
         while (!operators.empty()) {
             for (auto order : operatorOrder) {
@@ -104,8 +95,7 @@ namespace kara::parser {
                     operators.erase(operators.begin() + i);
 
                     results.insert(results.begin() + i,
-                        utils::ExpressionCombinator(
-                            std::make_unique<utils::ExpressionResult>(std::move(a)),
+                        utils::ExpressionCombinator(std::make_unique<utils::ExpressionResult>(std::move(a)),
                             std::make_unique<utils::ExpressionResult>(std::move(b)), op));
                 }
             }
@@ -118,8 +108,7 @@ namespace kara::parser {
 
         if (postfix) {
             result = utils::ExpressionOperation(
-                std::make_unique<utils::ExpressionResult>(std::move(result)),
-                postfix.get());
+                std::make_unique<utils::ExpressionResult>(std::move(result)), postfix.get());
         }
     }
 }

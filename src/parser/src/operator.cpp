@@ -1,21 +1,21 @@
 #include <parser/operator.h>
 
-#include <parser/typename.h>
-#include <parser/literals.h>
 #include <parser/expression.h>
+#include <parser/literals.h>
+#include <parser/typename.h>
 
 namespace kara::parser {
-    const hermes::Node *As::type() const {
-        return children.front().get();
-    }
+    const hermes::Node *As::type() const { return children.front().get(); }
 
-    As::As(Node *parent) : Node(parent, Kind::As) {
+    As::As(Node *parent)
+        : Node(parent, Kind::As) {
         match("as");
 
         pushTypename(this);
     }
 
-    CallParameterName::CallParameterName(Node *parent) : Node(parent, Kind::CallParameterName) {
+    CallParameterName::CallParameterName(Node *parent)
+        : Node(parent, Kind::CallParameterName) {
         name = token();
 
         match(":");
@@ -60,7 +60,8 @@ namespace kara::parser {
         return result;
     }
 
-    Call::Call(Node *parent) : Node(parent, Kind::Call) {
+    Call::Call(Node *parent)
+        : Node(parent, Kind::Call) {
         match("(");
 
         bool first = true;
@@ -77,21 +78,19 @@ namespace kara::parser {
         needs(")");
     }
 
-    const Reference *Dot::reference() const {
-        return children.front()->as<Reference>();
-    }
+    const Reference *Dot::reference() const { return children.front()->as<Reference>(); }
 
-    Dot::Dot(Node *parent) : Node(parent, Kind::Dot) {
+    Dot::Dot(Node *parent)
+        : Node(parent, Kind::Dot) {
         match(".");
 
         push<Reference>();
     }
 
-    const Expression *Index::index() const {
-        return children.front()->as<Expression>();
-    }
+    const Expression *Index::index() const { return children.front()->as<Expression>(); }
 
-    Index::Index(Node *parent) : Node(parent, Kind::Index) {
+    Index::Index(Node *parent)
+        : Node(parent, Kind::Index) {
         match("[");
 
         push<Expression>();
@@ -99,15 +98,12 @@ namespace kara::parser {
         needs("]");
     }
 
-    const Expression *Ternary::onTrue() const {
-        return children[0]->as<Expression>();
-    }
+    const Expression *Ternary::onTrue() const { return children[0]->as<Expression>(); }
 
-    const Expression *Ternary::onFalse() const {
-        return children[1]->as<Expression>();
-    }
+    const Expression *Ternary::onFalse() const { return children[1]->as<Expression>(); }
 
-    Ternary::Ternary(Node *parent) : Node(parent, Kind::Ternary) {
+    Ternary::Ternary(Node *parent)
+        : Node(parent, Kind::Ternary) {
         match("?");
 
         push<Expression>();
@@ -117,16 +113,15 @@ namespace kara::parser {
         push<Expression>();
     }
 
-    Unary::Unary(Node *parent) : Node(parent, Kind::Unary) {
-        op = select<utils::UnaryOperation>({
-            { "!", utils::UnaryOperation::Not },
-            { "-", utils::UnaryOperation::Negative },
-            { "&", utils::UnaryOperation::Reference },
-            { "@", utils::UnaryOperation::Fetch }
-        });
+    Unary::Unary(Node *parent)
+        : Node(parent, Kind::Unary) {
+        op = select<utils::UnaryOperation>(
+            { { "!", utils::UnaryOperation::Not }, { "-", utils::UnaryOperation::Negative },
+                { "&", utils::UnaryOperation::Reference }, { "@", utils::UnaryOperation::Fetch } });
     }
 
-    Operator::Operator(Node *parent) : Node(parent, Kind::Operator) {
+    Operator::Operator(Node *parent)
+        : Node(parent, Kind::Operator) {
         std::vector<std::string> doNotCapture = { "+=", "-=", "*=", "/=", "%=" };
 
         if (maybe<bool>({ { "+=", true }, { "-=", true }, { "*=", true }, { "/=", true }, { "%=", true } }, false))

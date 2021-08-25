@@ -11,10 +11,7 @@ namespace kara::parser {
     };
 
     struct Block : public hermes::Node {
-        enum class Type {
-            Regular,
-            Exit
-        };
+        enum class Type { Regular, Exit };
 
         Type type = Type::Regular;
 
@@ -49,4 +46,3 @@ namespace kara::parser {
         explicit For(Node *parent);
     };
 }
-

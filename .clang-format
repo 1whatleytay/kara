@@ -1,0 +1,9 @@
+---
+BasedOnStyle: WebKit
+BreakBeforeBraces: Attach
+Language: Cpp
+NamespaceIndentation: All
+PointerAlignment: Right
+SortIncludes: 'true'
+ColumnLimit: 120
+...

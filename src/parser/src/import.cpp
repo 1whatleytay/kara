@@ -3,11 +3,10 @@
 #include <parser/literals.h>
 
 namespace kara::parser {
-    const String *Import::body() const {
-        return children.front()->as<String>();
-    }
+    const String *Import::body() const { return children.front()->as<String>(); }
 
-    Import::Import(Node *parent) : Node(parent, Kind::Import) {
+    Import::Import(Node *parent)
+        : Node(parent, Kind::Import) {
         match("import", true);
 
         if (next("(")) {

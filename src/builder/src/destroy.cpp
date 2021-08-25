@@ -6,10 +6,9 @@ namespace kara::builder {
     void StatementContext::consider(const Result &result) {
         auto typeRef = std::get_if<utils::ReferenceTypename>(&result.type);
 
-        if (parent.current
-        && (result.isSet(builder::Result::FlagTemporary))
-        && std::holds_alternative<utils::PrimitiveTypename>(result.type)
-        && (!typeRef || typeRef->kind != utils::ReferenceKind::Regular)) {
+        if (parent.current && (result.isSet(builder::Result::FlagTemporary))
+            && std::holds_alternative<utils::PrimitiveTypename>(result.type)
+            && (!typeRef || typeRef->kind != utils::ReferenceKind::Regular)) {
             assert(!lock);
 
             toDestroy.push(result);
@@ -40,5 +39,6 @@ namespace kara::builder {
         avoidDestroy.clear();
     }
 
-    StatementContext::StatementContext(builder::Scope &parent) : parent(parent) { }
+    StatementContext::StatementContext(builder::Scope &parent)
+        : parent(parent) { }
 }

@@ -2,14 +2,15 @@
 
 #include <builder/error.h>
 
+#include <parser/expression.h>
 #include <parser/literals.h>
 #include <parser/variable.h>
-#include <parser/expression.h>
 
 #include <fmt/format.h>
 
 namespace kara::builder {
-    Variable::Variable(const parser::Variable *node, builder::Builder &builder) : node(node) {
+    Variable::Variable(const parser::Variable *node, builder::Builder &builder)
+        : node(node) {
         if (node->isMutable)
             throw VerifyError(node, "Global variables cannot be mutable.");
 
@@ -32,35 +33,38 @@ namespace kara::builder {
 
             auto numberNode = node->constantValue();
 
-            llvm::Type *resolvedType = node->hasFixedType
-                ? builder.makeTypename(builder.resolveTypename(node->fixedType())) : nullptr;
+            llvm::Type *resolvedType
+                = node->hasFixedType ? builder.makeTypename(builder.resolveTypename(node->fixedType())) : nullptr;
 
             struct {
                 builder::Builder &builder;
                 llvm::Type *resolvedType;
 
                 llvm::Constant *operator()(uint64_t v) {
-                    return llvm::ConstantInt::get(resolvedType ? resolvedType : llvm::Type::getInt64Ty(builder.context), v);
+                    return llvm::ConstantInt::get(
+                        resolvedType ? resolvedType : llvm::Type::getInt64Ty(builder.context), v);
                 }
 
                 llvm::Constant *operator()(int64_t v) {
-                    return llvm::ConstantInt::getSigned(resolvedType ? resolvedType :llvm::Type::getInt64Ty(builder.context), v);
+                    return llvm::ConstantInt::getSigned(
+                        resolvedType ? resolvedType : llvm::Type::getInt64Ty(builder.context), v);
                 }
 
                 llvm::Constant *operator()(double v) {
-                    return llvm::ConstantFP::get(resolvedType ? resolvedType : llvm::Type::getDoubleTy(builder.context), v);
+                    return llvm::ConstantFP::get(
+                        resolvedType ? resolvedType : llvm::Type::getDoubleTy(builder.context), v);
                 }
             } visitor { builder, resolvedType };
 
             defaultValue = std::visit(visitor, numberNode->value);
         }
 
-        value = new llvm::GlobalVariable(
-            *builder.module, builder.makeTypename(type), node->isMutable,
+        value = new llvm::GlobalVariable(*builder.module, builder.makeTypename(type), node->isMutable,
             node->isExternal ? L::ExternalLinkage : L::PrivateLinkage, defaultValue, node->name);
     }
 
-    Variable::Variable(const parser::Variable *node, builder::Scope &scope) : node(node) {
+    Variable::Variable(const parser::Variable *node, builder::Scope &scope)
+        : node(node) {
         assert(scope.function);
 
         builder::Function &function = *scope.function;
@@ -78,10 +82,8 @@ namespace kara::builder {
                 std::optional<builder::Result> resultConverted = scope.convert(result, fixedType);
 
                 if (!resultConverted) {
-                    throw VerifyError(node->value(),
-                        "Cannot convert from type {} to variable fixed type {}.",
-                        toString(result.type),
-                        toString(fixedType));
+                    throw VerifyError(node->value(), "Cannot convert from type {} to variable fixed type {}.",
+                        toString(result.type), toString(fixedType));
                 }
 
                 result = *resultConverted;
@@ -103,13 +105,16 @@ namespace kara::builder {
         }
     }
 
-    Variable::Variable(const parser::Variable *node, llvm::Value *input, builder::Scope &scope) : node(node) {
+    Variable::Variable(const parser::Variable *node, llvm::Value *input, builder::Scope &scope)
+        : node(node) {
         assert(scope.function);
 
         builder::Function &function = *scope.function;
 
         if (!node->hasFixedType || node->value())
-            throw VerifyError(node, "A function parameter must have fixed type and no default value, unimplemented.");
+            throw VerifyError(node,
+                "A function parameter must have fixed type and no "
+                "default value, unimplemented.");
 
         type = function.builder.resolveTypename(node->fixedType());
 

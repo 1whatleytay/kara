@@ -1,8 +1,8 @@
 #pragma once
 
-#include <vector>
 #include <memory>
 #include <variant>
+#include <vector>
 
 namespace hermes {
     struct Node;
