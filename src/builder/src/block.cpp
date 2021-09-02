@@ -1,16 +1,10 @@
 #include <builder/builder.h>
 
 #include <builder/error.h>
+#include <builder/operations.h>
 
 #include <parser/expression.h>
 #include <parser/scope.h>
-
-namespace {
-    void br(llvm::BasicBlock *block, llvm::BasicBlock *to) {
-        if (!block->getTerminator())
-            llvm::IRBuilder<>(block).CreateBr(to);
-    }
-} // namespace
 
 namespace kara::builder {
     void Scope::makeBlock(const parser::Block *node) {
@@ -34,7 +28,7 @@ namespace kara::builder {
         case parser::Block::Type::Exit: {
             sub.destinations[ExitPoint::Regular] = exitChainBegin;
 
-            // Prohibit Strange Operations, this isn't done in function root scope, idk
+            // Prohibit Strange Operations, this isn't done in function root scope, IDK
             // what will happen
             sub.destinations[ExitPoint::Break] = nullptr;
             sub.destinations[ExitPoint::Return] = nullptr;
@@ -53,6 +47,8 @@ namespace kara::builder {
         assert(current);
         assert(function);
 
+        auto context = ops::Context::from(*this);
+
         std::vector<std::unique_ptr<builder::Scope>> scopes;
 
         while (node) {
@@ -61,9 +57,11 @@ namespace kara::builder {
 
             currentBlock = llvm::BasicBlock::Create(builder.context, "", function->function, lastBlock);
 
-            builder::Result conditionResult = makeExpression(node->children.front()->as<parser::Expression>());
-            std::optional<builder::Result> conditionConverted
-                = convert(conditionResult, utils::PrimitiveTypename { utils::PrimitiveType::Bool });
+            auto expressionNode = node->children.front()->as<parser::Expression>();
+            auto typenameBool = utils::PrimitiveTypename { utils::PrimitiveType::Bool };
+
+            auto conditionResult = ops::expression::makeExpression(context, expressionNode);
+            auto conditionConverted = ops::makeConvert(context, conditionResult, typenameBool);
 
             if (!conditionConverted) {
                 throw VerifyError(
@@ -72,7 +70,7 @@ namespace kara::builder {
 
             conditionResult = *conditionConverted;
 
-            llvm::Value *condition = get(conditionResult);
+            llvm::Value *condition = ops::get(context, conditionResult);
 
             current->CreateCondBr(condition, sub.openingBlock, currentBlock);
             current->SetInsertPoint(currentBlock);
@@ -90,7 +88,8 @@ namespace kara::builder {
                     scopes.push_back(std::make_unique<builder::Scope>(onFalseNode->as<parser::Code>(), *this));
                     Scope &terminator = *scopes.back();
 
-                    br(currentBlock, terminator.openingBlock);
+                    if (!currentBlock->getTerminator())
+                        llvm::IRBuilder<>(currentBlock).CreateBr(terminator.openingBlock);
 
                     currentBlock = llvm::BasicBlock::Create(builder.context, "", function->function, lastBlock);
                     current->SetInsertPoint(currentBlock);
@@ -121,6 +120,8 @@ namespace kara::builder {
         assert(current);
         assert(function);
 
+        //        auto context = ops::Context::from(*this);
+
         const hermes::Node *condition = node->condition();
         auto *code = node->body();
 
@@ -145,8 +146,12 @@ namespace kara::builder {
             if (current) {
                 Scope check(condition, *this, true);
 
+                auto checkContext = ops::Context::from(check);
+
+                auto typenameBool = utils::PrimitiveTypename { utils::PrimitiveType::Bool };
+
                 assert(check.product);
-                auto converted = convert(*check.product, utils::PrimitiveTypename { utils::PrimitiveType::Bool });
+                auto converted = ops::makeConvert(checkContext, *check.product, typenameBool);
 
                 if (!converted)
                     throw VerifyError(
@@ -159,7 +164,7 @@ namespace kara::builder {
                 current->CreateBr(check.openingBlock);
                 current->SetInsertPoint(currentBlock);
 
-                check.current->CreateCondBr(check.get(*check.product), scope.openingBlock, currentBlock);
+                check.current->CreateCondBr(ops::get(checkContext, *check.product), scope.openingBlock, currentBlock);
 
                 scope.destinations[ExitPoint::Break] = currentBlock;
                 scope.destinations[ExitPoint::Regular] = check.openingBlock;

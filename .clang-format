@@ -6,4 +6,5 @@ NamespaceIndentation: All
 PointerAlignment: Right
 SortIncludes: 'true'
 ColumnLimit: 120
+AlwaysBreakTemplateDeclarations: 'Yes'
 ...

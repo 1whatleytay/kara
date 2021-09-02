@@ -11,6 +11,15 @@
 #include <llvm/Support/Host.h>
 
 namespace kara::builder {
+    builder::Cache *Cache::create() {
+        auto ptr = std::make_unique<builder::Cache>(Cache { this });
+        auto result = ptr.get();
+
+        children.push_back(std::move(ptr));
+
+        return result;
+    }
+
     builder::Type *Builder::makeType(const parser::Type *node) {
         auto iterator = types.find(node);
 
@@ -81,80 +90,6 @@ namespace kara::builder {
         }
 
         return freeCache;
-    }
-
-    llvm::Value *Scope::makeAlloca(const utils::Typename &type, const std::string &name) {
-        assert(function);
-
-        if (auto array = std::get_if<utils::ArrayTypename>(&type)) {
-            if (array->kind == utils::ArrayKind::Unbounded)
-                throw std::runtime_error(fmt::format("Attempt to allocate type {} on stack.", toString(type)));
-
-            if (array->kind == utils::ArrayKind::UnboundedSized)
-                throw std::runtime_error(
-                    fmt::format("VLA unsupported for type {0}. Use *{0} for allocation instead.", toString(type)));
-        }
-
-        return function->entry.CreateAlloca(builder.makeTypename(type), nullptr, name);
-    }
-
-    llvm::Value *Scope::makeMalloc(const utils::Typename &type, const std::string &name) {
-        llvm::Value *arraySize = nullptr;
-
-        if (auto array = std::get_if<utils::ArrayTypename>(&type)) {
-            if (array->kind == utils::ArrayKind::Unbounded)
-                throw std::runtime_error(fmt::format("Attempt to allocate type {} on heap.", toString(type)));
-
-            if (array->kind == utils::ArrayKind::UnboundedSized) {
-                assert(array->expression);
-
-                auto it = expressionCache.find(array->expression);
-                if (it != expressionCache.end()) {
-                    arraySize = get(it->second);
-                } else {
-                    auto converted = convert(
-                        makeExpression(array->expression), utils::PrimitiveTypename { utils::PrimitiveType::ULong });
-
-                    if (!converted)
-                        throw VerifyError(
-                            array->expression, "Expression cannot be converted to ulong for size for array.");
-
-                    auto &result = *converted;
-
-                    expressionCache.insert({ array->expression, result });
-
-                    arraySize = get(result);
-                }
-
-                // TODO: needs recursive implementation of sizes to account for
-                // [[int:50]:50] ^ probably would be done in the great refactor
-
-                auto llvmElementType = builder.makeTypename(*array->value);
-                size_t elementSize = builder.file.manager.target.layout->getTypeStoreSize(llvmElementType);
-
-                llvm::Constant *llvmElementSize
-                    = llvm::ConstantInt::get(llvm::Type::getInt64Ty(builder.context), elementSize);
-
-                if (current)
-                    arraySize = current->CreateMul(llvmElementSize, arraySize);
-            }
-        }
-
-        if (!current)
-            return nullptr;
-
-        auto llvmType = builder.makeTypename(type);
-        auto pointerType = llvm::PointerType::get(llvmType, 0);
-
-        size_t bytes = builder.file.manager.target.layout->getTypeStoreSize(llvmType);
-        auto malloc = builder.getMalloc();
-
-        // if statement above can adjust size...
-        if (!arraySize) {
-            arraySize = llvm::ConstantInt::get(llvm::Type::getInt64Ty(builder.context), bytes);
-        }
-
-        return current->CreatePointerCast(current->CreateCall(malloc, { arraySize }), pointerType, name);
     }
 
     Builder::Builder(const ManagerFile &file, const options::Options &opts)

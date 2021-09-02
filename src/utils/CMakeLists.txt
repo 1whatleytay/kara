@@ -1,4 +1,5 @@
 add_library(utils STATIC
+    include/utils/literals.h
     include/utils/typename.h
     include/utils/expression.h
 
