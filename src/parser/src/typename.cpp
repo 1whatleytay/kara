@@ -29,13 +29,22 @@ namespace kara::parser {
          */
 
         type = select<utils::PrimitiveType>(
-            { { "any", utils::PrimitiveType::Any }, { "null", utils::PrimitiveType::Null },
-                { "nothing", utils::PrimitiveType::Nothing }, { "bool", utils::PrimitiveType::Bool },
-                { "byte", utils::PrimitiveType::Byte }, { "short", utils::PrimitiveType::Short },
-                { "int", utils::PrimitiveType::Int }, { "long", utils::PrimitiveType::Long },
-                { "ubyte", utils::PrimitiveType::UByte }, { "ushort", utils::PrimitiveType::UShort },
-                { "uint", utils::PrimitiveType::UInt }, { "ulong", utils::PrimitiveType::ULong },
-                { "float", utils::PrimitiveType::Float }, { "double", utils::PrimitiveType::Double } },
+            {
+                { "any", utils::PrimitiveType::Any },
+                { "null", utils::PrimitiveType::Null },
+                { "nothing", utils::PrimitiveType::Nothing },
+                { "bool", utils::PrimitiveType::Bool },
+                { "byte", utils::PrimitiveType::Byte },
+                { "short", utils::PrimitiveType::Short },
+                { "int", utils::PrimitiveType::Int },
+                { "long", utils::PrimitiveType::Long },
+                { "ubyte", utils::PrimitiveType::UByte },
+                { "ushort", utils::PrimitiveType::UShort },
+                { "uint", utils::PrimitiveType::UInt },
+                { "ulong", utils::PrimitiveType::ULong },
+                { "float", utils::PrimitiveType::Float },
+                { "double", utils::PrimitiveType::Double },
+            },
             true);
     }
 

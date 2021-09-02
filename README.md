@@ -100,9 +100,9 @@ Until `1.0`.
  - [ ] Parameter Casting (in place of inheritance), `a as T from fieldOfTThatWouldContainA`
  - [ ] Great Refactor (better compiler)
    - [x] Split BuilderResult/Unresolved, infer for unpack
-   - [ ] Operations (Call, Add, etc.) Independent of BuilderScope
-   - [ ] Chain Expanding for Alloca, Malloc, Move, Copy, etc. + Predicate
-   - [ ] Reorganize Headers and Source Names and Locations to Something Sane
+   - [x] Operations (Call, Add, etc.) Independent of BuilderScope
+   - [x] Chain Expanding for Alloca, Malloc, Move, Copy, etc. + Predicate
+   - [x] Reorganize Headers and Source Names and Locations to Something Sane
    - [x] Namespace Builder
 
 ### Standard Library

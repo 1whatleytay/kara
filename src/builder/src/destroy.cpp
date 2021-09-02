@@ -1,35 +1,43 @@
 #include <builder/builder.h>
 
-namespace kara::builder {
-    uint64_t StatementContext::getNextUID() { return nextUID++; }
+#include <builder/operations.h>
 
-    void StatementContext::consider(const Result &result) {
+namespace kara::builder {
+    uint64_t Accumulator::getNextUID() { return nextUID++; }
+
+    void Accumulator::consider(const Result &result) {
         auto typeRef = std::get_if<utils::ReferenceTypename>(&result.type);
 
-        if (parent.current && (result.isSet(builder::Result::FlagTemporary))
-            && std::holds_alternative<utils::PrimitiveTypename>(result.type)
-            && (!typeRef || typeRef->kind != utils::ReferenceKind::Regular)) {
+        auto isTemporary = result.isSet(builder::Result::FlagTemporary);
+
+        // oh my god, I don't need these checks anymore because accumulator is optional in ops::Context wow
+        auto isPrimitive = std::holds_alternative<utils::PrimitiveTypename>(result.type);
+        auto isRegularReference = typeRef && typeRef->kind == utils::ReferenceKind::Regular;
+
+        if (isTemporary && !isPrimitive && !isRegularReference) {
             assert(!lock);
 
             toDestroy.push(result);
         }
     }
 
-    void StatementContext::commit(llvm::BasicBlock *block) {
-        if (!parent.current)
-            return;
+    void Accumulator::commit(builder::Builder &builder, llvm::IRBuilder<> &ir) {
+        ops::Context context {
+            builder, nullptr,
 
-        llvm::IRBuilder<> builder(block);
+            &ir,
+
+            nullptr,
+            nullptr, // please don't cause problems with null function
+        };
 
         lock = true;
 
         while (!toDestroy.empty()) {
             const builder::Result &destroy = toDestroy.front();
 
-            if (avoidDestroy.find(destroy.statementUID) != avoidDestroy.end())
-                continue;
-
-            parent.invokeDestroy(destroy, builder);
+            if (avoidDestroy.find(destroy.uid) == avoidDestroy.end())
+                ops::makeInvokeDestroy(context, destroy);
 
             toDestroy.pop();
         }
@@ -38,7 +46,4 @@ namespace kara::builder {
 
         avoidDestroy.clear();
     }
-
-    StatementContext::StatementContext(builder::Scope &parent)
-        : parent(parent) { }
 }

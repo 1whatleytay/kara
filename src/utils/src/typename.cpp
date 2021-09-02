@@ -167,9 +167,18 @@ namespace kara::utils {
     }
 
     int32_t PrimitiveTypename::priority() const {
-        std::array<PrimitiveType, 10> types = { PrimitiveType::Double, PrimitiveType::ULong, PrimitiveType::Long,
-            PrimitiveType::Float, PrimitiveType::UInt, PrimitiveType::Int, PrimitiveType::UShort, PrimitiveType::Short,
-            PrimitiveType::UByte, PrimitiveType::Byte };
+        std::array<PrimitiveType, 10> types = {
+            PrimitiveType::Double,
+            PrimitiveType::ULong,
+            PrimitiveType::Long,
+            PrimitiveType::Float,
+            PrimitiveType::UInt,
+            PrimitiveType::Int,
+            PrimitiveType::UShort,
+            PrimitiveType::Short,
+            PrimitiveType::UByte,
+            PrimitiveType::Byte,
+        };
 
         auto iterator = std::find(types.begin(), types.end(), type);
 
@@ -179,5 +188,5 @@ namespace kara::utils {
         return static_cast<int32_t>(types.size() - std::distance(types.begin(), iterator));
     }
 
-    Typename PrimitiveTypename::from(PrimitiveType type) { return Typename { PrimitiveTypename { type } }; }
+    Typename from(PrimitiveType type) { return Typename { PrimitiveTypename { type } }; }
 }

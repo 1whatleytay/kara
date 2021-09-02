@@ -2,6 +2,8 @@
 
 #include <parser/kinds.h>
 
+#include <utils/literals.h>
+
 #include <variant>
 #include <vector>
 
@@ -15,9 +17,7 @@ namespace kara::parser {
     };
 
     struct Special : public hermes::Node {
-        enum class Type { Any, Nothing, Null };
-
-        Type type = Type::Any;
+        utils::SpecialType type = utils::SpecialType::Any;
 
         explicit Special(Node *parent);
     };
@@ -29,7 +29,7 @@ namespace kara::parser {
     };
 
     struct Number : public hermes::Node {
-        std::variant<int64_t, uint64_t, double> value;
+        utils::NumberValue value;
 
         explicit Number(Node *parent, bool external = false);
     };

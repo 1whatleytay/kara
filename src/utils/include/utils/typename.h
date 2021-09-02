@@ -65,8 +65,6 @@ namespace kara::utils {
         [[nodiscard]] int32_t size() const;
         [[nodiscard]] int32_t priority() const;
 
-        static Typename from(PrimitiveType type);
-
         bool operator==(const PrimitiveTypename &other) const;
         bool operator!=(const PrimitiveTypename &other) const;
     };
@@ -124,6 +122,8 @@ namespace kara::utils {
         bool operator==(const ArrayTypename &other) const;
         bool operator!=(const ArrayTypename &other) const;
     };
+
+    Typename from(PrimitiveType type);
 
     std::string toString(const NamedTypename &type);
     std::string toString(const ArrayTypename &type);

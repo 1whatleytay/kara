@@ -1,6 +1,7 @@
 #include <builder/builder.h>
 
 #include <builder/error.h>
+#include <builder/operations.h>
 
 #include <parser/expression.h>
 #include <parser/statement.h>
@@ -9,7 +10,9 @@ namespace kara::builder {
     void Scope::makeStatement(const parser::Statement *node) {
         assert(current);
 
-        auto nothing = utils::PrimitiveTypename::from(utils::PrimitiveType::Nothing);
+        auto context = ops::Context::from(*this);
+
+        auto nothing = from(utils::PrimitiveType::Nothing);
 
         switch (node->op) {
         case parser::Statement::Operation::Return: {
@@ -31,20 +34,24 @@ namespace kara::builder {
 
                 // lambda :S
 
-                builder::Result resultRaw = makeExpression(node->children.front()->as<parser::Expression>());
-                std::optional<builder::Result> resultConverted = convert(resultRaw, *function->type.returnType);
+                auto expressionNode = node->children.front()->as<parser::Expression>();
+
+                auto resultRaw = ops::expression::makeExpression(context, expressionNode);
+                auto resultConverted = ops::makeConvert(context, resultRaw, *function->type.returnType);
 
                 if (!resultConverted.has_value()) {
                     throw VerifyError(node, "Cannot return {} from a function that returns {}.",
                         toString(resultRaw.type), toString(*function->type.returnType));
                 }
 
-                builder::Result result = pass(*resultConverted);
+                builder::Result result = ops::makePass(context, *resultConverted);
 
-                current->CreateStore(get(result), function->returnValue);
+                current->CreateStore(ops::get(context, result), function->returnValue);
             }
 
-            statementContext.commit(currentBlock);
+            // might want to make ops::makeAccumulatorCommit(const Context &, const builder::Accumulator &)
+            if (context.ir)
+                accumulator.commit(context.builder, *context.ir);
 
             exit(ExitPoint::Return);
 
