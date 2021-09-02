@@ -6,14 +6,14 @@ namespace kara::builder {
     bool Result::isSet(Flags flag) const { return flags & flag; }
 
     // oh dear
-    Result::Result(uint32_t flags, llvm::Value *value, utils::Typename type, StatementContext *statementContext)
+    Result::Result(uint32_t flags, llvm::Value *value, utils::Typename type, Accumulator *accumulator)
         : flags(flags)
         , value(value)
         , type(std::move(type)) {
 
-        if (statementContext) {
-            statementUID = statementContext->getNextUID();
-            statementContext->consider(*this); // register
+        if (accumulator) {
+            uid = accumulator->getNextUID();
+            accumulator->consider(*this); // register
         }
     }
 

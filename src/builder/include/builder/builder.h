@@ -19,6 +19,7 @@ namespace kara::parser {
     struct If;
     struct For;
     struct New;
+    struct Call;
     struct Code;
     struct Root;
     struct Type;
@@ -43,7 +44,7 @@ namespace kara::builder {
     struct Scope;
     struct Result;
     struct Function;
-    struct StatementContext;
+    struct Accumulator;
 
     struct Result {
         // valid flag layouts: reference, temporary | mutable | variable
@@ -52,19 +53,19 @@ namespace kara::builder {
         uint32_t flags = 0;
         [[nodiscard]] bool isSet(Flags flag) const;
 
-        uint64_t statementUID = 0; // copied when needed, for reference in move without refactor
+        uint64_t uid = 0; // copied when needed, for reference in move without refactor
 
         llvm::Value *value = nullptr;
         utils::Typename type;
 
-        Result(uint32_t flags, llvm::Value *value, utils::Typename type, StatementContext *statementContext);
+        Result(uint32_t flags, llvm::Value *value, utils::Typename type, Accumulator *accumulator);
     };
 
     struct Unresolved {
         const hermes::Node *from = nullptr;
         std::vector<const hermes::Node *> references;
 
-        std::shared_ptr<Result> implicit;
+        std::shared_ptr<builder::Result> implicit; // std::optional?
 
         Unresolved(const hermes::Node *from, std::vector<const hermes::Node *> references,
             std::unique_ptr<Result> implicit = nullptr);
@@ -73,12 +74,7 @@ namespace kara::builder {
     using Wrapped = std::variant<Result, Unresolved>;
 
     // Thinking struct for destroying objects when a statement is done.
-    struct StatementContext {
-        // COUPLING AHH T_T I'm sorry...
-        // I need it to use invokeDestroy for now, would be best to separate
-        // everything to global scope but... DW i got u - future taylor
-        Scope &parent;
-
+    struct Accumulator {
         uint64_t nextUID = 1;
         uint64_t getNextUID();
 
@@ -89,9 +85,7 @@ namespace kara::builder {
 
         void consider(const Result &result);
 
-        void commit(llvm::BasicBlock *block);
-
-        explicit StatementContext(Scope &parent);
+        void commit(builder::Builder &builder, llvm::IRBuilder<> &ir);
     };
 
     struct Variable {
@@ -100,35 +94,52 @@ namespace kara::builder {
 
         llvm::Value *value = nullptr;
 
-        Variable(const parser::Variable *node, Builder &builder); // global variable
-        Variable(const parser::Variable *node, Scope &scope); // regular variable
-        Variable(const parser::Variable *node, llvm::Value *input,
-            Scope &scope); // function parameter
+        Variable(const parser::Variable *node, builder::Builder &builder); // global variable
+        Variable(const parser::Variable *node, builder::Scope &scope); // regular variable
+        Variable(const parser::Variable *node, llvm::Value *input, Scope &scope); // function parameter
     };
 
-    struct MatchResult {
-        std::optional<std::string> failed;
-        std::vector<const Result *> map;
+    struct Cache {
+        builder::Cache *parent = nullptr;
 
-        size_t numImplicit = 0;
-    };
+        std::vector<std::unique_ptr<builder::Cache>> children;
 
-    struct MatchInput {
-        std::vector<const Result *> parameters;
-        std::unordered_map<size_t, std::string> names;
-    };
+        builder::Cache *create();
 
-    struct MatchCallError {
-        std::string problem;
-        std::vector<std::string> messages;
+        template <typename K, typename T>
+        using Record = std::unordered_map<K, std::unique_ptr<T>>;
+
+        // separate for now... for data efficiency - use findVariable function
+        Record<const parser::Variable *, builder::Variable> variables;
+        // For types, might need to be cleared occasionally. For
+        // ArrayKind::UnboundedSize mostly.
+        Record<const parser::Expression *, builder::Result> expressions;
+
+        template <typename K, typename T>
+        T *find(Record<K, T> builder::Cache::*ref, K key) const {
+            const Cache *current = this;
+
+            while (current) {
+                auto &map = current->*ref;
+
+                auto it = map.find(key);
+                if (it != map.end())
+                    return it->second.get();
+
+                current = current->parent;
+            }
+
+            return nullptr;
+        }
     };
 
     struct Scope {
-        Builder &builder;
-        Scope *parent = nullptr;
-        Function *function = nullptr;
+        builder::Builder &builder;
+        builder::Scope *parent = nullptr;
+        builder::Function *function = nullptr;
 
-        StatementContext statementContext;
+        Accumulator accumulator;
+        builder::Cache *cache = nullptr;
 
         llvm::BasicBlock *openingBlock = nullptr;
         llvm::BasicBlock *currentBlock = nullptr;
@@ -143,13 +154,6 @@ namespace kara::builder {
         std::set<ExitPoint> requiredPoints = { ExitPoint::Regular };
         std::unordered_map<ExitPoint, llvm::BasicBlock *> destinations;
 
-        // For types, might need to be cleared occasionally. For
-        // ArrayKind::UnboundedSize mostly.
-        std::unordered_map<const parser::Expression *, Result> expressionCache;
-
-        llvm::Value *makeAlloca(const utils::Typename &type, const std::string &name = "");
-        llvm::Value *makeMalloc(const utils::Typename &type, const std::string &name = "");
-
         void commit();
         void exit(ExitPoint point, llvm::BasicBlock *from = nullptr);
 
@@ -157,52 +161,6 @@ namespace kara::builder {
 
         // For ExpressionNode scopes, product is stored here
         std::optional<Result> product;
-
-        // separate for now... for data efficiency - use findVariable function
-        std::unordered_map<const parser::Variable *, std::shared_ptr<Variable>> variables;
-
-        MatchResult match(const std::vector<const parser::Variable *> &variables, const MatchInput &input);
-        std::variant<Result, MatchCallError> call(
-            const std::vector<const hermes::Node *> &options, const MatchInput &input);
-        std::variant<Result, MatchCallError> call(
-            const std::vector<const hermes::Node *> &options, const MatchInput &input, llvm::IRBuilder<> *builder);
-
-        static Result callUnpack(const std::variant<Result, MatchCallError> &result, const hermes::Node *node);
-
-        Variable *findVariable(const parser::Variable *node) const;
-
-        // Node for search scope.
-        static std::optional<utils::Typename> negotiate(const utils::Typename &left, const utils::Typename &right);
-
-        std::optional<Result> convert(const Result &result, const utils::Typename &type, bool force = false);
-        static std::optional<std::pair<Result, Result>> convert(
-            const Result &a, Scope &aScope, const Result &b, Scope &bScope);
-        std::optional<std::pair<Result, Result>> convert(const Result &a, const Result &b);
-
-        Result infer(const Wrapped &result);
-        Result unpack(const Result &result);
-        Result pass(const Result &result);
-
-        void invokeDestroy(const builder::Result &result);
-        void invokeDestroy(const builder::Result &result, llvm::IRBuilder<> &builder);
-        void invokeDestroy(const builder::Result &result, llvm::BasicBlock *block);
-
-        llvm::Value *get(const builder::Result &result);
-        llvm::Value *ref(const builder::Result &result);
-        llvm::Value *get(const builder::Result &result, llvm::IRBuilder<> &builder) const;
-        llvm::Value *ref(const builder::Result &result, llvm::IRBuilder<> &builder) const;
-
-        Result combine(const Result &a, const Result &b, utils::BinaryOperation op);
-
-        Wrapped makeExpressionNounContent(const hermes::Node *node);
-        Wrapped makeExpressionNounModifier(const hermes::Node *node, const Wrapped &result);
-        Wrapped makeExpressionNoun(const utils::ExpressionNoun &noun);
-        Wrapped makeExpressionOperation(const utils::ExpressionOperation &operation);
-        Wrapped makeExpressionCombinator(const utils::ExpressionCombinator &combinator);
-        Wrapped makeExpressionResult(const utils::ExpressionResult &result);
-        Result makeExpression(const parser::Expression *node);
-
-        Result makeNew(const parser::New *node);
 
         void makeIf(const parser::If *node);
         void makeFor(const parser::For *node);
@@ -220,7 +178,7 @@ namespace kara::builder {
     };
 
     struct Type {
-        Builder &builder;
+        builder::Builder &builder;
         const parser::Type *node = nullptr;
 
         llvm::StructType *type = nullptr;
@@ -232,7 +190,7 @@ namespace kara::builder {
         // for avoiding recursive problems
         void build();
 
-        explicit Type(const parser::Type *node, Builder &builder);
+        explicit Type(const parser::Type *node, builder::Builder &builder);
     };
 
     struct Function {
@@ -243,7 +201,8 @@ namespace kara::builder {
 
         Purpose purpose = Purpose::UserFunction;
 
-        Builder &builder;
+        builder::Builder &builder;
+        builder::Cache cache;
 
         const hermes::Node *node = nullptr;
 

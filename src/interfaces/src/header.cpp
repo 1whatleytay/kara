@@ -18,7 +18,8 @@
 using namespace clang;
 
 namespace kara::interfaces::header {
-    template <typename T, typename... Args> T *grab(Node *node, Args... args) {
+    template <typename T, typename... Args>
+    T *grab(Node *node, Args... args) {
         auto t = node->pick<T>(false, args...);
         auto *ptr = t.get();
 

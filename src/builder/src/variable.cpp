@@ -1,6 +1,7 @@
 #include <builder/builder.h>
 
 #include <builder/error.h>
+#include <builder/operations.h>
 
 #include <parser/expression.h>
 #include <parser/literals.h>
@@ -73,13 +74,15 @@ namespace kara::builder {
 
         std::optional<builder::Result> possibleDefault;
 
+        auto context = ops::Context::from(scope);
+
         if (node->hasInitialValue) {
-            builder::Result result = scope.makeExpression(node->value());
+            builder::Result result = ops::expression::makeExpression(context, node->value());
 
             if (node->hasFixedType) {
                 auto fixedType = function.builder.resolveTypename(node->fixedType());
 
-                std::optional<builder::Result> resultConverted = scope.convert(result, fixedType);
+                std::optional<builder::Result> resultConverted = ops::makeConvert(context, result, fixedType);
 
                 if (!resultConverted) {
                     throw VerifyError(node->value(), "Cannot convert from type {} to variable fixed type {}.",
@@ -89,7 +92,7 @@ namespace kara::builder {
                 result = *resultConverted;
             }
 
-            result = scope.pass(result);
+            result = ops::makePass(context, result);
 
             type = result.type;
             possibleDefault = result; // copy :|
@@ -98,10 +101,10 @@ namespace kara::builder {
         }
 
         if (scope.current) {
-            value = scope.makeAlloca(type, node->name);
+            value = ops::makeAlloca(context, type, node->name);
 
             if (possibleDefault)
-                scope.current->CreateStore(scope.get(*possibleDefault), value);
+                scope.current->CreateStore(ops::get(context, *possibleDefault), value);
         }
     }
 
@@ -111,6 +114,8 @@ namespace kara::builder {
 
         builder::Function &function = *scope.function;
 
+        auto context = ops::Context::from(scope);
+
         if (!node->hasFixedType || node->value())
             throw VerifyError(node,
                 "A function parameter must have fixed type and no "
@@ -119,7 +124,7 @@ namespace kara::builder {
         type = function.builder.resolveTypename(node->fixedType());
 
         if (scope.current) {
-            value = scope.makeAlloca(type, fmt::format("{}_value", node->name));
+            value = ops::makeAlloca(context, type, fmt::format("{}_value", node->name));
             function.entry.CreateStore(input, value);
         }
     }

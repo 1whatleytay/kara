@@ -1,65 +1,18 @@
 #include <builder/builder.h>
 
 #include <builder/error.h>
-#include <parser/search.h>
+#include <builder/operations.h>
 
 #include <parser/assign.h>
 #include <parser/function.h>
 #include <parser/literals.h>
 #include <parser/scope.h>
+#include <parser/search.h>
 #include <parser/statement.h>
 #include <parser/type.h>
 #include <parser/variable.h>
 
 namespace kara::builder {
-    builder::Variable *Scope::findVariable(const parser::Variable *node) const {
-        const builder::Scope *scope = this;
-
-        while (scope) {
-            auto newVariable = scope->variables.find(node);
-
-            if (newVariable != scope->variables.end()) {
-                return newVariable->second.get();
-            }
-
-            scope = scope->parent;
-        }
-
-        return nullptr;
-    }
-
-    llvm::Value *Scope::get(const builder::Result &result) {
-        if (!current)
-            return nullptr;
-
-        return get(result, *current);
-    }
-
-    llvm::Value *Scope::get(const builder::Result &result, llvm::IRBuilder<> &irBuilder) const {
-        return result.isSet(builder::Result::FlagReference) ? irBuilder.CreateLoad(result.value) : result.value;
-    }
-
-    llvm::Value *Scope::ref(const builder::Result &result) {
-        if (!current)
-            return nullptr;
-
-        return ref(result, *current);
-    }
-
-    llvm::Value *Scope::ref(const builder::Result &result, llvm::IRBuilder<> &irBuilder) const {
-        if (result.isSet(builder::Result::FlagReference)) {
-            return result.value;
-        } else {
-            assert(function);
-
-            llvm::Value *ref = function->entry.CreateAlloca(function->builder.makeTypename(result.type));
-
-            irBuilder.CreateStore(result.value, ref);
-
-            return ref;
-        }
-    }
-
     void Scope::makeParameters() {
         assert(function && function->node->is(parser::Kind::Function));
 
@@ -77,7 +30,7 @@ namespace kara::builder {
                 argument->setName(parameterNode->name);
             }
 
-            variables[parameterNode] = std::make_shared<builder::Variable>(parameterNode, argument, *this);
+            cache->variables[parameterNode] = std::make_unique<builder::Variable>(parameterNode, argument, *this);
         }
     }
 
@@ -137,12 +90,17 @@ namespace kara::builder {
         output.CreateBr(exitChainBegin);
     }
 
+    // Moving out to stop confusing the analysis
+    Cache *createCache(builder::Function &function, builder::Scope *parent) {
+        return parent ? parent->cache->create() : function.cache.create();
+    }
+
     Scope::Scope(const hermes::Node *node, builder::Function &function, builder::Scope *parent,
         bool doCodeGen) // NOLINT(misc-no-recursion)
         : parent(parent)
         , builder(function.builder)
         , function(&function)
-        , statementContext(*this) {
+        , cache(createCache(function, parent)) {
 
         llvm::BasicBlock *moveAfter = parent ? parent->lastBlock : function.exitBlock;
 
@@ -162,7 +120,7 @@ namespace kara::builder {
             }
         }
 
-        if (!parent && !node->is(parser::Kind::Type)) // dont bother building parameters for type
+        if (!parent && !node->is(parser::Kind::Type)) // don't bother building parameters for type
             // destructor functions
             makeParameters();
 
@@ -171,9 +129,11 @@ namespace kara::builder {
             return;
         }
 
+        auto context = ops::Context::from(*this);
+
         switch (node->is<parser::Kind>()) {
         case parser::Kind::Expression:
-            product = makeExpression(node->as<parser::Expression>());
+            product = ops::expression::makeExpression(context, node->as<parser::Expression>());
 
             break;
 
@@ -185,13 +145,15 @@ namespace kara::builder {
                 case parser::Kind::Variable: {
                     auto var = std::make_unique<builder::Variable>(child->as<parser::Variable>(), *this);
 
-                    invokeDestroy(builder::Result {
+                    auto result = builder::Result {
                         builder::Result::FlagReference | (var->node->isMutable ? builder::Result::FlagMutable : 0),
                         var->value, var->type,
-                        &statementContext // safe to put, is reference dw
-                    });
+                        &accumulator, // safe to put, is reference dw
+                    };
 
-                    variables[child->as<parser::Variable>()] = std::move(var);
+                    ops::makeInvokeDestroy(context, result);
+
+                    cache->variables[child->as<parser::Variable>()] = std::move(var);
 
                     break;
                 }
@@ -218,7 +180,7 @@ namespace kara::builder {
                     break;
 
                 case parser::Kind::Expression:
-                    makeExpression(child->as<parser::Expression>());
+                    ops::expression::makeExpression(context, child->as<parser::Expression>());
                     break;
 
                 case parser::Kind::Insight: {
@@ -235,7 +197,8 @@ namespace kara::builder {
                     throw;
                 }
 
-                statementContext.commit(currentBlock);
+                if (context.ir)
+                    accumulator.commit(context.builder, *context.ir);
             }
 
             break;
@@ -259,8 +222,8 @@ namespace kara::builder {
                 auto underlyingType = arg->getType();
                 assert(underlyingType->isPointerTy());
 
-                auto pointeeType = underlyingType->getPointerElementType();
-                assert(pointeeType == type->type);
+                auto elementType = underlyingType->getPointerElementType();
+                assert(elementType == type->type);
             }
 
             assert(current);
@@ -271,13 +234,14 @@ namespace kara::builder {
 
                 assert(var->hasFixedType);
 
-                auto result = builder::Result(builder::Result::FlagReference, // TODO might need mutable/immutable
-                                                                              // versions of implicit destructors
-                    current->CreateStructGEP(arg, index), builder.resolveTypename(var->fixedType()),
-                    &statementContext // might as well
-                );
+                // TODO might need mutable/immutable versions of implicit destructors
+                auto result = builder::Result {
+                    builder::Result::FlagReference, current->CreateStructGEP(arg, index),
+                    builder.resolveTypename(var->fixedType()),
+                    &accumulator, // might as well
+                };
 
-                invokeDestroy(result, *current);
+                ops::makeInvokeDestroy(context, result);
             }
 
             break;

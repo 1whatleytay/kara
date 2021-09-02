@@ -30,7 +30,13 @@ namespace kara::parser {
 
     Special::Special(Node *parent)
         : Node(parent, Kind::Special) {
-        type = select<Type>({ { "any", Type::Any }, { "nothing", Type::Nothing }, { "null", Type::Null } }, true);
+        type = select<utils::SpecialType>(
+            {
+                { "any", utils::SpecialType::Any },
+                { "nothing", utils::SpecialType::Nothing },
+                { "null", utils::SpecialType::Null },
+            },
+            true);
     }
 
     Number::Number(Node *parent, bool external)
