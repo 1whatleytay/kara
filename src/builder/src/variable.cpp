@@ -77,7 +77,7 @@ namespace kara::builder {
         auto context = ops::Context::from(scope);
 
         if (node->hasInitialValue) {
-            builder::Result result = ops::expression::makeExpression(context, node->value());
+            builder::Result result = ops::expression::make(context, node->value());
 
             if (node->hasFixedType) {
                 auto fixedType = function.builder.resolveTypename(node->fixedType());

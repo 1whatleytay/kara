@@ -23,9 +23,9 @@ namespace kara::builder {
     void Scope::makeAssign(const parser::Assign *node) {
         auto context = ops::Context::from(*this);
 
-        auto destination = ops::expression::makeExpression(context, node->children.front()->as<parser::Expression>());
+        auto destination = ops::expression::make(context, node->children.front()->as<parser::Expression>());
 
-        auto sourceRaw = ops::expression::makeExpression(context, node->children.back()->as<parser::Expression>());
+        auto sourceRaw = ops::expression::make(context, node->children.back()->as<parser::Expression>());
         auto sourceConverted = ops::makeConvert(context, sourceRaw, destination.type);
 
         if (!sourceConverted) {

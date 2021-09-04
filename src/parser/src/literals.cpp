@@ -110,7 +110,7 @@ namespace kara::parser {
 
         std::stringstream stream;
 
-        auto quote = select<std::string>({ { "\'", "\'" }, { "\"", "\'" } });
+        auto quote = select<std::string>({ { "\'", "\'" }, { "\"", "\"" } });
         match();
 
         enum class BreakChars {
@@ -130,8 +130,11 @@ namespace kara::parser {
         };
 
         std::vector<std::string> breakChars = { "$", "\\", quote };
-        hermes::SelectMap<BreakChars> breakCharsMap
-            = { { "$", BreakChars::Dollar }, { "\\", BreakChars::Backslash }, { quote, BreakChars::Quote } };
+        hermes::SelectMap<BreakChars> breakCharsMap = {
+            { "$", BreakChars::Dollar },
+            { "\\", BreakChars::Backslash },
+            { quote, BreakChars::Quote },
+        };
 
         hermes::SelectMap<SpecialChars> specialCharsMap = {
             { "n", SpecialChars::NewLine },
@@ -147,7 +150,7 @@ namespace kara::parser {
         while (loop) {
             stream << until(breakChars);
 
-            if (peek("'"))
+            if (peek(quote))
                 spaceStoppable = defaultPop;
 
             switch (select(breakCharsMap)) {

@@ -133,7 +133,7 @@ namespace kara::builder {
 
         switch (node->is<parser::Kind>()) {
         case parser::Kind::Expression:
-            product = ops::expression::makeExpression(context, node->as<parser::Expression>());
+            product = ops::expression::make(context, node->as<parser::Expression>());
 
             break;
 
@@ -180,7 +180,7 @@ namespace kara::builder {
                     break;
 
                 case parser::Kind::Expression:
-                    ops::expression::makeExpression(context, child->as<parser::Expression>());
+                    ops::expression::make(context, child->as<parser::Expression>());
                     break;
 
                 case parser::Kind::Insight: {

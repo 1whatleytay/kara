@@ -45,7 +45,7 @@ namespace kara::utils {
             case ArrayKind::FixedSize:
                 return fmt::format(":{}", type.size);
             case ArrayKind::UnboundedSized:
-                return fmt::format(":()");
+                return fmt::format(":expr");
             case ArrayKind::VariableSize:
                 return "";
             }

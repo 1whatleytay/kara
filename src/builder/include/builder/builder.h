@@ -16,16 +16,20 @@
 #include <unordered_set>
 
 namespace kara::parser {
+    struct As;
     struct If;
     struct For;
+    struct Dot;
     struct New;
     struct Call;
     struct Code;
     struct Root;
     struct Type;
     struct Block;
+    struct Index;
     struct Assign;
     struct Import;
+    struct Ternary;
     struct Function;
     struct Variable;
     struct Reference;

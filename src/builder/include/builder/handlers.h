@@ -109,4 +109,18 @@ namespace kara::builder::ops::handlers {
         const Context &context, const builder::Result &left, const builder::Result &right);
     Maybe<builder::Result> makeAndBool(
         const Context &context, const builder::Result &left, const builder::Result &right);
+
+    // here it's to be being more specific, we need a fix to the multiple code generation problem though
+    Maybe<builder::Wrapped> makeCallOnNew(
+        const Context &context, const builder::Unresolved &unresolved, const matching::MatchInput &input);
+    Maybe<builder::Wrapped> makeCallOnFunctionOrType(
+        const Context &context, const builder::Unresolved &unresolved, const matching::MatchInput &input);
+
+    // Marked as taking builder::Result to avoid multiple infers... new solution maybe be needed in future
+    Maybe<builder::Wrapped> makeDotForArraySize(
+        const Context &context, const builder::Result &value, const parser::Reference *node);
+    Maybe<builder::Wrapped> makeDotForField(
+        const Context &context, const builder::Result &value, const parser::Reference *node);
+    Maybe<builder::Wrapped> makeDotForUFCS(
+        const Context &context, const builder::Result &value, const parser::Reference *node);
 }

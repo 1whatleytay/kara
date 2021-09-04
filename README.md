@@ -98,7 +98,8 @@ Until `1.0`.
  - [ ] Select Levels through Keywords `global.f` vs `scope.f`
  - [x] Casting with `as`, `a as T`
  - [ ] Parameter Casting (in place of inheritance), `a as T from fieldOfTThatWouldContainA`
- - [ ] Great Refactor (better compiler)
+ - [ ] `--strict-pointers` safety (no "output" of function contains unowned reference)
+ - [x] Great Refactor (better compiler)
    - [x] Split BuilderResult/Unresolved, infer for unpack
    - [x] Operations (Call, Add, etc.) Independent of BuilderScope
    - [x] Chain Expanding for Alloca, Malloc, Move, Copy, etc. + Predicate

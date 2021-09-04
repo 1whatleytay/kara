@@ -60,7 +60,7 @@ namespace kara::builder {
             auto expressionNode = node->children.front()->as<parser::Expression>();
             auto typenameBool = utils::PrimitiveTypename { utils::PrimitiveType::Bool };
 
-            auto conditionResult = ops::expression::makeExpression(context, expressionNode);
+            auto conditionResult = ops::expression::make(context, expressionNode);
             auto conditionConverted = ops::makeConvert(context, conditionResult, typenameBool);
 
             if (!conditionConverted) {

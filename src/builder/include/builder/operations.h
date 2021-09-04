@@ -48,9 +48,15 @@ namespace kara::builder::ops {
 
     std::optional<utils::Typename> negotiate(const utils::Typename &left, const utils::Typename &right);
 
+    // some missing:
+    // make create -> zero init arrays ([int] size must be 0), default constructor for default field values
+    // make copy -> override for [int], for unique pointers, etc.
+    // make move -> move operator, for unique pointers, etc.
+    // we have makeDestroy I think, we should rename
+
     builder::Result makePass(const Context &context, const Result &result);
+    builder::Result makeReal(const Context &context, const Result &result); // dereference
     builder::Result makeInfer(const Context &context, const Wrapped &result);
-    builder::Result makeDereference(const Context &context, const Result &result);
 
     llvm::Value *makeAlloca(const Context &context, const utils::Typename &type, const std::string &name = "");
     llvm::Value *makeMalloc(const Context &context, const utils::Typename &type, const std::string &name = "");
@@ -100,6 +106,19 @@ namespace kara::builder::ops {
         builder::Result makeAnd(const Context &context, const builder::Result &left, const builder::Result &right);
     }
 
+    namespace modifiers {
+        builder::Wrapped makeCall(
+            const Context &context, const builder::Wrapped &value, const parser::Call *node);
+        builder::Wrapped makeDot(
+            const Context &context, const builder::Wrapped &value, const parser::Dot *node);
+        builder::Wrapped makeIndex(
+            const Context &context, const builder::Wrapped &value, const parser::Index *node);
+        builder::Wrapped makeTernary(
+            const Context &context, const builder::Wrapped &value, const parser::Ternary *node);
+        builder::Wrapped makeAs(
+            const Context &context, const builder::Wrapped &value, const parser::As *node);
+    }
+
     namespace expression {
         builder::Wrapped makeNounContent(const Context &context, const hermes::Node *node);
         builder::Wrapped makeNounModifier(
@@ -110,7 +129,7 @@ namespace kara::builder::ops {
         builder::Wrapped makeCombinator(const Context &context, const utils::ExpressionCombinator &combinator);
         builder::Wrapped makeResult(const Context &context, const utils::ExpressionResult &result);
 
-        builder::Result makeExpression(const Context &context, const parser::Expression *expression);
+        builder::Result make(const Context &context, const parser::Expression *expression);
     }
 
     namespace matching {

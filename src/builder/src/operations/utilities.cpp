@@ -81,7 +81,7 @@ namespace kara::builder::ops {
                 if (it) {
                     arraySize = ops::get(context, *it);
                 } else {
-                    auto length = ops::expression::makeExpression(context, array->expression);
+                    auto length = ops::expression::make(context, array->expression);
                     auto ulongTypename = utils::PrimitiveTypename { utils::PrimitiveType::ULong };
 
                     auto converted = ops::makeConvert(context, length, ulongTypename);
@@ -94,7 +94,7 @@ namespace kara::builder::ops {
 
                     context.cache->expressions.insert({
                         array->expression,
-                        std::make_unique<builder::Result>(result),
+                        std::make_unique<builder::Result>(result), // guaranteed to be ulong?
                     });
 
                     arraySize = ops::get(context, result);
@@ -180,8 +180,7 @@ namespace kara::builder::ops {
                         die("Cannot find variable reference.");
 
                     return builder::Result {
-                        builder::Result::FlagReference
-                            | (info->node->isMutable ? builder::Result::FlagMutable : 0),
+                        builder::Result::FlagReference | (info->node->isMutable ? builder::Result::FlagMutable : 0),
                         info->value,
                         info->type,
                         context.accumulator,
@@ -225,7 +224,7 @@ namespace kara::builder::ops {
         return std::visit(visitor, result);
     }
 
-    builder::Result makeDereference(const Context &context, const Result &result) {
+    builder::Result makeReal(const Context &context, const Result &result) {
         builder::Result value = result;
 
         while (auto *r = std::get_if<utils::ReferenceTypename>(&value.type)) {

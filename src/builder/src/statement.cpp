@@ -36,7 +36,7 @@ namespace kara::builder {
 
                 auto expressionNode = node->children.front()->as<parser::Expression>();
 
-                auto resultRaw = ops::expression::makeExpression(context, expressionNode);
+                auto resultRaw = ops::expression::make(context, expressionNode);
                 auto resultConverted = ops::makeConvert(context, resultRaw, *function->type.returnType);
 
                 if (!resultConverted.has_value()) {
