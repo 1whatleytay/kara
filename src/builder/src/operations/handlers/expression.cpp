@@ -157,29 +157,90 @@ namespace kara::builder::ops::handlers {
 
     Maybe<builder::Wrapped> makeDotForUFCS(
         const Context &context, const builder::Result &value, const parser::Reference *node) {
-            const auto &global = context.builder.root->children;
+        const auto &global = context.builder.root->children;
 
-            auto matchFunction = [&name = node->name](const hermes::Node *node) {
-                if (!node->is(parser::Kind::Function))
-                    return false;
+        auto matchFunction = [&name = node->name](const hermes::Node *node) {
+            if (!node->is(parser::Kind::Function))
+                return false;
 
-                auto *e = node->as<parser::Function>();
-                if (e->name != name || e->parameterCount == 0)
-                    return false;
+            auto *e = node->as<parser::Function>();
+            if (e->name != name || e->parameterCount == 0)
+                return false;
 
-                return true;
-            };
+            return true;
+        };
 
-            auto n = context.builder.searchAllDependencies(matchFunction);
+        auto n = context.builder.searchAllDependencies(matchFunction);
 
-            // last in row of makeDot
-            if (n.empty())
-                die("Could not find method or field with name {}.", node->name);
+        // last in row of makeDot
+        if (n.empty())
+            die("Could not find method or field with name {}.", node->name);
 
-            return builder::Unresolved {
-                node,
-                n,
-                std::make_unique<builder::Result>(value)
-            };
+        return builder::Unresolved {
+            node,
+            n,
+            std::make_unique<builder::Result>(value)
+        };
+    }
+
+
+    bool makeDestroyReference(const Context &context, const builder::Result &result) {
+        auto reference = std::get_if<utils::ReferenceTypename>(&result.type);
+
+        // return true will mark reference as handled
+        return reference && reference->kind == utils::ReferenceKind::Regular;
+    }
+
+    bool makeDestroyUnique(const Context &context, const builder::Result &result) {
+        auto reference = std::get_if<utils::ReferenceTypename>(&result.type);
+
+        if (!(reference && reference->kind == utils::ReferenceKind::Unique))
+            return false;
+
+        auto free = context.builder.getFree();
+        auto dataType = llvm::Type::getInt8PtrTy(context.builder.context);
+        auto pointer = context.ir->CreatePointerCast(ops::get(context, result), dataType);
+
+        // alternative is keep Kind::Reference but only CreateLoad(result.value)
+        auto containedValue = builder::Result {
+            builder::Result::FlagTemporary | builder::Result::FlagReference,
+            ops::get(context, result),
+            *reference->value,
+            nullptr, // don't do it!! &accumulator would be here but I want raw
+        };
+
+        ops::makeDestroy(context, containedValue);
+
+        context.ir->CreateCall(free, { pointer });
+
+        return true;
+    }
+
+    bool makeDestroyGlobal(const Context &context, const builder::Result &result) {
+        // Try to call destroy invocables... call will throw if options are empty
+        if (!context.builder.destroyInvocables.empty())
+            ops::matching::call(context, context.builder.destroyInvocables, { { result }, {} });
+
+        if (auto named = std::get_if<utils::NamedTypename>(&result.type)) {
+            auto containedType = named->type;
+            auto builderType = context.builder.makeType(containedType);
+
+            auto func = builderType->implicitDestructor->function;
+
+            llvm::Value *param = ops::ref(context, result);
+
+            // duplicate sanity check
+            {
+                auto paramType = param->getType();
+                assert(paramType->isPointerTy());
+
+                auto elementType = paramType->getPointerElementType();
+                assert(elementType == builderType->type);
+            }
+
+            context.ir->CreateCall(func, { param });
+        }
+
+        return true;
     }
 }

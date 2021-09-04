@@ -104,7 +104,7 @@ namespace kara::builder {
         module->setDataLayout(*file.manager.target.layout);
         module->setTargetTriple(file.manager.target.triple);
 
-        destroyInvokables = searchAllDependencies([](const hermes::Node *node) -> bool {
+        destroyInvocables = searchAllDependencies([](const hermes::Node *node) -> bool {
             if (!node->is(parser::Kind::Function))
                 return false;
 

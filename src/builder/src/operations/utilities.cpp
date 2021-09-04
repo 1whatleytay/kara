@@ -294,54 +294,15 @@ namespace kara::builder::ops {
         return makeConvertExplicit(context, a, context, b);
     }
 
-    void makeInvokeDestroy(const Context &context, const builder::Result &result) {
-        if (!context.ir)
-            return;
+    void makeDestroy(const Context &context, const builder::Result &result) {
+        bool status = handlers::resolve(
+            std::array {
+                handlers::makeDestroyReference,
+                handlers::makeDestroyUnique,
+                handlers::makeDestroyGlobal,
+            }, context, result);
 
-        auto referenceTypename = std::get_if<utils::ReferenceTypename>(&result.type);
-
-        if (referenceTypename) {
-            if (referenceTypename->kind == utils::ReferenceKind::Unique) {
-                auto free = context.builder.getFree();
-                auto dataType = llvm::Type::getInt8PtrTy(context.builder.context);
-                auto pointer = context.ir->CreatePointerCast(ops::get(context, result), dataType);
-
-                // alternative is keep Kind::Reference but only CreateLoad(result.value)
-                auto containedValue = builder::Result {
-                    builder::Result::FlagTemporary,
-                    context.ir->CreateLoad(ops::get(context, result), "invokeDestroy_load"), *referenceTypename->value,
-                    nullptr // dont do it!! &accumulator would be here but i want raw
-                };
-
-                ops::makeInvokeDestroy(context, containedValue);
-
-                context.ir->CreateCall(free, { pointer });
-            }
-        } else if (!context.builder.destroyInvokables.empty()) {
-            try {
-                ops::matching::call(context, context.builder.destroyInvokables, { { result }, {} });
-
-                if (auto named = std::get_if<utils::NamedTypename>(&result.type)) {
-                    auto containedType = named->type;
-                    auto builderType = context.builder.makeType(containedType);
-
-                    auto func = builderType->implicitDestructor->function;
-
-                    llvm::Value *param = ops::ref(context, result);
-
-                    // duplicate sanity check
-                    {
-                        auto paramType = param->getType();
-                        assert(paramType->isPointerTy());
-
-                        auto pointeeType = paramType->getPointerElementType();
-                        assert(pointeeType == builderType->type);
-                    }
-
-                    context.ir->CreateCall(func, { param });
-                }
-            } catch (const std::runtime_error &e) { }
-        }
+        assert(status);
 
         // TODO: needs call to implicit object destructor, probably in BuilderType,
         // can do later

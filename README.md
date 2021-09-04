@@ -119,6 +119,7 @@ Until `1.0`.
  - [x] LLVM JIT `--interpret`
  - [x] Binary Output on Major Platforms (macOS, Windows)
  - [ ] Language Server or Syntax Suggestion Platform
+ - [ ] C Var Args Support
 
 ### Beyond 1.0
  - [ ] WebASM interop

@@ -11,6 +11,15 @@ namespace kara::builder::ops::handlers {
     template <typename T>
     using Maybe = std::optional<T>;
 
+    template <size_t size, typename... Args, typename... Others>
+    bool resolve(const std::array<bool (*)(Args...), size> &values, Others &&...args) {
+        static_assert(std::is_invocable_v<bool (*)(Args...), Others...>);
+
+        return std::any_of(values.begin(), values.end(), [&args...](auto f) {
+            return f(args...);
+        });
+    }
+
     template <size_t size, typename T, typename... Args, typename... Others>
     Maybe<T> resolve(const std::array<Maybe<T> (*)(Args...), size> &values, Others &&...args) {
         static_assert(std::is_invocable_v<Maybe<T> (*)(Args...), Others...>);
@@ -123,4 +132,8 @@ namespace kara::builder::ops::handlers {
         const Context &context, const builder::Result &value, const parser::Reference *node);
     Maybe<builder::Wrapped> makeDotForUFCS(
         const Context &context, const builder::Result &value, const parser::Reference *node);
+
+    bool makeDestroyReference(const Context &context, const builder::Result &result); // block it
+    bool makeDestroyUnique(const Context &context, const builder::Result &result);
+    bool makeDestroyGlobal(const Context &context, const builder::Result &result);
 }

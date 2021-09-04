@@ -151,7 +151,7 @@ namespace kara::builder {
                         &accumulator, // safe to put, is reference dw
                     };
 
-                    ops::makeInvokeDestroy(context, result);
+                    ops::makeDestroy(context, result);
 
                     cache->variables[child->as<parser::Variable>()] = std::move(var);
 
@@ -241,7 +241,7 @@ namespace kara::builder {
                     &accumulator, // might as well
                 };
 
-                ops::makeInvokeDestroy(context, result);
+                ops::makeDestroy(context, result);
             }
 
             break;
