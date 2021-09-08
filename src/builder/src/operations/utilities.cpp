@@ -203,13 +203,13 @@ namespace kara::builder::ops {
                 std::copy_if(
                     result.references.begin(), result.references.end(), std::back_inserter(functions), callable);
 
-                if (!functions.empty()) {
+                if (!(functions.empty() && result.builtins.empty())) {
                     std::vector<builder::Result> params;
 
                     if (result.implicit)
                         params.push_back(*result.implicit);
 
-                    auto returnResult = ops::matching::call(context, functions, { params, {} });
+                    auto returnResult = ops::matching::call(context, functions, result.builtins, { params, {} });
                     return ops::matching::unwrap(returnResult, result.from);
                 } else {
                     throw VerifyError(result.from, "Reference does not implicitly resolve to anything.");
@@ -224,7 +224,16 @@ namespace kara::builder::ops {
         return std::visit(visitor, result);
     }
 
-    builder::Result makeReal(const Context &context, const Result &result) {
+    const utils::Typename *findReal(const utils::Typename &type) {
+        const utils::Typename *subtype = &type;
+
+        while (auto *sub = std::get_if<utils::ReferenceTypename>(subtype))
+            subtype = sub->value.get();
+
+        return subtype;
+    }
+
+    builder::Result makeReal(const Context &context, const builder::Result &result) {
         builder::Result value = result;
 
         while (auto *r = std::get_if<utils::ReferenceTypename>(&value.type)) {
@@ -300,7 +309,8 @@ namespace kara::builder::ops {
                 handlers::makeDestroyReference,
                 handlers::makeDestroyUnique,
                 handlers::makeDestroyGlobal,
-            }, context, result);
+            },
+            context, result);
 
         assert(status);
 

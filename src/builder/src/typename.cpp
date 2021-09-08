@@ -138,6 +138,8 @@ namespace kara::builder {
                 case utils::ArrayKind::UnboundedSized: // some thinking probably needs to
                     // be done here too
                     return builder.makeTypename(*type.value);
+                case utils::ArrayKind::VariableSize:
+                    return builder.makeVariableArrayType(*type.value);
                 default:
                     throw std::runtime_error(fmt::format("Type {} is unimplemented.", toString(type)));
                 }

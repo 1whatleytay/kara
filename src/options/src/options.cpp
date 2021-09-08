@@ -26,6 +26,7 @@ namespace kara::options {
 
         app.add_option("--malloc", malloc, "Name of malloc stub function to link against (i8 * (size_t)).");
         app.add_option("--free", free, "Name of free stub function to link against (void (i8 *)).");
+        app.add_option("--realloc", realloc, "Name of realloc stub function to link against (i8 * (i8 *, size_t)).");
 
         try {
             app.parse(count, args);

@@ -2,6 +2,7 @@
 
 #include <builder/error.h>
 #include <builder/manager.h>
+#include <builder/builtins.h>
 #include <builder/operations.h>
 
 #include <parser/expression.h>
@@ -38,10 +39,12 @@ namespace kara::builder::ops::modifiers {
             input.parameters.push_back(ops::expression::make(context, parameter));
 
         auto resolve = [&]() {
-            auto v = handlers::resolve(std::array {
-                handlers::makeCallOnNew,
-                handlers::makeCallOnFunctionOrType,
-            }, context, *unresolved, input);
+            auto v = handlers::resolve(
+                std::array {
+                    handlers::makeCallOnNew,
+                    handlers::makeCallOnFunctionOrType,
+                },
+                context, *unresolved, input);
 
             if (!v)
                 die("Could not resolve call operator.");
@@ -56,11 +59,13 @@ namespace kara::builder::ops::modifiers {
         builder::Result infer = ops::makeInfer(context, value);
 
         auto resolve = [&]() {
-            auto v = handlers::resolve(std::array {
-                handlers::makeDotForArraySize,
-                handlers::makeDotForField,
-                handlers::makeDotForUFCS,
-            }, context, infer, node->reference());
+            auto v = handlers::resolve(
+                std::array {
+//                    handlers::makeDotForArrayProperties,
+                    handlers::makeDotForField,
+                    handlers::makeDotForUFCS,
+                },
+                context, infer, node->reference());
 
             if (!v)
                 die("Could not resolve dot operator.");
@@ -77,8 +82,7 @@ namespace kara::builder::ops::modifiers {
         const utils::ArrayTypename *arrayType = std::get_if<utils::ArrayTypename>(&sub.type);
 
         if (!arrayType) {
-            throw VerifyError(
-                node, "Indexing must only be applied on array types, type is {}.", toString(sub.type));
+            throw VerifyError(node, "Indexing must only be applied on array types, type is {}.", toString(sub.type));
         }
 
         auto *indexExpression = node->children.front()->as<parser::Expression>();
@@ -131,8 +135,7 @@ namespace kara::builder::ops::modifiers {
         auto inferConverted = ops::makeConvert(context, value, typenameBool);
 
         if (!inferConverted.has_value()) {
-            throw VerifyError(
-                node,
+            throw VerifyError(node,
                 "Must be able to be converted to boolean type for "
                 "ternary, instead type is {}.",
                 toString(value.type));
@@ -181,8 +184,7 @@ namespace kara::builder::ops::modifiers {
             throw VerifyError(node,
                 "Branches of ternary of type {} and {} cannot be "
                 "converted to each other.",
-                toString(trueValue.type),
-                toString(falseValue.type));
+                toString(trueValue.type), toString(falseValue.type));
         }
 
         auto [onTrue, onFalse] = *results;
@@ -217,8 +219,7 @@ namespace kara::builder::ops::modifiers {
         };
     }
 
-    builder::Wrapped makeAs(
-        const Context &context, const builder::Wrapped &value, const parser::As *node) {
+    builder::Wrapped makeAs(const Context &context, const builder::Wrapped &value, const parser::As *node) {
         auto result = std::get<builder::Result>(value);
 
         auto destination = context.builder.resolveTypename(node->type());
@@ -226,11 +227,7 @@ namespace kara::builder::ops::modifiers {
         auto converted = ops::blame(node, ops::makeConvert, context, result, destination, true);
 
         if (!converted) {
-            throw VerifyError(
-                node,
-                "Cannot convert type {} to type {}.",
-                toString(result.type),
-                toString(destination));
+            throw VerifyError(node, "Cannot convert type {} to type {}.", toString(result.type), toString(destination));
         }
 
         return *converted;
@@ -246,13 +243,20 @@ namespace kara::builder::ops::expression {
         case parser::Kind::Reference: {
             auto e = node->as<parser::Reference>();
 
-            return Unresolved(e, context.builder.findAll(e));
+            auto builtins = ops::handlers::builtins::matching(e->name);
+
+            // here, search through ops::handlers::builtins::functions and find any that match e->name DONE
+            // then we go into Unresolved, change std::vector so it can also contain either std::function or the pointer DONE
+            // then we just override a case for that in Call unfortunately
+            // this is really rough
+
+            return builder::Unresolved(e, context.builder.findAll(e), std::move(builtins));
         }
 
         case parser::Kind::New: {
             auto *e = node->as<parser::New>();
 
-            return builder::Unresolved(e, { e });
+            return builder::Unresolved(e, { e }, { });
         }
 
         case parser::Kind::Special:

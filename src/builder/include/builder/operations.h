@@ -55,8 +55,10 @@ namespace kara::builder::ops {
     // we have makeDestroy I think, we should rename
 
     builder::Result makePass(const Context &context, const Result &result);
-    builder::Result makeReal(const Context &context, const Result &result); // dereference
     builder::Result makeInfer(const Context &context, const Wrapped &result);
+
+    const utils::Typename *findReal(const utils::Typename &result);
+    builder::Result makeReal(const Context &context, const Result &result);
 
     llvm::Value *makeAlloca(const Context &context, const utils::Typename &type, const std::string &name = "");
     llvm::Value *makeMalloc(const Context &context, const utils::Typename &type, const std::string &name = "");
@@ -107,16 +109,12 @@ namespace kara::builder::ops {
     }
 
     namespace modifiers {
-        builder::Wrapped makeCall(
-            const Context &context, const builder::Wrapped &value, const parser::Call *node);
-        builder::Wrapped makeDot(
-            const Context &context, const builder::Wrapped &value, const parser::Dot *node);
-        builder::Wrapped makeIndex(
-            const Context &context, const builder::Wrapped &value, const parser::Index *node);
+        builder::Wrapped makeCall(const Context &context, const builder::Wrapped &value, const parser::Call *node);
+        builder::Wrapped makeDot(const Context &context, const builder::Wrapped &value, const parser::Dot *node);
+        builder::Wrapped makeIndex(const Context &context, const builder::Wrapped &value, const parser::Index *node);
         builder::Wrapped makeTernary(
             const Context &context, const builder::Wrapped &value, const parser::Ternary *node);
-        builder::Wrapped makeAs(
-            const Context &context, const builder::Wrapped &value, const parser::As *node);
+        builder::Wrapped makeAs(const Context &context, const builder::Wrapped &value, const parser::As *node);
     }
 
     namespace expression {
@@ -145,6 +143,11 @@ namespace kara::builder::ops {
             std::unordered_map<size_t, std::string> names;
         };
 
+        // Probably best to slowly transition to this structure instead of MatchInput?
+        using MatchInputFlattened = std::vector<std::pair<std::string, builder::Result>>;
+
+        MatchInputFlattened flatten(const MatchInput &input);
+
         struct CallError {
             std::string problem;
             std::vector<std::string> messages;
@@ -153,9 +156,16 @@ namespace kara::builder::ops {
         using CallWrapped = std::variant<builder::Result, CallError>;
 
         MatchResult match(
-            Builder &builder, const std::vector<const parser::Variable *> &variables, const MatchInput &input);
+            Builder &builder,
+            const std::vector<const parser::Variable *> &variables,
+            const MatchInput &input);
+
         CallWrapped call(
-            const Context &context, const std::vector<const hermes::Node *> &options, const MatchInput &input);
+            const Context &context,
+            const std::vector<const hermes::Node *> &options,
+            const std::vector<ops::handlers::builtins::BuiltinFunction> &builtins,
+            const MatchInput &input);
+
         builder::Result unwrap(const CallWrapped &result, const hermes::Node *node);
     }
 }

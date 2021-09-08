@@ -1,9 +1,9 @@
-import (c) "stdio.h"
+import "print.kara"
 
-x => 30
+main(a *int) int {
+    let a [int]
 
-main int {
-    let z = *[int:x]
+    a.resize(50)
 
-    return z.size
+    return a.size
 }

@@ -1,12 +1,30 @@
 #include <builder/operations.h>
 
+#include <builder/builtins.h>
+
 #include <parser/function.h>
 #include <parser/type.h>
 #include <parser/variable.h>
 
 namespace kara::builder::ops::matching {
+    MatchInputFlattened flatten(const MatchInput &input) {
+        MatchInputFlattened result;
+
+        for (const auto &parameter : input.parameters) {
+            result.push_back({ "", parameter });
+        }
+
+        for (const auto &name : input.names) {
+            result[name.first].first = name.second;
+        }
+
+        return result;
+    }
+
     MatchResult match(
-        Builder &builder, const std::vector<const parser::Variable *> &parameters, const MatchInput &input) {
+        Builder &builder,
+        const std::vector<const parser::Variable *> &parameters,
+        const MatchInput &input) {
         if (parameters.size() != input.parameters.size()) {
             auto error = fmt::format("Expected {} parameters but got {}.", parameters.size(), input.parameters.size());
 
@@ -95,9 +113,12 @@ namespace kara::builder::ops::matching {
     }
 
     CallWrapped call(
-        const Context &context, const std::vector<const hermes::Node *> &options, const MatchInput &input) {
+        const Context &context,
+        const std::vector<const hermes::Node *> &options,
+        const std::vector<ops::handlers::builtins::BuiltinFunction> &builtins,
+        const MatchInput &input) {
 
-        assert(!options.empty());
+        assert(!(options.empty() && builtins.empty()));
 
         using TestResult = std::tuple<const hermes::Node *, MatchResult>;
 
@@ -136,6 +157,14 @@ namespace kara::builder::ops::matching {
         }
 
         if (picks.empty()) {
+            for (const auto &builtin : builtins) {
+                auto r = builtin(context, input);
+
+                // might want to be more specific as to why any errors are happening :flushed:
+                if (r)
+                    return *r;
+            }
+
             std::vector<std::string> errors;
 
             for (const auto &check : checks) {
@@ -176,6 +205,9 @@ namespace kara::builder::ops::matching {
                 }
             }
 
+            if (!builtins.empty())
+                errors.push_back("Builtins were checked but all rejected the given parameters.");
+
             return CallError {
                 "No functions match given function parameters.",
                 std::move(errors),
@@ -188,10 +220,10 @@ namespace kara::builder::ops::matching {
             return node->is(parser::Kind::Function) && node->as<parser::Function>()->isExtern;
         };
 
-        if (picks.size() != 1 && !(std::all_of(picks.begin(), picks.end(), isExternMatch) /* && bet == 0*/)) {
-            return CallError {
-                fmt::format("Multiple functions match the most accurate conversion level, {}.", bet),
-            };
+        if (picks.size() != 1 && !(std::all_of(picks.begin(), picks.end(), isExternMatch))) {
+            auto message = fmt::format("Multiple functions match the most accurate conversion level, {}.", bet);
+
+            return CallError { message };
         }
 
         auto [pick, match] = *picks.front();

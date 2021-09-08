@@ -70,8 +70,8 @@ namespace kara::builder {
 
     llvm::Function *Builder::getMalloc() {
         if (!mallocCache) {
-            auto type = llvm::FunctionType::get(llvm::Type::getInt8PtrTy(context),
-                std::vector<llvm::Type *> { llvm::Type::getInt64Ty(context) }, false);
+            auto type = llvm::FunctionType::get(
+                llvm::Type::getInt8PtrTy(context), { llvm::Type::getInt64Ty(context) }, false);
 
             mallocCache = llvm::Function::Create(
                 type, llvm::GlobalVariable::LinkageTypes::ExternalLinkage, options.malloc, *module);
@@ -82,14 +82,43 @@ namespace kara::builder {
 
     llvm::Function *Builder::getFree() {
         if (!freeCache) {
-            auto type = llvm::FunctionType::get(
-                llvm::Type::getVoidTy(context), std::vector<llvm::Type *> { llvm::Type::getInt8PtrTy(context) }, false);
+            auto type
+                = llvm::FunctionType::get(llvm::Type::getVoidTy(context), { llvm::Type::getInt8PtrTy(context) }, false);
 
             freeCache = llvm::Function::Create(
                 type, llvm::GlobalVariable::LinkageTypes::ExternalLinkage, options.free, *module);
         }
 
         return freeCache;
+    }
+
+    llvm::Function *Builder::getRealloc() {
+        if (!reallocCache) {
+            auto type = llvm::FunctionType::get(llvm::Type::getInt8PtrTy(context),
+                { llvm::Type::getInt8PtrTy(context), llvm::Type::getInt64Ty(context) }, false);
+
+            reallocCache = llvm::Function::Create(
+                type, llvm::GlobalVariable::LinkageTypes::ExternalLinkage, options.realloc, *module);
+        }
+
+        return reallocCache;
+    }
+
+    llvm::StructType *Builder::makeVariableArrayType(const utils::Typename &type) {
+        llvm::Type *subtype = makeTypename(type);
+
+        auto sizeType = llvm::Type::getInt64Ty(context);
+        auto pointerType = llvm::PointerType::get(subtype, 0);
+
+        /*
+         * struct VariableArrayOfInts {
+         *   size_t size;
+         *   size_t capacity;
+         *   int *data;
+         * };
+         */
+
+        return llvm::StructType::get(context, { sizeType, sizeType, pointerType });
     }
 
     Builder::Builder(const ManagerFile &file, const options::Options &opts)

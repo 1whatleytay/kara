@@ -1,10 +1,12 @@
 #include <builder/handlers.h>
 
+#include <builder/builtins.h>
+
+#include <parser/function.h>
+#include <parser/literals.h>
 #include <parser/root.h>
 #include <parser/type.h>
-#include <parser/literals.h>
 #include <parser/variable.h>
-#include <parser/function.h>
 
 namespace kara::builder::ops::handlers {
     Maybe<builder::Wrapped> makeCallOnNew(
@@ -23,7 +25,7 @@ namespace kara::builder::ops::handlers {
         if (!typeNode)
             die("New parameters may only be passed to a type/struct.");
 
-        auto wrappedResult = ops::matching::call(context, { typeNode->type }, input);
+        auto wrappedResult = ops::matching::call(context, { typeNode->type }, { }, input);
         auto returnResult = ops::matching::unwrap(wrappedResult, unresolved.from);
 
         auto output = ops::nouns::makeNew(context, type);
@@ -41,87 +43,29 @@ namespace kara::builder::ops::handlers {
         auto isFunctionOrType
             = [](const hermes::Node *n) { return n->is(parser::Kind::Function) || n->is(parser::Kind::Type); };
 
-        std::copy_if(
-            unresolved.references.begin(),
-            unresolved.references.end(),
-            std::back_inserter(functions),
+        std::copy_if(unresolved.references.begin(), unresolved.references.end(), std::back_inserter(functions),
             isFunctionOrType);
 
-        if (functions.empty())
+        if (functions.empty() && unresolved.builtins.empty())
             die("Reference did not resolve to any functions to call.");
 
-        return ops::matching::unwrap(ops::matching::call(context, functions, input), unresolved.from);
+        return ops::matching::unwrap(
+            ops::matching::call(context, functions, unresolved.builtins, input),
+            unresolved.from);
     }
 
-    std::pair<size_t, const utils::Typename *> sourceType(const utils::Typename &type) {
-        const utils::Typename *subtype = &type;
-
-        size_t numReferences = 0;
-
-        while (auto *sub = std::get_if<utils::ReferenceTypename>(subtype)) {
-            subtype = sub->value.get();
-            numReferences++;
-        }
-
-        return { numReferences, subtype };
-    }
-
-    llvm::Value *refToSourceType(const Context &context, const builder::Result &value, size_t num) {
-        llvm::Value *refTo = num > 0 ? ops::get(context, value) : ops::ref(context, value);
-
-        if (context.ir) {
-            for (size_t a = 1; a < num; a++) {
-                refTo = context.ir->CreateLoad(refTo);
-            }
-        }
-
-        return refTo;
-    }
-
-    Maybe<builder::Wrapped> makeDotForArraySize(
-        const Context &context, const builder::Result &value, const parser::Reference *node) {
-        auto [count, subtype] = sourceType(value.type);
-
-        auto array = std::get_if<utils::ArrayTypename>(subtype);
-        if (!(node->name == "size" && array))
-            return std::nullopt;
-
-        switch (array->kind) {
-        case utils::ArrayKind::UnboundedSized: {
-            auto expression = array->expression;
-
-            if (!context.cache)
-                die("Cache required to size field on array.");
-
-            auto cached = context.cache->find(&Cache::expressions, expression);
-
-            if (!cached)
-                die("Attempting to access size of {} but size has not yet been calculated.", toString(value.type));
-
-            return *cached; // may need concert to long
-        }
-
-        case utils::ArrayKind::FixedSize:
-            return ops::nouns::makeNumber(context, array->size); // uh oh
-
-        case utils::ArrayKind::Unbounded:
-            return std::nullopt; // let UFCS maybe take action
-
-        case utils::ArrayKind::Iterable:
-        case utils::ArrayKind::VariableSize:
-            throw;
-
-        default:
-            throw;
-        }
-    }
+    // moved to builtin solution, that would allow parameters to be taken and work the same as fields
+//    Maybe<builder::Wrapped> makeDotForArrayProperties(
+//        const Context &context, const builder::Result &value, const parser::Reference *node) {
+//
+//    }
 
     Maybe<builder::Wrapped> makeDotForField(
         const Context &context, const builder::Result &value, const parser::Reference *node) {
         // :| might generate duplicate code here, but pretty sure it generated duplicate code in last system too
 
         // Set up to check if property exists, dereference if needed
-        auto [count, subtype] = sourceType(value.type);
+        auto subtype = ops::findReal(value.type);
 
         auto type = std::get_if<utils::NamedTypename>(subtype);
         if (!type)
@@ -144,12 +88,12 @@ namespace kara::builder::ops::handlers {
 
         size_t index = builderType->indices.at(varNode);
 
-        auto structRef = refToSourceType(context, value, count);
+        auto structRef = ops::makeReal(context, value);
 
         return builder::Result {
             (value.flags & (builder::Result::FlagMutable | builder::Result::FlagTemporary))
                 | builder::Result::FlagReference,
-            context.ir ? context.ir->CreateStructGEP(structRef, index, node->name) : nullptr,
+            context.ir ? context.ir->CreateStructGEP(ops::ref(context, structRef), index, node->name) : nullptr,
             context.builder.resolveTypename(varNode->fixedType()),
             context.accumulator,
         };
@@ -172,17 +116,19 @@ namespace kara::builder::ops::handlers {
 
         auto n = context.builder.searchAllDependencies(matchFunction);
 
+        auto builtins = ops::handlers::builtins::matching(node->name);
+
         // last in row of makeDot
-        if (n.empty())
+        if (n.empty() && builtins.empty())
             die("Could not find method or field with name {}.", node->name);
 
         return builder::Unresolved {
             node,
             n,
-            std::make_unique<builder::Result>(value)
+            builtins,
+            std::make_unique<builder::Result>(value),
         };
     }
-
 
     bool makeDestroyReference(const Context &context, const builder::Result &result) {
         auto reference = std::get_if<utils::ReferenceTypename>(&result.type);
@@ -203,8 +149,7 @@ namespace kara::builder::ops::handlers {
 
         // alternative is keep Kind::Reference but only CreateLoad(result.value)
         auto containedValue = builder::Result {
-            builder::Result::FlagTemporary | builder::Result::FlagReference,
-            ops::get(context, result),
+            builder::Result::FlagTemporary | builder::Result::FlagReference, ops::get(context, result),
             *reference->value,
             nullptr, // don't do it!! &accumulator would be here but I want raw
         };
@@ -219,7 +164,11 @@ namespace kara::builder::ops::handlers {
     bool makeDestroyGlobal(const Context &context, const builder::Result &result) {
         // Try to call destroy invocables... call will throw if options are empty
         if (!context.builder.destroyInvocables.empty())
-            ops::matching::call(context, context.builder.destroyInvocables, { { result }, {} });
+            ops::matching::call(
+                context,
+                context.builder.destroyInvocables,
+                { /* dwbi builtins */ },
+                ops::matching::MatchInput { { result }, {} });
 
         if (auto named = std::get_if<utils::NamedTypename>(&result.type)) {
             auto containedType = named->type;

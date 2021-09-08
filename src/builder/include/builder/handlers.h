@@ -15,9 +15,7 @@ namespace kara::builder::ops::handlers {
     bool resolve(const std::array<bool (*)(Args...), size> &values, Others &&...args) {
         static_assert(std::is_invocable_v<bool (*)(Args...), Others...>);
 
-        return std::any_of(values.begin(), values.end(), [&args...](auto f) {
-            return f(args...);
-        });
+        return std::any_of(values.begin(), values.end(), [&args...](auto f) { return f(args...); });
     }
 
     template <size_t size, typename T, typename... Args, typename... Others>
@@ -126,8 +124,8 @@ namespace kara::builder::ops::handlers {
         const Context &context, const builder::Unresolved &unresolved, const matching::MatchInput &input);
 
     // Marked as taking builder::Result to avoid multiple infers... new solution maybe be needed in future
-    Maybe<builder::Wrapped> makeDotForArraySize(
-        const Context &context, const builder::Result &value, const parser::Reference *node);
+//    Maybe<builder::Wrapped> makeDotForArrayProperties(
+//        const Context &context, const builder::Result &value, const parser::Reference *node);
     Maybe<builder::Wrapped> makeDotForField(
         const Context &context, const builder::Result &value, const parser::Reference *node);
     Maybe<builder::Wrapped> makeDotForUFCS(

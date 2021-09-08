@@ -50,9 +50,27 @@ namespace kara::builder {
     struct Function;
     struct Accumulator;
 
+    // Getting rid of this would give bonus points, used for Unresolved
+    namespace ops {
+        struct Context;
+    }
+
+    namespace ops::matching {
+        struct MatchInput;
+    }
+
+    namespace ops::handlers::builtins {
+        using Parameters = ops::matching::MatchInput;
+        using BuiltinFunction = std::optional<builder::Result> (*)(const Context &, const Parameters &);
+    }
+
     struct Result {
         // valid flag layouts: reference, temporary | mutable | variable
-        enum Flags : uint32_t { FlagTemporary = 1u << 0u, FlagMutable = 1u << 1u, FlagReference = 1u << 2u };
+        enum Flags : uint32_t {
+            FlagTemporary = 1u << 0u,
+            FlagMutable = 1u << 1u,
+            FlagReference = 1u << 2u,
+        };
 
         uint32_t flags = 0;
         [[nodiscard]] bool isSet(Flags flag) const;
@@ -68,10 +86,13 @@ namespace kara::builder {
     struct Unresolved {
         const hermes::Node *from = nullptr;
         std::vector<const hermes::Node *> references;
+        std::vector<ops::handlers::builtins::BuiltinFunction> builtins;
 
         std::shared_ptr<builder::Result> implicit; // std::optional?
 
-        Unresolved(const hermes::Node *from, std::vector<const hermes::Node *> references,
+        Unresolved(const hermes::Node *from,
+            std::vector<const hermes::Node *> references,
+            std::vector<ops::handlers::builtins::BuiltinFunction> builtins,
             std::unique_ptr<Result> implicit = nullptr);
     };
 
@@ -235,6 +256,7 @@ namespace kara::builder {
 
         llvm::Function *mallocCache = nullptr;
         llvm::Function *freeCache = nullptr;
+        llvm::Function *reallocCache = nullptr;
 
         std::unordered_set<const ManagerFile *> dependencies;
 
@@ -255,6 +277,7 @@ namespace kara::builder {
 
         llvm::Function *getMalloc();
         llvm::Function *getFree();
+        llvm::Function *getRealloc();
 
         const hermes::Node *find(const parser::Reference *node);
         std::vector<const hermes::Node *> findAll(const parser::Reference *node);
@@ -268,6 +291,9 @@ namespace kara::builder {
 
         llvm::Type *makeTypename(const utils::Typename &type);
         [[nodiscard]] llvm::Type *makePrimitiveType(utils::PrimitiveType type) const;
+
+        // take llvm::Type * ? can use hashmap
+        llvm::StructType *makeVariableArrayType(const utils::Typename &of);
 
         Builder(const ManagerFile &file, const options::Options &opts);
     };

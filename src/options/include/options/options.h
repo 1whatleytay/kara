@@ -26,6 +26,7 @@ namespace kara::options {
 
         std::string malloc = "malloc";
         std::string free = "free";
+        std::string realloc = "realloc";
 
         Options() = default;
         Options(int count, const char **args);

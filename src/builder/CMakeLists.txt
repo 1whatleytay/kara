@@ -4,6 +4,7 @@ add_library(builder STATIC
     include/builder/error.h
     include/builder/operations.h
     include/builder/handlers.h
+	include/builder/builtins.h
 
     src/manager.cpp
     src/builder.cpp
@@ -24,7 +25,8 @@ add_library(builder STATIC
 	src/operations/operations.cpp
 	src/operations/expression.cpp
 	src/operations/handlers/expression.cpp
-	src/operations/handlers/operations.cpp)
+	src/operations/handlers/operations.cpp
+	src/operations/handlers/builtins.cpp)
 
 target_include_directories(builder PUBLIC include)
 target_link_libraries(builder PUBLIC parser options llvm rapidjson interfaces)
