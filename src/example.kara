@@ -1,9 +1,5 @@
-import "print.kara"
-
-type T { a int }
-
 main int {
-    var a [int]
+    var a &int
 
-    return a.size
+    return a == null ? 1 : 0
 }

@@ -1,6 +1,32 @@
 #include <builder/handlers.h>
 
 namespace kara::builder::ops::handlers {
+    const utils::PrimitiveTypename *asPrim(const utils::Typename &type) {
+        return std::get_if<utils::PrimitiveTypename>(&type);
+    }
+
+    const utils::PrimitiveTypename *asPrimTo(const utils::Typename &type, utils::PrimitiveType target) {
+        auto v = asPrim(type);
+
+        if (v && v->type == target)
+            return v;
+
+        return nullptr;
+    }
+
+    const utils::ReferenceTypename *asRef(const utils::Typename &type) {
+        return std::get_if<utils::ReferenceTypename>(&type);
+    }
+
+    const utils::ReferenceTypename *asRefTo(const utils::Typename &type, const utils::Typename &target) {
+        auto v = asRef(type);
+
+        if (v && *v->value == target)
+            return v;
+
+        return nullptr;
+    }
+
     Maybe<utils::Typename> negotiateEqual(const utils::Typename &left, const utils::Typename &right) {
         if (left != right)
             return std::nullopt;
@@ -72,30 +98,20 @@ namespace kara::builder::ops::handlers {
         return from(type);
     }
 
-    const utils::PrimitiveTypename *asPrim(const utils::Typename &type) {
-        return std::get_if<utils::PrimitiveTypename>(&type);
-    }
+    Maybe<utils::Typename> negotiateReferenceAndNull(const utils::Typename &left, const utils::Typename &right) {
+        auto leftRef = asRef(left);
+        auto rightRef = asRef(right);
 
-    const utils::PrimitiveTypename *asPrimTo(const utils::Typename &type, utils::PrimitiveType target) {
-        auto v = asPrim(type);
+        auto leftPrim = asPrimTo(left, utils::PrimitiveType::Null);
+        auto rightPrim = asPrimTo(right, utils::PrimitiveType::Null);
 
-        if (v && v->type == target)
-            return v;
+        if (leftPrim && rightRef)
+            return right;
 
-        return nullptr;
-    }
+        if (rightPrim && leftRef)
+            return left;
 
-    const utils::ReferenceTypename *asRef(const utils::Typename &type) {
-        return std::get_if<utils::ReferenceTypename>(&type);
-    }
-
-    const utils::ReferenceTypename *asRefTo(const utils::Typename &type, const utils::Typename &target) {
-        auto v = asRef(type);
-
-        if (v && *v->value == target)
-            return v;
-
-        return nullptr;
+        return std::nullopt;
     }
 
     template <typename T>
@@ -131,7 +147,10 @@ namespace kara::builder::ops::handlers {
         auto leftRef = asRef(left.type);
         auto rightRef = asRef(right.type);
 
-        if (!(leftRef && rightRef))
+        auto leftNull = asPrimTo(left.type, utils::PrimitiveType::Null);
+        auto rightNull = asPrimTo(right.type, utils::PrimitiveType::Null);
+
+        if (!((leftRef || leftNull) && (rightRef || rightNull)))
             return std::nullopt;
 
         auto converted = ops::makeConvertDouble(context, left, right);
@@ -506,7 +525,10 @@ namespace kara::builder::ops::handlers {
         auto typePrim = asPrim(type);
         auto resultPrim = asPrim(result.type);
 
-        if (!(typePrim && resultPrim && typePrim->isFloat() == resultPrim->isFloat()))
+        auto areFloats = [&]() { return typePrim->isFloat() && resultPrim->isFloat(); };
+        auto areIntegers = [&]() { return typePrim->isInteger() && resultPrim->isInteger(); };
+
+        if (!(typePrim && resultPrim && (areFloats() || areIntegers())))
             return std::nullopt;
 
         auto needsTrunc = resultPrim->priority() > typePrim->priority();

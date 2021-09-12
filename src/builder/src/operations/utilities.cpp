@@ -48,6 +48,7 @@ namespace kara::builder::ops {
             std::array {
                 handlers::negotiateEqual,
                 handlers::negotiatePrimitive,
+                handlers::negotiateReferenceAndNull,
             },
             left, right);
     }

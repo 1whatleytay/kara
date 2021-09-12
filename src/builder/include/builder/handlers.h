@@ -48,6 +48,8 @@ namespace kara::builder::ops::handlers {
 
     Maybe<utils::Typename> negotiateEqual(const utils::Typename &left, const utils::Typename &right);
     Maybe<utils::Typename> negotiatePrimitive(const utils::Typename &left, const utils::Typename &right);
+    Maybe<utils::Typename> negotiateReferenceAndNull(const utils::Typename &left, const utils::Typename &right);
+
 
     Maybe<builder::Result> makeConvertBridgeImplicitReference(
         const Context &context, const builder::Result &result, const utils::Typename &type, bool force); // promote

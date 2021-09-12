@@ -53,7 +53,8 @@ namespace kara::builder {
             if (context.ir)
                 accumulator.commit(context.builder, *context.ir);
 
-            exit(ExitPoint::Return);
+            // TODO: something needs to be done about this insert block... this is a temp solution
+            exit(ExitPoint::Return, context.ir ? context.ir->GetInsertBlock() : nullptr);
 
             break;
         }
