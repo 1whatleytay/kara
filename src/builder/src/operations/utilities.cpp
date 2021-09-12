@@ -303,14 +303,33 @@ namespace kara::builder::ops {
         return makeConvertExplicit(context, a, context, b);
     }
 
-    void makeDestroy(const Context &context, const builder::Result &result) {
+    void makeInitialize(const Context &context, llvm::Value *value, const utils::Typename &type) {
+        if (!context.ir)
+            return;
+
+        bool status = handlers::resolve(
+            std::array {
+                handlers::makeInitializeNumber,
+                handlers::makeInitializeReference,
+                handlers::makeInitializeVariableArray,
+                handlers::makeInitializeIgnore,
+            },
+            context, value, type);
+
+        assert(status);
+    }
+
+    void makeDestroy(const Context &context, llvm::Value *value, const utils::Typename &type) {
+        if (!context.ir)
+            return;
+
         bool status = handlers::resolve(
             std::array {
                 handlers::makeDestroyReference,
                 handlers::makeDestroyUnique,
                 handlers::makeDestroyGlobal,
             },
-            context, result);
+            context, value, type);
 
         assert(status);
 

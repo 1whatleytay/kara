@@ -145,13 +145,13 @@ namespace kara::builder {
                 case parser::Kind::Variable: {
                     auto var = std::make_unique<builder::Variable>(child->as<parser::Variable>(), *this);
 
-                    auto result = builder::Result {
-                        builder::Result::FlagReference | (var->node->isMutable ? builder::Result::FlagMutable : 0),
-                        var->value, var->type,
-                        &accumulator, // safe to put, is reference dw
-                    };
+//                    auto result = builder::Result {
+//                        builder::Result::FlagReference | (var->node->isMutable ? builder::Result::FlagMutable : 0),
+//                        var->value, var->type,
+//                        &accumulator, // safe to put, is reference dw
+//                    };
 
-                    ops::makeDestroy(context, result);
+                    ops::makeDestroy(context, var->value, var->type);
 
                     cache->variables[child->as<parser::Variable>()] = std::move(var);
 
@@ -234,14 +234,18 @@ namespace kara::builder {
 
                 assert(var->hasFixedType);
 
-                // TODO might need mutable/immutable versions of implicit destructors
-                auto result = builder::Result {
-                    builder::Result::FlagReference, current->CreateStructGEP(arg, index),
-                    builder.resolveTypename(var->fixedType()),
-                    &accumulator, // might as well
-                };
+//                // TODO might need mutable/immutable versions of implicit destructors
+//                auto result = builder::Result {
+//                    builder::Result::FlagReference,
+//                    current->CreateStructGEP(arg, index),
+//                    builder.resolveTypename(var->fixedType()),
+//                    &accumulator, // might as well
+//                };
 
-                ops::makeDestroy(context, result);
+                ops::makeDestroy(
+                    context,
+                    current->CreateStructGEP(arg, index),
+                    builder.resolveTypename(var->fixedType()));
             }
 
             break;

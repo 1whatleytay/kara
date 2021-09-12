@@ -71,7 +71,8 @@ namespace kara::builder::ops {
     std::optional<std::pair<Result, Result>> makeConvertDouble(
         const Context &context, const Result &a, const Result &b);
 
-    void makeDestroy(const Context &context, const builder::Result &result);
+    void makeInitialize(const Context &context, llvm::Value *value, const utils::Typename &type);
+    void makeDestroy(const Context &context, llvm::Value *value, const utils::Typename &type);
 
     namespace nouns {
         builder::Result makeSpecial(const Context &context, utils::SpecialType type);

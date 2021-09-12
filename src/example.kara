@@ -1,9 +1,9 @@
 import "print.kara"
 
-main(a *int) int {
-    let a [int]
+type T { a int }
 
-    a.resize(50)
+main int {
+    var a [int]
 
     return a.size
 }

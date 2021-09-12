@@ -37,7 +37,7 @@ namespace kara::builder {
             const builder::Result &destroy = toDestroy.front();
 
             if (avoidDestroy.find(destroy.uid) == avoidDestroy.end())
-                ops::makeDestroy(context, destroy);
+                ops::makeDestroy(context, ops::ref(context, destroy), destroy.type);
 
             toDestroy.pop();
         }

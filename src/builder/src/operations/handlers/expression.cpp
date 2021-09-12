@@ -130,64 +130,132 @@ namespace kara::builder::ops::handlers {
         };
     }
 
-    bool makeDestroyReference(const Context &context, const builder::Result &result) {
-        auto reference = std::get_if<utils::ReferenceTypename>(&result.type);
+    bool makeInitializeNumber(const Context &context, llvm::Value *ptr, const utils::Typename &type) {
+        auto prim = std::get_if<utils::PrimitiveTypename>(&type);
+
+        if (!(prim && prim->isNumber()))
+            return false;
+
+        auto llvmType = context.builder.makePrimitiveType(prim->type);
+
+        llvm::Value *value;
+
+        if (prim->isFloat())
+            value = llvm::ConstantFP::get(llvmType, 0);
+        else
+            value = llvm::ConstantInt::get(llvmType, 0);
+
+        context.ir->CreateStore(value, ptr);
+
+        return true;
+    }
+
+    bool makeInitializeReference(const Context &context, llvm::Value *ptr, const utils::Typename &type) {
+        auto reference = std::get_if<utils::ReferenceTypename>(&type);
+
+        if (!(reference && reference->kind != utils::ReferenceKind::Shared))
+            return false;
+
+        auto llvmType = context.builder.makeTypename(type);
+
+        assert(llvmType->isPointerTy());
+
+        auto llvmPointerType = reinterpret_cast<llvm::PointerType *>(llvmType);
+        auto value = llvm::ConstantPointerNull::get(llvmPointerType);
+
+        context.ir->CreateStore(value, ptr);
+
+        return true;
+    }
+
+    bool makeInitializeVariableArray(const Context &context, llvm::Value *ptr, const utils::Typename &type) {
+        auto array = std::get_if<utils::ArrayTypename>(&type);
+
+        if (!(array && array->kind == utils::ArrayKind::VariableSize))
+            return false;
+
+        auto llvmType = context.builder.makeTypename(type);
+
+        assert(llvmType->isStructTy());
+
+        auto llvmStructType = reinterpret_cast<llvm::StructType *>(llvmType);
+
+        auto pointerType = context.builder.makeTypename(*array->value);
+        auto llvmPointerType = llvm::PointerType::get(pointerType, 0);
+
+        auto zero = llvm::ConstantInt::get(llvm::Type::getInt64Ty(context.builder.context), 0);
+        auto null = llvm::ConstantPointerNull::get(llvmPointerType);
+
+        auto empty = llvm::ConstantStruct::ConstantStruct::get(llvmStructType, { zero, zero, null });
+
+        context.ir->CreateStore(empty, ptr);
+
+        return true;
+    }
+
+    bool makeInitializeIgnore(const Context &context, llvm::Value *ptr, const utils::Typename &type) {
+        return true;
+    }
+
+    bool makeDestroyReference(const Context &context, llvm::Value *ptr, const utils::Typename &type) {
+        auto reference = std::get_if<utils::ReferenceTypename>(&type);
 
         // return true will mark reference as handled
         return reference && reference->kind == utils::ReferenceKind::Regular;
     }
 
-    bool makeDestroyUnique(const Context &context, const builder::Result &result) {
-        auto reference = std::get_if<utils::ReferenceTypename>(&result.type);
+    bool makeDestroyUnique(const Context &context, llvm::Value *ptr, const utils::Typename &type) {
+        auto reference = std::get_if<utils::ReferenceTypename>(&type);
 
         if (!(reference && reference->kind == utils::ReferenceKind::Unique))
             return false;
 
         auto free = context.builder.getFree();
         auto dataType = llvm::Type::getInt8PtrTy(context.builder.context);
-        auto pointer = context.ir->CreatePointerCast(ops::get(context, result), dataType);
+        auto value = context.ir->CreateLoad(ptr);
 
-        // alternative is keep Kind::Reference but only CreateLoad(result.value)
-        auto containedValue = builder::Result {
-            builder::Result::FlagTemporary | builder::Result::FlagReference, ops::get(context, result),
-            *reference->value,
-            nullptr, // don't do it!! &accumulator would be here but I want raw
-        };
+        auto pointer = context.ir->CreatePointerCast(value, dataType);
 
-        ops::makeDestroy(context, containedValue);
+        ops::makeDestroy(context, value, *reference->value);
 
         context.ir->CreateCall(free, { pointer });
 
         return true;
     }
 
-    bool makeDestroyGlobal(const Context &context, const builder::Result &result) {
+    bool makeDestroyGlobal(const Context &context, llvm::Value *ptr, const utils::Typename &type) {
         // Try to call destroy invocables... call will throw if options are empty
-        if (!context.builder.destroyInvocables.empty())
+        if (!context.builder.destroyInvocables.empty()) {
+            // attempt to avoid this construction forces me to create it here
+            auto parameter = builder::Result {
+                builder::Result::FlagTemporary | builder::Result::FlagReference,
+                ptr,
+                type,
+                nullptr
+            };
+
             ops::matching::call(
                 context,
-                context.builder.destroyInvocables,
-                { /* dwbi builtins */ },
-                ops::matching::MatchInput { { result }, {} });
+                context.builder.destroyInvocables, { /* dwbi builtins */ },
+                ops::matching::MatchInput { { parameter }, { /* no names */ } });
+        }
 
-        if (auto named = std::get_if<utils::NamedTypename>(&result.type)) {
+        if (auto named = std::get_if<utils::NamedTypename>(&type)) {
             auto containedType = named->type;
             auto builderType = context.builder.makeType(containedType);
 
             auto func = builderType->implicitDestructor->function;
 
-            llvm::Value *param = ops::ref(context, result);
-
             // duplicate sanity check
             {
-                auto paramType = param->getType();
+                auto paramType = ptr->getType();
                 assert(paramType->isPointerTy());
 
                 auto elementType = paramType->getPointerElementType();
                 assert(elementType == builderType->type);
             }
 
-            context.ir->CreateCall(func, { param });
+            context.ir->CreateCall(func, { ptr });
         }
 
         return true;

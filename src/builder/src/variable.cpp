@@ -105,6 +105,8 @@ namespace kara::builder {
 
             if (possibleDefault)
                 scope.current->CreateStore(ops::get(context, *possibleDefault), value);
+            else
+                ops::makeInitialize(context, value, type);
         }
     }
 

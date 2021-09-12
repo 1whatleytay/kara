@@ -155,7 +155,7 @@ namespace kara::builder::ops::handlers::builtins {
 //
 //            auto &size = *converted;
 //
-//            
+//
             throw;
         }
 

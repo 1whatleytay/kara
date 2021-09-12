@@ -131,7 +131,12 @@ namespace kara::builder::ops::handlers {
     Maybe<builder::Wrapped> makeDotForUFCS(
         const Context &context, const builder::Result &value, const parser::Reference *node);
 
-    bool makeDestroyReference(const Context &context, const builder::Result &result); // block it
-    bool makeDestroyUnique(const Context &context, const builder::Result &result);
-    bool makeDestroyGlobal(const Context &context, const builder::Result &result);
+    bool makeInitializeNumber(const Context &context, llvm::Value *ptr, const utils::Typename &type);
+    bool makeInitializeReference(const Context &context, llvm::Value *ptr, const utils::Typename &type);
+    bool makeInitializeVariableArray(const Context &context, llvm::Value *ptr, const utils::Typename &type);
+    bool makeInitializeIgnore(const Context &context, llvm::Value *ptr, const utils::Typename &type);
+
+    bool makeDestroyReference(const Context &context, llvm::Value *ptr, const utils::Typename &type); // block it
+    bool makeDestroyUnique(const Context &context, llvm::Value *ptr, const utils::Typename &type);
+    bool makeDestroyGlobal(const Context &context, llvm::Value *ptr, const utils::Typename &type);
 }

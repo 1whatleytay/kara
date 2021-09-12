@@ -139,9 +139,13 @@ namespace kara::builder::ops {
         }
 
         builder::Result makeNew(const Context &context, const utils::Typename &type) {
+            auto ptr = ops::makeMalloc(context, type);
+
+            ops::makeInitialize(context, ptr, type);
+
             return builder::Result {
                 builder::Result::FlagTemporary,
-                ops::makeMalloc(context, type),
+                ptr,
                 utils::ReferenceTypename {
                     std::make_shared<utils::Typename>(type),
                     true,
