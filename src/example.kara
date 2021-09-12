@@ -1,5 +1,7 @@
-main int {
-    var a &int
+value(a bool) => a ? 1 : 0
 
-    return a == null ? 1 : 0
+main int {
+    var a = *[int:50].variable
+
+    return a.size
 }

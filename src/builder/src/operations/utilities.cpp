@@ -328,7 +328,8 @@ namespace kara::builder::ops {
             std::array {
                 handlers::makeDestroyReference,
                 handlers::makeDestroyUnique,
-                handlers::makeDestroyGlobal,
+                handlers::makeDestroyVariableArray,
+                handlers::makeDestroyRegular,
             },
             context, value, type);
 

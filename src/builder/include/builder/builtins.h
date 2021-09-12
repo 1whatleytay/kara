@@ -46,12 +46,20 @@ namespace kara::builder::ops::handlers::builtins {
         Maybe<builder::Result> resize(const Context &context, const Parameters &parameters);
         Maybe<builder::Result> reserve(const Context &context, const Parameters &parameters);
 
+        Maybe<builder::Result> add(const Context &context, const Parameters &parameters);
+        Maybe<builder::Result> clear(const Context &context, const Parameters &parameters);
+
+        Maybe<builder::Result> variable(const Context &context, const Parameters &parameters);
+
         constexpr std::array functions = {
             std::make_pair("size", size),
             std::make_pair("capacity", capacity),
             std::make_pair("data", data),
             std::make_pair("resize", resize),
             std::make_pair("reserve", reserve),
+            std::make_pair("add", add),
+            std::make_pair("clear", clear),
+            std::make_pair("variable", variable),
         };
     }
 

@@ -148,7 +148,7 @@ namespace kara::builder {
             state = std::move(tupleState);
             root = std::move(tupleRoot);
         } else {
-            throw std::exception();
+            throw;
         }
 
         for (const auto &e : root->children) {

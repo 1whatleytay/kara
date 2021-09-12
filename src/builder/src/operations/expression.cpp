@@ -116,8 +116,14 @@ namespace kara::builder::ops::modifiers {
                 // allocated arrays
                 return context.ir->CreateGEP(ops::ref(context, sub), ops::get(context, index));
 
+            case utils::ArrayKind::VariableSize: {
+                auto dataPtr = context.ir->CreateStructGEP(ops::ref(context, sub), 2); // data is at 2
+
+                return context.ir->CreateGEP(context.ir->CreateLoad(dataPtr), ops::get(context, index));
+            }
+
             default:
-                throw std::exception();
+                throw;
             }
         };
 

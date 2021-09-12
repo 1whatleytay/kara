@@ -1,5 +1,7 @@
 #include <builder/builtins.h>
 
+#include <builder/manager.h>
+
 #include <utils/typename.h>
 
 namespace kara::builder::ops::handlers::builtins {
@@ -130,37 +132,305 @@ namespace kara::builder::ops::handlers::builtins {
         }
 
         Maybe<builder::Result> resize(const Context &context, const Parameters &parameters) {
-//            auto input = ops::matching::flatten(parameters);
-//
-//            // name/size check
-//            if (!(input.size() == 2
-//                    && named(input[0].first, "array")
-//                    && named(input[1].first, "size")))
-//                return std::nullopt;
-//
-//            auto &value = input[0].second;
-//            auto &second = input[1].second;
-//
-//            auto subtype = ops::findReal(value.type);
-//
-//            auto array = std::get_if<utils::ArrayTypename>(subtype);
-//            if (!(array && array->kind == utils::ArrayKind::VariableSize))
-//                return std::nullopt;
-//
-//            auto ulongTypename = utils::PrimitiveTypename { utils::PrimitiveType::ULong };
-//
-//            auto converted = ops::makeConvert(context, second, ulongTypename);
-//            if (!converted)
-//                return std::nullopt;
-//
-//            auto &size = *converted;
-//
-//
-            throw;
+            auto input = ops::matching::flatten(parameters);
+
+            // name/size check
+            if (!(input.size() == 2
+                    && named(input[0].first, "array")
+                    && named(input[1].first, "size")))
+                return std::nullopt;
+
+            auto &value = input[0].second;
+            auto &second = input[1].second;
+
+            auto subtype = ops::findReal(value.type);
+
+            auto array = std::get_if<utils::ArrayTypename>(subtype);
+            if (!(array && array->kind == utils::ArrayKind::VariableSize))
+                return std::nullopt;
+
+            auto arrayResult = ops::makeReal(context, value);
+
+            auto ulongTypename = utils::PrimitiveTypename { utils::PrimitiveType::ULong };
+
+            auto converted = ops::makeConvert(context, second, ulongTypename);
+            if (!converted)
+                die("Size parameter must be converted to ulong.");
+
+            auto &size = *converted;
+
+            if (context.ir) {
+                auto realloc = context.builder.getRealloc();
+
+                auto ptr = ops::ref(context, arrayResult);
+
+                auto sizePtr = context.ir->CreateStructGEP(ptr, 0); // 0 is size
+                auto capacityPtr = context.ir->CreateStructGEP(ptr, 1); // 1 is capacity
+                auto dataPtr = context.ir->CreateStructGEP(ptr, 2); // 2 is data
+
+                assert(dataPtr->getType()->isPointerTy());
+
+                auto dataPtrType = llvm::Type::getInt8PtrTy(context.builder.context);
+                auto dataPtrRealType = dataPtr->getType()->getPointerElementType();
+
+                assert(dataPtrRealType->isPointerTy());
+
+                auto dataElementType = dataPtrRealType->getPointerElementType();
+
+                auto dataSize = context.builder.file.manager.target.layout->getTypeAllocSize(dataElementType);
+                auto constantSize = llvm::ConstantInt::get(llvm::Type::getInt64Ty(context.builder.context), dataSize);
+
+                auto dataCasted = context.ir->CreatePointerCast(context.ir->CreateLoad(dataPtr), dataPtrType);
+
+                auto llvmSize = ops::get(context, size);
+
+                auto allocSize = context.ir->CreateMul(llvmSize, constantSize);
+
+                auto newData = context.ir->CreateCall(realloc, { dataCasted, allocSize });
+                auto newDataCasted = context.ir->CreatePointerCast(newData, dataPtrRealType);
+
+                context.ir->CreateStore(newDataCasted, dataPtr);
+                context.ir->CreateStore(llvmSize, sizePtr);
+                context.ir->CreateStore(llvmSize, capacityPtr);
+            }
+
+            return builder::Result {
+                builder::Result::FlagTemporary,
+                nullptr,
+                utils::PrimitiveTypename { utils::PrimitiveType::Nothing },
+                nullptr,
+            };
         }
 
         Maybe<builder::Result> reserve(const Context &context, const Parameters &parameters) {
-            throw;
+            auto input = ops::matching::flatten(parameters);
+
+            // name/size check
+            if (!(input.size() == 2
+                    && named(input[0].first, "array")
+                    && named(input[1].first, "size")))
+                return std::nullopt;
+
+            auto &value = input[0].second;
+            auto &second = input[1].second;
+
+            auto subtype = ops::findReal(value.type);
+
+            auto array = std::get_if<utils::ArrayTypename>(subtype);
+            if (!(array && array->kind == utils::ArrayKind::VariableSize))
+                return std::nullopt;
+
+            auto arrayResult = ops::makeReal(context, value);
+
+            auto ulongTypename = utils::PrimitiveTypename { utils::PrimitiveType::ULong };
+
+            auto converted = ops::makeConvert(context, second, ulongTypename);
+            if (!converted)
+                die("Size parameter must be converted to ulong.");
+
+            auto &size = *converted;
+
+            if (context.ir) {
+                auto realloc = context.builder.getRealloc();
+
+                auto ptr = ops::ref(context, arrayResult);
+
+                auto sizePtr = context.ir->CreateStructGEP(ptr, 0); // 0 is size
+                auto capacityPtr = context.ir->CreateStructGEP(ptr, 1); // 1 is capacity
+                auto dataPtr = context.ir->CreateStructGEP(ptr, 2); // 2 is data
+
+                assert(dataPtr->getType()->isPointerTy());
+
+                auto dataPtrType = llvm::Type::getInt8PtrTy(context.builder.context);
+                auto dataPtrRealType = dataPtr->getType()->getPointerElementType();
+
+                assert(dataPtrRealType->isPointerTy());
+
+                auto dataElementType = dataPtrRealType->getPointerElementType();
+
+                auto dataSize = context.builder.file.manager.target.layout->getTypeAllocSize(dataElementType);
+                auto constantSize = llvm::ConstantInt::get(llvm::Type::getInt64Ty(context.builder.context), dataSize);
+
+                auto dataCasted = context.ir->CreatePointerCast(context.ir->CreateLoad(dataPtr), dataPtrType);
+
+                auto llvmSize = ops::get(context, size);
+                auto llvmExistingSize = context.ir->CreateLoad(sizePtr);
+
+                // don't under allocate the elements in our array
+                // IDK if it works like that but at least be safe
+                auto maximum = context.ir->CreateMaximum(llvmSize, llvmExistingSize);
+
+                auto allocSize = context.ir->CreateMul(maximum, constantSize);
+
+                auto newData = context.ir->CreateCall(realloc, { dataCasted, allocSize });
+                auto newDataCasted = context.ir->CreatePointerCast(newData, dataPtrRealType);
+
+                context.ir->CreateStore(newDataCasted, dataPtr);
+                context.ir->CreateStore(maximum, capacityPtr);
+            }
+
+            return builder::Result {
+                builder::Result::FlagTemporary,
+                nullptr,
+                utils::PrimitiveTypename { utils::PrimitiveType::Nothing },
+                nullptr,
+            };
+        }
+
+        Maybe<builder::Result> add(const Context &context, const Parameters &parameters) {
+            auto input = ops::matching::flatten(parameters);
+
+            // name/size check
+            if (!(input.size() == 2
+                    && named(input[0].first, "array")
+                    && named(input[1].first, "value")))
+                return std::nullopt;
+
+            auto &value = input[0].second;
+            auto &second = input[1].second;
+
+            auto subtype = ops::findReal(value.type);
+
+            auto array = std::get_if<utils::ArrayTypename>(subtype);
+            if (!(array && array->kind == utils::ArrayKind::VariableSize))
+                return std::nullopt;
+
+            auto arrayResult = ops::makeReal(context, value);
+
+            auto converted = ops::makeConvert(context, second, *array->value);
+            if (!converted)
+                die("Value parameter must be converted to {}.", toString(*array->value));
+
+            auto &toInsert = *converted;
+
+            if (context.ir) {
+                auto realloc = context.builder.getRealloc();
+
+                auto ptr = ops::ref(context, arrayResult);
+
+                auto sizePtr = context.ir->CreateStructGEP(ptr, 0); // 0 is size
+                auto capacityPtr = context.ir->CreateStructGEP(ptr, 1); // 1 is capacity
+                auto dataPtr = context.ir->CreateStructGEP(ptr, 2); // 2 is data
+
+                assert(dataPtr->getType()->isPointerTy());
+
+                auto dataPtrType = llvm::Type::getInt8PtrTy(context.builder.context);
+                auto dataPtrRealType = dataPtr->getType()->getPointerElementType();
+
+                assert(dataPtrRealType->isPointerTy());
+
+                auto dataElementType = dataPtrRealType->getPointerElementType();
+
+                auto dataSize = context.builder.file.manager.target.layout->getTypeAllocSize(dataElementType);
+                auto constantSize = llvm::ConstantInt::get(llvm::Type::getInt64Ty(context.builder.context), dataSize);
+
+                auto dataCasted = context.ir->CreatePointerCast(context.ir->CreateLoad(dataPtr), dataPtrType);
+
+                // should use vector resizing
+                auto one = llvm::ConstantInt::get(llvm::Type::getInt64Ty(context.builder.context), 1);
+                auto originalSize = context.ir->CreateLoad(sizePtr);
+                auto llvmSize = context.ir->CreateNUWAdd(originalSize, one);
+
+                auto allocSize = context.ir->CreateMul(llvmSize, constantSize);
+
+                auto newData = context.ir->CreateCall(realloc, { dataCasted, allocSize });
+                auto newDataCasted = context.ir->CreatePointerCast(newData, dataPtrRealType);
+
+                auto newElementPtr = context.ir->CreateGEP(newDataCasted, originalSize);
+                context.ir->CreateStore(ops::get(context, toInsert), newElementPtr);
+
+                context.ir->CreateStore(newDataCasted, dataPtr);
+                context.ir->CreateStore(llvmSize, sizePtr);
+                context.ir->CreateStore(llvmSize, capacityPtr); // TODO: vector doubling allocation
+            }
+
+            return builder::Result {
+                builder::Result::FlagTemporary,
+                nullptr,
+                utils::PrimitiveTypename { utils::PrimitiveType::Nothing },
+                nullptr,
+            };
+        }
+
+        Maybe<builder::Result> clear(const Context &context, const Parameters &parameters) {
+            auto input = ops::matching::flatten(parameters);
+
+            // name/size check
+            if (!(input.size() == 1 && named(input[0].first, "array")))
+                return std::nullopt;
+
+            auto &value = input[0].second;
+
+            auto subtype = ops::findReal(value.type);
+
+            auto array = std::get_if<utils::ArrayTypename>(subtype);
+            if (!(array && array->kind == utils::ArrayKind::VariableSize))
+                return std::nullopt;
+
+            auto real = makeReal(context, value);
+            assert(std::holds_alternative<utils::ArrayTypename>(real.type));
+
+            if (context.ir) {
+                auto free = context.builder.getFree();
+
+                auto ptr = ops::ref(context, real);
+
+                auto sizePtr = context.ir->CreateStructGEP(ptr, 0); // 0 is size
+                auto capacityPtr = context.ir->CreateStructGEP(ptr, 1); // 1 is capacity
+                auto dataPtr = context.ir->CreateStructGEP(ptr, 2); // 2 is data
+
+                assert(dataPtr->getType()->isPointerTy());
+
+                auto llvmSizeType = llvm::Type::getInt64Ty(context.builder.context);
+                auto llvmDataType = dataPtr->getType()->getPointerElementType();
+
+                auto llvmFreeDataType = llvm::Type::getInt8PtrTy(context.builder.context);
+                auto llvmFreePointer = context.ir->CreateLoad(dataPtr);
+                auto llvmFreeParameter = context.ir->CreatePointerCast(llvmFreePointer, llvmFreeDataType);
+
+                context.ir->CreateCall(free, { llvmFreeParameter });
+
+                assert(llvmDataType->isPointerTy());
+
+                auto pointerType = reinterpret_cast<llvm::PointerType *>(llvmDataType);
+
+                auto llvmZero = llvm::ConstantInt::get(llvmSizeType, 0);
+                auto llvmNull = llvm::ConstantPointerNull::get(pointerType);
+
+                context.ir->CreateStore(llvmZero, sizePtr);
+                context.ir->CreateStore(llvmZero, capacityPtr);
+                context.ir->CreateStore(llvmNull, dataPtr);
+            }
+
+            return builder::Result {
+                builder::Result::FlagTemporary,
+                nullptr,
+                utils::PrimitiveTypename { utils::PrimitiveType::Nothing },
+                nullptr,
+            };
+        }
+
+
+        Maybe<builder::Result> variable(const Context &context, const Parameters &parameters) {
+            auto input = ops::matching::flatten(parameters);
+
+            // name/size check
+            if (!(input.size() == 1 && named(input[0].first, "array")))
+                return std::nullopt;
+
+            auto &value = input[0].second;
+
+            assert(value.isSet(builder::Result::FlagTemporary)); // sanity check
+
+            auto reference = std::get_if<utils::ReferenceTypename>(&value.type);
+            if (!(reference && reference->kind == utils::ReferenceKind::Unique))
+                return std::nullopt;
+
+            auto array = std::get_if<utils::ArrayTypename>(&*reference->value);
+            if (!(array && array->kind == utils::ArrayKind::UnboundedSized))
+                return std::nullopt;
+
+            throw; // too lazy
         }
     }
 

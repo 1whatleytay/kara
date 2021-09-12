@@ -140,5 +140,6 @@ namespace kara::builder::ops::handlers {
 
     bool makeDestroyReference(const Context &context, llvm::Value *ptr, const utils::Typename &type); // block it
     bool makeDestroyUnique(const Context &context, llvm::Value *ptr, const utils::Typename &type);
-    bool makeDestroyGlobal(const Context &context, llvm::Value *ptr, const utils::Typename &type);
+    bool makeDestroyVariableArray(const Context &context, llvm::Value *ptr, const utils::Typename &type);
+    bool makeDestroyRegular(const Context &context, llvm::Value *ptr, const utils::Typename &type);
 }

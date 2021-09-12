@@ -71,9 +71,11 @@ Until `1.0`.
  - [x] Statements, `return`/`break`/`continue`
  - [x] Control `if`/`for`
  - [ ] VLA for Unbounded Sized Arrays `let x [T:expr]`
+ - [ ] Copy Suggestion References for Unknown Lifetimes (`&copy T` or `&temp T`)
  - [ ] Match Statement `match x { 1 => value1, 2 => value2 }`
  - [ ] Match Statement Fallback on `operator==`
  - [ ] Match Statement for Unpacking of Variant or Bubbling Optionals
+ - [ ] Undefined Special Value `let x int = undef`
  - [x] Universal Function Call Syntax, `f(x, y)` = `x.f(y)`
  - [x] Implicit `()` on Expressions, `f()` = `f`
  - [x] Implicit Referencing (in place of error) `&expr`

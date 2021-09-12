@@ -223,7 +223,39 @@ namespace kara::builder::ops::handlers {
         return true;
     }
 
-    bool makeDestroyGlobal(const Context &context, llvm::Value *ptr, const utils::Typename &type) {
+    bool makeDestroyVariableArray(const Context &context, llvm::Value *ptr, const utils::Typename &type) {
+        auto baseType = ops::findReal(type);
+
+        auto array = std::get_if<utils::ArrayTypename>(baseType);
+
+        if (!(array && array->kind == utils::ArrayKind::VariableSize))
+            return false;
+
+        // i regret assembling this a bit
+        builder::Result decoy {
+            builder::Result::FlagReference | builder::Result::FlagMutable, // ???
+            ptr,
+            type,
+            nullptr,
+        };
+
+        auto arrayResult = ops::makeReal(context, decoy);
+
+        auto free = context.builder.getFree();
+        auto dataType = llvm::Type::getInt8PtrTy(context.builder.context);
+
+        auto dataPtr = context.ir->CreateStructGEP(ops::ref(context, arrayResult), 2); // 2 is data
+        auto dataPtrCasted = context.ir->CreatePointerCast(context.ir->CreateLoad(dataPtr), dataType);
+
+        context.ir->CreateCall(free, { dataPtrCasted });
+
+        // TODO: this is scary but make destroy has to loop over the elements in the array...
+        //  ... and call ops::makeDestroy for each
+
+        return true;
+    }
+
+    bool makeDestroyRegular(const Context &context, llvm::Value *ptr, const utils::Typename &type) {
         // Try to call destroy invocables... call will throw if options are empty
         if (!context.builder.destroyInvocables.empty()) {
             // attempt to avoid this construction forces me to create it here

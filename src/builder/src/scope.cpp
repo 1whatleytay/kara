@@ -151,7 +151,19 @@ namespace kara::builder {
 //                        &accumulator, // safe to put, is reference dw
 //                    };
 
-                    ops::makeDestroy(context, var->value, var->type);
+                    llvm::IRBuilder<> exitBuilder(exitChainBegin, exitChainBegin->begin());
+
+                    ops::Context exitContext {
+                        builder,
+                        nullptr,
+
+                        &exitBuilder,
+
+                        cache,
+                        &function,
+                    };
+
+                    ops::makeDestroy(exitContext, var->value, var->type);
 
                     cache->variables[child->as<parser::Variable>()] = std::move(var);
 
