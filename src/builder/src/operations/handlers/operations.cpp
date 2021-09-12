@@ -376,6 +376,82 @@ namespace kara::builder::ops::handlers {
         };
     }
 
+
+    Maybe<builder::Result> makeConvertUniqueToVariableArray(
+        const Context &context, const builder::Result &result, const utils::Typename &type, bool force) {
+        auto reference = std::get_if<utils::ReferenceTypename>(&result.type);
+        if (!(reference && reference->kind == utils::ReferenceKind::Unique))
+            return std::nullopt;
+
+        auto array = std::get_if<utils::ArrayTypename>(&*reference->value);
+        auto arrayIsUsable = [&]() {
+            return array->kind == utils::ArrayKind::UnboundedSized || array->kind == utils::ArrayKind::FixedSize;
+        };
+        if (!(array && arrayIsUsable()))
+            return std::nullopt;
+
+        utils::ArrayTypename resultType {
+            utils::ArrayKind::VariableSize,
+            array->value,
+        };
+
+        auto value = ops::makePass(context, result); // :flushed:
+        assert(value.isSet(builder::Result::FlagTemporary));
+
+        auto llvmValue = ops::makeAlloca(context, resultType);
+
+        if (context.ir) {
+            auto sizePtr = context.ir->CreateStructGEP(llvmValue, 0); // 0 is size
+            auto capacityPtr = context.ir->CreateStructGEP(llvmValue, 1); // 1 is capacity
+            auto dataPtr = context.ir->CreateStructGEP(llvmValue, 2); // 2 is data
+
+            assert(context.cache);
+
+            llvm::Value *size;
+            llvm::Value *parameter;
+
+            switch (array->kind) {
+            case utils::ArrayKind::FixedSize: {
+                auto sizeType = llvm::Type::getInt64Ty(context.builder.context);
+
+                auto zero = llvm::ConstantInt::get(sizeType, 0);
+
+                size = llvm::ConstantInt::get(sizeType, array->size);
+                parameter = context.ir->CreateGEP(ops::get(context, value), { zero, zero });
+                break;
+            }
+
+            case utils::ArrayKind::UnboundedSized: {
+                assert(array->expression);
+
+                auto cached = context.cache->find(&Cache::expressions, array->expression);
+                if (!cached)
+                    die("Cached expression is not computed.");
+
+                size = ops::get(context, *cached);
+                parameter = ops::get(context, value);
+
+                break;
+            }
+
+            default:
+                throw;
+            }
+
+            // it shouldn't delete the unique ptr cuz makePass I dont think
+            context.ir->CreateStore(size, sizePtr);
+            context.ir->CreateStore(size, capacityPtr);
+            context.ir->CreateStore(parameter, dataPtr);
+        }
+
+        return builder::Result {
+            builder::Result::FlagTemporary | builder::Result::FlagReference,
+            llvmValue,
+            resultType,
+            nullptr,
+        };
+    }
+
     Maybe<builder::Result> makeConvertRefToAnyRef(
         const Context &context, const builder::Result &result, const utils::Typename &type, bool) {
         auto typeRef = asRefTo(type, from(utils::PrimitiveType::Any));

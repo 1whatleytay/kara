@@ -157,8 +157,14 @@ namespace kara::builder::ops::matching {
         }
 
         if (picks.empty()) {
+            auto copy = input;
+
+            // please...
+            for (auto &parameter : copy.parameters)
+                parameter = ops::makePass(context, parameter);
+
             for (const auto &builtin : builtins) {
-                auto r = builtin(context, input);
+                auto r = builtin(context, copy);
 
                 // might want to be more specific as to why any errors are happening :flushed:
                 if (r)
@@ -227,6 +233,9 @@ namespace kara::builder::ops::matching {
         }
 
         auto [pick, match] = *picks.front();
+
+        for (auto &parameter : match.map)
+            parameter = ops::makePass(context, parameter);
 
         switch (pick->is<parser::Kind>()) {
         case parser::Kind::Function: {

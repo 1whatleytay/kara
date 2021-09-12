@@ -66,6 +66,8 @@ namespace kara::builder::ops::handlers {
         const Context &context, const builder::Result &result, const utils::Typename &type, bool force);
     Maybe<builder::Result> makeConvertUniqueOrMutableToRef(
         const Context &context, const builder::Result &result, const utils::Typename &type, bool force);
+    Maybe<builder::Result> makeConvertUniqueToVariableArray(
+        const Context &context, const builder::Result &result, const utils::Typename &type, bool force);
     Maybe<builder::Result> makeConvertRefToAnyRef(
         const Context &context, const builder::Result &result, const utils::Typename &type, bool force);
     Maybe<builder::Result> makeConvertRefToUnboundedRef(

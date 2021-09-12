@@ -279,7 +279,7 @@ namespace kara::builder {
         llvm::Function *getFree();
         llvm::Function *getRealloc();
 
-        const hermes::Node *find(const parser::Reference *node);
+//        const hermes::Node *find(const parser::Reference *node);
         std::vector<const hermes::Node *> findAll(const parser::Reference *node);
 
         using SearchChecker = std::function<bool(const hermes::Node *)>;

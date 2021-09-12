@@ -1,7 +1,7 @@
-value(a bool) => a ? 1 : 0
-
 main int {
-    var a = *[int:50].variable
+    let z = 77
+
+    var a [int] = *[int:z]
 
     return a.size
 }

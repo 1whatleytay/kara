@@ -271,6 +271,7 @@ namespace kara::builder::ops {
                 handlers::makeConvertForcedULongToRef,
                 handlers::makeConvertForcedRefToULong,
                 handlers::makeConvertUniqueOrMutableToRef,
+                handlers::makeConvertUniqueToVariableArray,
                 handlers::makeConvertRefToAnyRef,
                 handlers::makeConvertRefToUnboundedRef,
                 handlers::makeConvertFixedRefToUnboundedRef,

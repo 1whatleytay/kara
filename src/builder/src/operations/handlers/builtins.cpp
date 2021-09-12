@@ -411,7 +411,7 @@ namespace kara::builder::ops::handlers::builtins {
         }
 
 
-        Maybe<builder::Result> variable(const Context &context, const Parameters &parameters) {
+        Maybe<builder::Result> list(const Context &context, const Parameters &parameters) {
             auto input = ops::matching::flatten(parameters);
 
             // name/size check
@@ -427,10 +427,69 @@ namespace kara::builder::ops::handlers::builtins {
                 return std::nullopt;
 
             auto array = std::get_if<utils::ArrayTypename>(&*reference->value);
-            if (!(array && array->kind == utils::ArrayKind::UnboundedSized))
+            auto arrayIsUsable = [&]() {
+                return array->kind == utils::ArrayKind::UnboundedSized || array->kind == utils::ArrayKind::FixedSize;
+            };
+            if (!(array && arrayIsUsable()))
                 return std::nullopt;
 
-            throw; // too lazy
+            utils::ArrayTypename resultType {
+                utils::ArrayKind::VariableSize,
+                array->value,
+            };
+
+            auto llvmValue = ops::makeAlloca(context, resultType);
+
+            if (context.ir) {
+                auto sizePtr = context.ir->CreateStructGEP(llvmValue, 0); // 0 is size
+                auto capacityPtr = context.ir->CreateStructGEP(llvmValue, 1); // 1 is capacity
+                auto dataPtr = context.ir->CreateStructGEP(llvmValue, 2); // 2 is data
+
+                assert(context.cache);
+
+                llvm::Value *size;
+                llvm::Value *parameter;
+
+                switch (array->kind) {
+                case utils::ArrayKind::FixedSize: {
+                    auto sizeType = llvm::Type::getInt64Ty(context.builder.context);
+
+                    auto zero = llvm::ConstantInt::get(sizeType, 0);
+
+                    size = llvm::ConstantInt::get(sizeType, array->size);
+                    parameter = context.ir->CreateGEP(ops::get(context, value), { zero, zero });
+                    break;
+                }
+
+                case utils::ArrayKind::UnboundedSized: {
+                    assert(array->expression);
+
+                    auto cached = context.cache->find(&Cache::expressions, array->expression);
+                    if (!cached)
+                        die("Cached expression is not computed.");
+
+                    size = ops::get(context, *cached);
+                    parameter = ops::get(context, value);
+
+                    break;
+                }
+
+                default:
+                    throw;
+                }
+
+                // it shouldn't delete the unique ptr cuz makePass I dont think
+                context.ir->CreateStore(size, sizePtr);
+                context.ir->CreateStore(size, capacityPtr);
+                context.ir->CreateStore(parameter, dataPtr);
+            }
+
+            return builder::Result {
+                builder::Result::FlagTemporary | builder::Result::FlagReference,
+                llvmValue,
+                resultType,
+                nullptr,
+            };
         }
     }
 

@@ -38,7 +38,7 @@ Until `1.0`.
  - [x] References `&T`
  - [x] Unique Pointers `*T`
  - [ ] Shared Pointers `*shared T`
- - [ ] Dynamic Arrays `[T]`
+ - [x] Dynamic Arrays `[T]`
  - [ ] Hybrid Arrays (sso) `[T,50]`
  - [x] Fixed Size Arrays `[T:50]`
  - [x] Unbounded Sized Arrays `[T:expr]`
