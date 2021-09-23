@@ -4,6 +4,7 @@
 #include <builder/manager.h>
 #include <builder/operations.h>
 
+#include <parser/scope.h>
 #include <parser/assign.h>
 #include <parser/function.h>
 #include <parser/operator.h>
@@ -31,12 +32,30 @@ namespace kara::builder {
 
             body = responsible ? e->body() : nullptr;
             // Check for inferred type from expression node maybe?
-            if (body && body->is(parser::Kind::Expression) && !e->hasFixedType
+            if (body
+                && body->is(parser::Kind::Expression)
+                && !e->hasFixedType
                 && returnTypename == from(utils::PrimitiveType::Nothing)) {
 
-                builder::Scope productScope(body, *this, false);
+                auto astFunction = node->as<parser::Function>();
+                auto parameters = astFunction->parameters();
 
-                returnTypename = productScope.product.value().type;
+                // this might be bad?
+                Cache tempCache;
+
+                ops::Context tempContext = { builder };
+                tempContext.function = this;
+                tempContext.cache = &tempCache;
+
+                for (auto parameter : parameters) {
+                    tempCache.variables.insert({
+                        parameter,
+                        std::make_unique<builder::Variable>(parameter, tempContext, nullptr),
+                    });
+                }
+
+                auto returnValue = ops::expression::make(tempContext, body->as<parser::Expression>());
+                returnTypename = returnValue.type;
             }
 
             returnType = builder.makeTypename(returnTypename);
@@ -100,39 +119,164 @@ namespace kara::builder {
             entry.SetInsertPoint(entryBlock);
             exit.SetInsertPoint(exitBlock);
 
+            if (node->is(parser::Kind::Function)) {
+                ops::Context entryContext {
+                    builder,
+                    nullptr,
+
+                    &entry,
+
+                    &cache,
+                    this,
+
+                    nullptr,
+                };
+
+                auto astFunction = node->as<parser::Function>();
+                auto parameters = astFunction->parameters();
+
+                // Create parameters within scope.
+                for (size_t a = 0; a < parameters.size(); a++) {
+                    const auto *parameterNode = parameters[a];
+
+                    llvm::Argument *argument = function->getArg(a);
+                    argument->setName(parameterNode->name);
+
+                    cache.variables[parameterNode]
+                        = std::make_unique<builder::Variable>(parameterNode, entryContext, argument);
+                }
+            }
+
             if (returnTypename != from(utils::PrimitiveType::Nothing))
                 returnValue = entry.CreateAlloca(returnType, nullptr, "result");
 
-            builder::Scope scope(body, *this);
+            switch (body->is<parser::Kind>()) {
+            case parser::Kind::Expression: {
+                auto bodyBlock = llvm::BasicBlock::Create(builder.context, "", function, exitBlock);
+                llvm::IRBuilder<> bodyBuilder(bodyBlock);
 
-            if (body->is(parser::Kind::Expression)) {
-                if (!scope.product.has_value())
-                    throw VerifyError(body, "Missing product for expression type function.");
+                ops::Context bodyContext {
+                    builder,
+                    nullptr, // accumulator is null?
 
-                builder::Result result = scope.product.value();
+                    &bodyBuilder,
 
-                auto context = ops::Context::from(scope);
+                    &cache, this,
 
-                std::optional<builder::Result> resultConverted = ops::makeConvert(context, result, *type.returnType);
+                    nullptr, // exit info might need to be added later for ?? but right now we give resp. to makeScope
+                };
 
-                if (!resultConverted.has_value()) {
+                auto result = ops::expression::make(bodyContext, body->as<parser::Expression>());
+
+                auto resultConverted = ops::makeConvert(bodyContext, result, *type.returnType);
+
+                if (!resultConverted) {
                     throw VerifyError(body, "Method returns type {} but expression is of type {}.",
                         toString(*type.returnType), toString(result.type));
                 }
 
-                result = resultConverted.value();
+                bodyBuilder.CreateStore(ops::get(bodyContext, *resultConverted), returnValue);
 
-                scope.current.value().CreateStore(ops::get(context, result), returnValue);
+                entry.CreateBr(bodyBlock);
+                bodyBuilder.CreateBr(exitBlock);
+
+                break;
             }
 
-            entry.CreateBr(scope.openingBlock);
+            case parser::Kind::Code: {
+                ops::Context bodyContext {
+                    builder,
+                    nullptr, // accumulator is null?
 
-            if (body->is(parser::Kind::Code)) {
-                scope.destinations[Scope::ExitPoint::Regular] = exitBlock;
-                scope.destinations[Scope::ExitPoint::Return] = exitBlock;
-                scope.commit();
-            } else {
-                scope.current->CreateBr(exitBlock);
+                    &entry,
+
+                    &cache,
+                    this,
+
+                    nullptr, // exit info might need to be added later for ?? but right now we give resp. to makeScope
+                };
+
+                auto scope = ops::statements::makeScope(
+                    bodyContext,
+                    body->as<parser::Code>(),
+                    {
+                        { ExitPoint::Regular, exitBlock },
+                        { ExitPoint::Return, exitBlock },
+                    });
+
+                entry.CreateBr(scope);
+
+                break;
+            }
+
+            case parser::Kind::Type: { // create destructor for elements
+                assert(purpose == builder::Function::Purpose::TypeDestructor); // no mistakes
+
+                auto e = node->as<parser::Type>();
+
+                if (e->isAlias)
+                    return;
+
+                auto targetType = builder.makeType(e);
+                auto fields = e->fields();
+
+                assert(function->arg_size() > 0);
+
+                llvm::Argument *arg = function->getArg(0);
+
+                { // sanity checks
+                    auto underlyingType = arg->getType();
+                    assert(underlyingType->isPointerTy());
+
+                    auto elementType = underlyingType->getPointerElementType();
+                    assert(elementType == targetType->type);
+                }
+
+                auto bodyBlock = llvm::BasicBlock::Create(
+                    builder.context, "", function, entryBlock->getNextNode());
+
+                llvm::IRBuilder<> bodyBuilder(bodyBlock);
+
+                ops::Context bodyContext {
+                    builder,
+                    nullptr,
+
+                    &bodyBuilder,
+
+                    nullptr,
+                    this,
+
+                    nullptr
+                };
+
+                for (auto it = fields.rbegin(); it != fields.rend(); ++it) {
+                    auto var = *it;
+                    auto index = targetType->indices.at(var);
+
+                    assert(var->hasFixedType);
+
+                    // // TODO might need mutable/immutable versions of implicit destructors
+                    // auto result = builder::Result {
+                    //     builder::Result::FlagReference,
+                    //     current->CreateStructGEP(arg, index),
+                    //     builder.resolveTypename(var->fixedType()),
+                    //     &accumulator, // might as well
+                    // };
+
+                    ops::makeDestroy(
+                        bodyContext,
+                        bodyBuilder.CreateStructGEP(arg, index),
+                        builder.resolveTypename(var->fixedType()));
+                }
+
+                entry.CreateBr(bodyBlock);
+                bodyBuilder.CreateBr(exitBlock);
+
+                break;
+            }
+
+            default:
+                throw;
             }
 
             if (returnTypename == from(utils::PrimitiveType::Nothing))

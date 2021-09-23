@@ -55,7 +55,7 @@ Until `1.0`.
  - [ ] Function Pointers `fun ptr (T1, T2, T3) ReturnType`
  - [ ] Function Type + Captures `fun (T1, T2, T3) Return Type`
  - [ ] Ranges `(1..<3)`
- - [ ] Named Tuples `+(a TypeA, b TypeB)`
+ - [ ] Named Tuples `type { a TypeA, b TypeB }`
 
 ### Functions
  - [x] `=>` For Implicit Return

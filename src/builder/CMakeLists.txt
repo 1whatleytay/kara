@@ -12,21 +12,17 @@ add_library(builder STATIC
     src/function.cpp
     src/typename.cpp
     src/variable.cpp
-    src/assign.cpp
     src/reference.cpp
     src/result.cpp
     src/destroy.cpp
-    src/statement.cpp
-    src/scope.cpp
     src/type.cpp
-    src/block.cpp
-	src/operations/call.cpp
+    src/operations/call.cpp
 	src/operations/utilities.cpp
 	src/operations/operations.cpp
 	src/operations/expression.cpp
 	src/operations/handlers/expression.cpp
 	src/operations/handlers/operations.cpp
-	src/operations/handlers/builtins.cpp)
+	src/operations/handlers/builtins.cpp src/operations/statements.cpp)
 
 target_include_directories(builder PUBLIC include)
 target_link_libraries(builder PUBLIC parser options llvm rapidjson interfaces)

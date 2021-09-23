@@ -9,9 +9,9 @@
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
 
-#include <optional>
-#include <queue>
 #include <set>
+#include <queue>
+#include <optional>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -45,7 +45,7 @@ namespace kara::builder {
 
     struct Builder;
 
-    struct Scope;
+//    struct Scope;
     struct Result;
     struct Function;
     struct Accumulator;
@@ -119,15 +119,18 @@ namespace kara::builder {
 
         llvm::Value *value = nullptr;
 
-        Variable(const parser::Variable *node, builder::Builder &builder); // global variable
-        Variable(const parser::Variable *node, builder::Scope &scope); // regular variable
-        Variable(const parser::Variable *node, llvm::Value *input, Scope &scope); // function parameter
+        // global variable
+        Variable(const parser::Variable *node, builder::Builder &builder);
+        // regular variable
+        Variable(const parser::Variable *node, const ops::Context &context);
+        // function parameter
+        Variable(const parser::Variable *node, const ops::Context &context, llvm::Argument *argument);
     };
 
     struct Cache {
         builder::Cache *parent = nullptr;
 
-        std::vector<std::unique_ptr<builder::Cache>> children;
+        std::vector<std::unique_ptr<builder::Cache>> children; // probably don't need this in favor of in place caches
 
         builder::Cache *create();
 
@@ -158,49 +161,40 @@ namespace kara::builder {
         }
     };
 
-    struct Scope {
-        builder::Builder &builder;
-        builder::Scope *parent = nullptr;
-        builder::Function *function = nullptr;
+    enum class ExitPoint { Regular, Return, Break, Continue };
 
-        Accumulator accumulator;
-        builder::Cache *cache = nullptr;
-
-        llvm::BasicBlock *openingBlock = nullptr;
-        llvm::BasicBlock *currentBlock = nullptr;
-
-        llvm::BasicBlock *lastBlock = nullptr;
-
-        llvm::Value *exitChainType = nullptr;
-        llvm::BasicBlock *exitChainBegin = nullptr;
-
-        enum class ExitPoint { Regular, Return, Break, Continue };
-
-        std::set<ExitPoint> requiredPoints = { ExitPoint::Regular };
-        std::unordered_map<ExitPoint, llvm::BasicBlock *> destinations;
-
-        void commit();
-        void exit(ExitPoint point, llvm::BasicBlock *from = nullptr);
-
-        std::optional<llvm::IRBuilder<>> current;
+//    struct Scope {
+//        builder::Builder &builder;
+//        builder::Scope *parent = nullptr; // ?
+//        builder::Function *function = nullptr;
+//
+//        Accumulator accumulator; // x
+//        builder::Cache *cache = nullptr; // x
+//
+//        llvm::BasicBlock *openingBlock = nullptr; // x
+//        llvm::BasicBlock *currentBlock = nullptr; // x
+//
+//        llvm::BasicBlock *lastBlock = nullptr; // ?
+//
+//        llvm::Value *exitChainType = nullptr; // x
+//        llvm::BasicBlock *exitChainBegin = nullptr; // x
+//
+////        std::unordered_set<ExitPoint> requiredPoints = { ExitPoint::Regular };
+//        std::unordered_map<ExitPoint, llvm::BasicBlock *> destinations;
+//
+//        std::optional<llvm::IRBuilder<>> current;
 
         // For ExpressionNode scopes, product is stored here
-        std::optional<Result> product;
+//        std::optional<Result> product;
 
-        void makeIf(const parser::If *node);
-        void makeFor(const parser::For *node);
-        void makeBlock(const parser::Block *node);
-        void makeAssign(const parser::Assign *node);
-        void makeStatement(const parser::Statement *node);
-
-        Scope(const hermes::Node *node, Scope &parent, bool doCodeGen = true);
-        Scope(const hermes::Node *node, Function &function, bool doCodeGen = true);
-
-    private:
-        void makeParameters();
-
-        Scope(const hermes::Node *node, Function &function, Scope *parent, bool doCodeGen = true);
-    };
+//        Scope(const hermes::Node *node, Scope &parent, bool doCodeGen = true);
+//        Scope(const hermes::Node *node, Function &function, bool doCodeGen = true);
+//
+//    private:
+//        void makeParameters();
+//
+//        Scope(const hermes::Node *node, Function &function, Scope *parent, bool doCodeGen = true);
+//    };
 
     struct Type {
         builder::Builder &builder;

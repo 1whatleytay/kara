@@ -64,23 +64,19 @@ namespace kara::builder {
             node->isExternal ? L::ExternalLinkage : L::PrivateLinkage, defaultValue, node->name);
     }
 
-    Variable::Variable(const parser::Variable *node, builder::Scope &scope)
+    Variable::Variable(const parser::Variable *node, const ops::Context &context)
         : node(node) {
-        assert(scope.function);
-
-        builder::Function &function = *scope.function;
+        assert(context.function);
 
         assert(node->hasFixedType || node->value());
 
         std::optional<builder::Result> possibleDefault;
 
-        auto context = ops::Context::from(scope);
-
         if (node->hasInitialValue) {
             builder::Result result = ops::expression::make(context, node->value());
 
             if (node->hasFixedType) {
-                auto fixedType = function.builder.resolveTypename(node->fixedType());
+                auto fixedType = context.function->builder.resolveTypename(node->fixedType());
 
                 std::optional<builder::Result> resultConverted = ops::makeConvert(context, result, fixedType);
 
@@ -97,37 +93,34 @@ namespace kara::builder {
             type = result.type;
             possibleDefault = result; // copy :|
         } else {
-            type = function.builder.resolveTypename(node->fixedType());
+            type = context.function->builder.resolveTypename(node->fixedType());
         }
 
-        if (scope.current) {
+        if (context.ir) {
             value = ops::makeAlloca(context, type, node->name);
 
             if (possibleDefault)
-                scope.current->CreateStore(ops::get(context, *possibleDefault), value);
+                context.ir->CreateStore(ops::get(context, *possibleDefault), value);
             else
                 ops::makeInitialize(context, value, type);
         }
     }
 
-    Variable::Variable(const parser::Variable *node, llvm::Value *input, builder::Scope &scope)
+    Variable::Variable(const parser::Variable *node, const ops::Context &context, llvm::Argument *argument)
         : node(node) {
-        assert(scope.function);
-
-        builder::Function &function = *scope.function;
-
-        auto context = ops::Context::from(scope);
+        assert(context.function);
 
         if (!node->hasFixedType || node->value())
             throw VerifyError(node,
                 "A function parameter must have fixed type and no "
                 "default value, unimplemented.");
 
-        type = function.builder.resolveTypename(node->fixedType());
+        type = context.builder.resolveTypename(node->fixedType());
 
-        if (scope.current) {
+        // THIS IS BAD, its probably going to generate in scope, function needs to create IRBuilder for entry?
+        if (context.ir) {
             value = ops::makeAlloca(context, type, fmt::format("{}_value", node->name));
-            function.entry.CreateStore(input, value);
+            context.function->entry.CreateStore(argument, value);
         }
     }
 }

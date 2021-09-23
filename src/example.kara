@@ -1,7 +1,18 @@
+import (c) 'stdio.h'
+
+type Z { b int }
+
+type X {
+  z Z
+}
+
+destroy(z &Z) {
+    'what'.puts
+}
+
 main int {
-    let z = 77
+    var x = X(z: Z(b: 4))
+    x.z.b = 5
 
-    var a [int] = *[int:z]
-
-    return a.size
+    return x.z.b
 }

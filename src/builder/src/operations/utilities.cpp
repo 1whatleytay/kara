@@ -7,15 +7,33 @@
 #include <parser/variable.h>
 
 namespace kara::builder::ops {
-    Context Context::from(builder::Scope &scope) {
-        return {
-            scope.builder,
-            &scope.accumulator,
-            scope.current ? &*scope.current : nullptr,
-            scope.cache,
-            scope.function,
-        };
+    Context Context::noIR() const {
+        return move(nullptr);
     }
+
+    Context Context::move(llvm::IRBuilder<> *ir) const {
+        Context context = *this;
+
+        context.ir = ir;
+
+        return context;
+    }
+
+//    Context Context::from(builder::Scope &scope) {
+//        return {
+//            scope.builder,
+//            &scope.accumulator,
+//            scope.current ? &*scope.current : nullptr,
+//            scope.cache,
+//            scope.function,
+//            ExitInfo {
+//                scope.lastBlock, // :| should probably be initial value of exitChainBegin
+//                scope.exitChainBegin,
+//                scope.exitChainType,
+//                scope.requiredPoints,
+//            }
+//        };
+//    }
 
     llvm::Value *get(const Context &context, const builder::Result &result) {
         if (result.isSet(builder::Result::FlagReference))
@@ -138,7 +156,9 @@ namespace kara::builder::ops {
     builder::Result makePass(const Context &context, const Result &result) {
         auto reference = std::get_if<utils::ReferenceTypename>(&result.type);
 
-        if (context.accumulator && reference && reference->kind != utils::ReferenceKind::Regular) {
+        auto isRegularReference = reference && reference->kind == utils::ReferenceKind::Regular;
+
+        if (context.accumulator && !isRegularReference) {
             context.accumulator->avoidDestroy.insert(result.uid);
         }
 
@@ -253,7 +273,7 @@ namespace kara::builder::ops {
 
     std::optional<builder::Result> makeConvert(
         const Context &context, const builder::Result &value, const utils::Typename &type, bool force) {
-        auto result = handlers::bridge(
+        auto bridged = handlers::bridge(
             [&](const builder::Result &v) {
                 return handlers::resolve(
                     std::array {
@@ -281,7 +301,7 @@ namespace kara::builder::ops {
                 handlers::makeConvertFloatToInt,
                 handlers::makeConvertPrimitiveExtend,
             },
-            context, value, type, force);
+            context, bridged, type, force);
     }
 
     std::optional<std::pair<Result, Result>> makeConvertExplicit(

@@ -34,7 +34,7 @@ namespace kara::parser {
 
     const Code *If::onTrue() const { return children[1]->as<Code>(); }
 
-    const hermes::Node *If::onFalse() const { return children.size() >= 2 ? children[2].get() : nullptr; }
+    const hermes::Node *If::onFalse() const { return children.size() > 2 ? children[2].get() : nullptr; }
 
     If::If(Node *parent)
         : Node(parent, Kind::If) {

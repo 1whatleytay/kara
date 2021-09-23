@@ -254,7 +254,7 @@ namespace kara::builder::ops::handlers {
 
         auto workable = [typeRef, &result]() {
             auto toRegular = typeRef->kind == utils::ReferenceKind::Regular;
-            auto mutabilityOk = typeRef->isMutable && !result.isSet(builder::Result::FlagMutable);
+            auto mutabilityOk = !typeRef->isMutable || result.isSet(builder::Result::FlagMutable);
 
             return toRegular && mutabilityOk;
         };

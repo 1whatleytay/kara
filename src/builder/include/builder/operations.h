@@ -6,6 +6,7 @@
 #include <utils/literals.h>
 
 #include <optional>
+#include <unordered_set>
 
 namespace kara::builder::ops {
     template <typename T, typename... Args>
@@ -31,6 +32,14 @@ namespace kara::builder::ops {
         throw;
     }
 
+    struct ExitInfo {
+        llvm::BasicBlock *exitChainEnd = nullptr;
+        llvm::BasicBlock *exitChainBegin = nullptr;
+        llvm::Value *exitChainType = nullptr;
+
+//        std::unordered_set<ExitPoint> &requiredPoints;
+    };
+
     struct Context {
         builder::Builder &builder;
         builder::Accumulator *accumulator = nullptr;
@@ -40,7 +49,12 @@ namespace kara::builder::ops {
         builder::Cache *cache = nullptr;
         builder::Function *function = nullptr; // replace with entry?
 
-        static Context from(builder::Scope &scope);
+        ExitInfo *exitInfo = nullptr;
+
+        [[nodiscard]] Context noIR() const;
+        [[nodiscard]] Context move(llvm::IRBuilder<> *ir) const;
+
+//        static Context from(builder::Scope &scope);
     };
 
     llvm::Value *get(const Context &context, const builder::Result &result);
@@ -168,5 +182,20 @@ namespace kara::builder::ops {
             const MatchInput &input);
 
         builder::Result unwrap(const CallWrapped &result, const hermes::Node *node);
+    }
+
+    namespace statements {
+        void exit(const Context &context, ExitPoint point);
+
+        void makeIf(const Context &context, const parser::If *node);
+        void makeFor(const Context &context, const parser::For *node);
+        void makeBlock(const Context &context, const parser::Block *node);
+        void makeAssign(const Context &context, const parser::Assign *node);
+        void makeStatement(const Context &context, const parser::Statement *node);
+
+        using Destinations = std::unordered_map<builder::ExitPoint, llvm::BasicBlock *>;
+
+        llvm::BasicBlock *makeScope(
+            const Context &context, const parser::Code *node, const Destinations &destinations);
     }
 }
