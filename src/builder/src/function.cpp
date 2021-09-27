@@ -81,7 +81,7 @@ namespace kara::builder {
             type = { utils::FunctionTypename::Kind::Pointer, std::move(parameters),
                 std::make_shared<utils::Typename>(returnTypename) };
 
-            llvm::FunctionType *valueType = llvm::FunctionType::get(returnType, parameterTypes, false);
+            llvm::FunctionType *valueType = llvm::FunctionType::get(returnType, parameterTypes, e->isCVarArgs);
             function = llvm::Function::Create(
                 valueType, llvm::GlobalVariable::ExternalLinkage, 0, e->name, builder.module.get());
 

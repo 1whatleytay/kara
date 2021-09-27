@@ -342,6 +342,7 @@ namespace kara::interfaces::header {
         function->isExtern = true;
         function->hasFixedType = true;
         function->parameterCount = parameters.size();
+        function->isCVarArgs = decl->isVariadic();
 
         size_t id = 0;
 

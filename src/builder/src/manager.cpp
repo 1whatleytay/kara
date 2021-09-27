@@ -356,15 +356,15 @@ namespace kara::builder {
             if (jit->addIRModule(llvm::orc::ThreadSafeModule(std::move(base), std::move(context))))
                 throw std::runtime_error("Could not add module to jit instance.");
 
-            void (*print)(char *, int) = [](char *buffer, int a) {
-                char v[200];
-                snprintf(v, 200, "%d", a);
-
-                strcat(buffer, v);
-            };
-
-            auto _ = jit->getMainJITDylib().define(llvm::orc::absoluteSymbols(
-                { { jit->mangleAndIntern("catInt"), llvm::JITEvaluatedSymbol::fromPointer(print) } }));
+//            void (*print)(char *, int) = [](char *buffer, int a) {
+//                char v[200];
+//                snprintf(v, 200, "%d", a);
+//
+//                strcat(buffer, v);
+//            };
+//
+//            auto error = jit->getMainJITDylib().define(llvm::orc::absoluteSymbols(
+//                { { jit->mangleAndIntern("catInt"), llvm::JITEvaluatedSymbol::fromPointer(print) } }));
 
             for (const auto &library : libraries) {
                 for (const auto &lib : library.libraries) {

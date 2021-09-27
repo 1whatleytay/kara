@@ -17,6 +17,8 @@ namespace kara::parser {
         bool isExtern = false;
         bool hasFixedType = false;
 
+        bool isCVarArgs = false; // uh oh
+
         [[nodiscard]] std::vector<const Variable *> parameters() const;
 
         [[nodiscard]] const Node *fixedType() const;

@@ -40,6 +40,12 @@ namespace kara::builder::ops::matching {
         ops::Context context = { builder };
 
         auto tryMove = [&](size_t from, size_t to) -> bool {
+            if (input.parameters.size() <= from) {
+                result.failed = fmt::format(
+                    "Named parameters must be one of the first few parameters in a C Var Args function.");
+                return false;
+            }
+
             const parser::Variable *var = parameters[to];
             const builder::Result &value = input.parameters[from];
 
@@ -122,20 +128,48 @@ namespace kara::builder::ops::matching {
 
         using TestResult = std::tuple<const hermes::Node *, MatchResult>;
 
-        auto paramsFromNode = [](const hermes::Node *node) {
+        std::vector<TestResult> checks(options.size());
+        std::transform(options.begin(), options.end(), checks.begin(), [&](const hermes::Node *node) {
+            std::vector<const parser::Variable *> parameters;
+            MatchInput inputCopy = input; // copy sadness, want &T | *T
+
             switch (node->is<parser::Kind>()) {
-            case parser::Kind::Function:
-                return node->as<parser::Function>()->parameters();
+            case parser::Kind::Function: {
+                auto function = node->as<parser::Function>();
+                parameters = function->parameters();
+
+                if (function->isCVarArgs) {
+                    if (input.parameters.size() < parameters.size()) {
+                        auto error = fmt::format(
+                            "C Var Args function requires {} parameters, but {} provided.",
+                            parameters.size(),
+                            input.parameters.size());
+
+                        return std::make_tuple(node, MatchResult { error });
+                    }
+
+                    inputCopy.parameters.clear();
+                    inputCopy.parameters.reserve(parameters.size());
+
+                    // only copy first few parameters, to avoid checking the last few
+                    std::copy(
+                        input.parameters.begin(),
+                        input.parameters.begin() + static_cast<int64_t>(parameters.size()),
+                        std::back_inserter(inputCopy.parameters));
+                }
+
+                break;
+            }
+
             case parser::Kind::Type:
-                return node->as<parser::Type>()->fields();
+                parameters = node->as<parser::Type>()->fields();
+                break;
+
             default:
                 throw;
             }
-        };
 
-        std::vector<TestResult> checks(options.size());
-        std::transform(options.begin(), options.end(), checks.begin(), [&](const hermes::Node *o) {
-            return std::make_tuple(o, ops::matching::match(context.builder, paramsFromNode(o), input));
+            return std::make_tuple(node, ops::matching::match(context.builder, parameters, inputCopy));
         });
 
         size_t bet = SIZE_T_MAX;
@@ -212,7 +246,7 @@ namespace kara::builder::ops::matching {
             }
 
             if (!builtins.empty())
-                errors.push_back("Builtins were checked but all rejected the given parameters.");
+                errors.emplace_back("Builtins were checked but all rejected the given parameters.");
 
             return CallError {
                 "No functions match given function parameters.",
@@ -253,6 +287,15 @@ namespace kara::builder::ops::matching {
                 auto type = context.builder.resolveTypename(pickVariables[a]->fixedType());
 
                 passParameters[a] = ops::get(context, ops::makeConvert(context, match.map[a], type).value());
+            }
+
+            if (e->isCVarArgs) {
+                // TODO: C Var Args is kinda broken
+                // since last few parameters are trimmed to map(), names of call parameters might be out of bounds
+                // kinda strange but i'll take what i get... not really meant to be super supported rn anyway
+                for (size_t a = match.map.size(); a < input.parameters.size(); a++) {
+                    passParameters.push_back(ops::get(context, input.parameters[a]));
+                }
             }
 
             return builder::Result {

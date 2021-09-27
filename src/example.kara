@@ -1,18 +1,7 @@
 import (c) 'stdio.h'
 
-type Z { b int }
-
-type X {
-  z Z
-}
-
-destroy(z &Z) {
-    'what'.puts
-}
-
 main int {
-    var x = X(z: Z(b: 4))
-    x.z.b = 5
+    "Hello World %f %f\n".printf(100 as double, 200 as double),
 
-    return x.z.b
+    return 0
 }

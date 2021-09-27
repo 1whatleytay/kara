@@ -47,6 +47,10 @@ namespace kara::parser {
         if (next("external")) {
             match();
             isExtern = true;
+
+            if (next("varargs")) {
+                isCVarArgs = true;
+            }
         } else if (next("=>")) {
             match();
             push<Expression>();
