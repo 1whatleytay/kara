@@ -22,9 +22,7 @@ namespace kara::builder::ops::matching {
     }
 
     MatchResult match(
-        Builder &builder,
-        const std::vector<const parser::Variable *> &parameters,
-        const MatchInput &input) {
+        Builder &builder, const std::vector<const parser::Variable *> &parameters, const MatchInput &input) {
         if (parameters.size() != input.parameters.size()) {
             auto error = fmt::format("Expected {} parameters but got {}.", parameters.size(), input.parameters.size());
 
@@ -41,8 +39,8 @@ namespace kara::builder::ops::matching {
 
         auto tryMove = [&](size_t from, size_t to) -> bool {
             if (input.parameters.size() <= from) {
-                result.failed = fmt::format(
-                    "Named parameters must be one of the first few parameters in a C Var Args function.");
+                result.failed
+                    = fmt::format("Named parameters must be one of the first few parameters in a C Var Args function.");
                 return false;
             }
 
@@ -118,11 +116,8 @@ namespace kara::builder::ops::matching {
         return result;
     }
 
-    CallWrapped call(
-        const Context &context,
-        const std::vector<const hermes::Node *> &options,
-        const std::vector<ops::handlers::builtins::BuiltinFunction> &builtins,
-        const MatchInput &input) {
+    CallWrapped call(const Context &context, const std::vector<const hermes::Node *> &options,
+        const std::vector<ops::handlers::builtins::BuiltinFunction> &builtins, const MatchInput &input) {
 
         assert(!(options.empty() && builtins.empty()));
 
@@ -140,10 +135,8 @@ namespace kara::builder::ops::matching {
 
                 if (function->isCVarArgs) {
                     if (input.parameters.size() < parameters.size()) {
-                        auto error = fmt::format(
-                            "C Var Args function requires {} parameters, but {} provided.",
-                            parameters.size(),
-                            input.parameters.size());
+                        auto error = fmt::format("C Var Args function requires {} parameters, but {} provided.",
+                            parameters.size(), input.parameters.size());
 
                         return std::make_tuple(node, MatchResult { error });
                     }
@@ -152,8 +145,7 @@ namespace kara::builder::ops::matching {
                     inputCopy.parameters.reserve(parameters.size());
 
                     // only copy first few parameters, to avoid checking the last few
-                    std::copy(
-                        input.parameters.begin(),
+                    std::copy(input.parameters.begin(),
                         input.parameters.begin() + static_cast<int64_t>(parameters.size()),
                         std::back_inserter(inputCopy.parameters));
                 }

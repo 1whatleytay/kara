@@ -17,11 +17,8 @@ namespace kara::builder {
         }
     }
 
-    Unresolved::Unresolved(
-        const hermes::Node *from,
-        std::vector<const hermes::Node *> references,
-        std::vector<ops::handlers::builtins::BuiltinFunction> builtins,
-        std::unique_ptr<Result> implicit)
+    Unresolved::Unresolved(const hermes::Node *from, std::vector<const hermes::Node *> references,
+        std::vector<ops::handlers::builtins::BuiltinFunction> builtins, std::unique_ptr<Result> implicit)
         : from(from)
         , references(std::move(references))
         , builtins(std::move(builtins))

@@ -376,7 +376,6 @@ namespace kara::builder::ops::handlers {
         };
     }
 
-
     Maybe<builder::Result> makeConvertUniqueToVariableArray(
         const Context &context, const builder::Result &result, const utils::Typename &type, bool force) {
         auto reference = std::get_if<utils::ReferenceTypename>(&result.type);

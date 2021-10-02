@@ -9,9 +9,9 @@
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
 
-#include <set>
-#include <queue>
 #include <optional>
+#include <queue>
+#include <set>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -45,7 +45,7 @@ namespace kara::builder {
 
     struct Builder;
 
-//    struct Scope;
+    //    struct Scope;
     struct Result;
     struct Function;
     struct Accumulator;
@@ -90,10 +90,8 @@ namespace kara::builder {
 
         std::shared_ptr<builder::Result> implicit; // std::optional?
 
-        Unresolved(const hermes::Node *from,
-            std::vector<const hermes::Node *> references,
-            std::vector<ops::handlers::builtins::BuiltinFunction> builtins,
-            std::unique_ptr<Result> implicit = nullptr);
+        Unresolved(const hermes::Node *from, std::vector<const hermes::Node *> references,
+            std::vector<ops::handlers::builtins::BuiltinFunction> builtins, std::unique_ptr<Result> implicit = nullptr);
     };
 
     using Wrapped = std::variant<Result, Unresolved>;
@@ -163,38 +161,38 @@ namespace kara::builder {
 
     enum class ExitPoint { Regular, Return, Break, Continue };
 
-//    struct Scope {
-//        builder::Builder &builder;
-//        builder::Scope *parent = nullptr; // ?
-//        builder::Function *function = nullptr;
-//
-//        Accumulator accumulator; // x
-//        builder::Cache *cache = nullptr; // x
-//
-//        llvm::BasicBlock *openingBlock = nullptr; // x
-//        llvm::BasicBlock *currentBlock = nullptr; // x
-//
-//        llvm::BasicBlock *lastBlock = nullptr; // ?
-//
-//        llvm::Value *exitChainType = nullptr; // x
-//        llvm::BasicBlock *exitChainBegin = nullptr; // x
-//
-////        std::unordered_set<ExitPoint> requiredPoints = { ExitPoint::Regular };
-//        std::unordered_map<ExitPoint, llvm::BasicBlock *> destinations;
-//
-//        std::optional<llvm::IRBuilder<>> current;
+    //    struct Scope {
+    //        builder::Builder &builder;
+    //        builder::Scope *parent = nullptr; // ?
+    //        builder::Function *function = nullptr;
+    //
+    //        Accumulator accumulator; // x
+    //        builder::Cache *cache = nullptr; // x
+    //
+    //        llvm::BasicBlock *openingBlock = nullptr; // x
+    //        llvm::BasicBlock *currentBlock = nullptr; // x
+    //
+    //        llvm::BasicBlock *lastBlock = nullptr; // ?
+    //
+    //        llvm::Value *exitChainType = nullptr; // x
+    //        llvm::BasicBlock *exitChainBegin = nullptr; // x
+    //
+    ////        std::unordered_set<ExitPoint> requiredPoints = { ExitPoint::Regular };
+    //        std::unordered_map<ExitPoint, llvm::BasicBlock *> destinations;
+    //
+    //        std::optional<llvm::IRBuilder<>> current;
 
-        // For ExpressionNode scopes, product is stored here
-//        std::optional<Result> product;
+    // For ExpressionNode scopes, product is stored here
+    //        std::optional<Result> product;
 
-//        Scope(const hermes::Node *node, Scope &parent, bool doCodeGen = true);
-//        Scope(const hermes::Node *node, Function &function, bool doCodeGen = true);
-//
-//    private:
-//        void makeParameters();
-//
-//        Scope(const hermes::Node *node, Function &function, Scope *parent, bool doCodeGen = true);
-//    };
+    //        Scope(const hermes::Node *node, Scope &parent, bool doCodeGen = true);
+    //        Scope(const hermes::Node *node, Function &function, bool doCodeGen = true);
+    //
+    //    private:
+    //        void makeParameters();
+    //
+    //        Scope(const hermes::Node *node, Function &function, Scope *parent, bool doCodeGen = true);
+    //    };
 
     struct Type {
         builder::Builder &builder;
@@ -273,7 +271,7 @@ namespace kara::builder {
         llvm::Function *getFree();
         llvm::Function *getRealloc();
 
-//        const hermes::Node *find(const parser::Reference *node);
+        //        const hermes::Node *find(const parser::Reference *node);
         std::vector<const hermes::Node *> findAll(const parser::Reference *node);
 
         using SearchChecker = std::function<bool(const hermes::Node *)>;

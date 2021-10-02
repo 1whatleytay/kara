@@ -1,8 +1,8 @@
 #include <builder/builder.h>
 
+#include <builder/builtins.h>
 #include <builder/error.h>
 #include <builder/manager.h>
-#include <builder/builtins.h>
 #include <builder/operations.h>
 
 #include <parser/expression.h>
@@ -61,7 +61,6 @@ namespace kara::builder::ops::modifiers {
         auto resolve = [&]() {
             auto v = handlers::resolve(
                 std::array {
-//                    handlers::makeDotForArrayProperties,
                     handlers::makeDotForField,
                     handlers::makeDotForUFCS,
                 },
@@ -252,9 +251,8 @@ namespace kara::builder::ops::expression {
             auto builtins = ops::handlers::builtins::matching(e->name);
 
             // here, search through ops::handlers::builtins::functions and find any that match e->name DONE
-            // then we go into Unresolved, change std::vector so it can also contain either std::function or the pointer DONE
-            // then we just override a case for that in Call unfortunately
-            // this is really rough
+            // then we go into Unresolved, change std::vector so it can also contain either std::function or the pointer
+            // DONE then we just override a case for that in Call unfortunately this is really rough
 
             return builder::Unresolved(e, context.builder.findAll(e), std::move(builtins));
         }
@@ -262,7 +260,7 @@ namespace kara::builder::ops::expression {
         case parser::Kind::New: {
             auto *e = node->as<parser::New>();
 
-            return builder::Unresolved(e, { e }, { });
+            return builder::Unresolved(e, { e }, {});
         }
 
         case parser::Kind::Special:
@@ -352,6 +350,9 @@ namespace kara::builder::ops::expression {
 
         case parser::Kind::As:
             return ops::modifiers::makeAs(context, value, operation.op->as<parser::As>());
+
+        case parser::Kind::Slash:
+            return value;
 
         default:
             throw;

@@ -3,11 +3,13 @@
 #include <parser/literals.h>
 #include <parser/operator.h>
 
+#include <array>
 #include <stdexcept>
+#include <unordered_set>
 
 namespace kara::parser {
-    static utils::ExpressionResult applyUnary(
-        const utils::ExpressionNoun &current, const std::vector<parser::Unary *> &unary) {
+    utils::ExpressionResult applyUnary(
+        const utils::ExpressionNoun &current, const std::vector<const parser::Unary *> &unary) {
         utils::ExpressionResult value = current;
 
         for (auto a = unary.rbegin(); a < unary.rend(); a++)
@@ -16,73 +18,38 @@ namespace kara::parser {
         return value;
     }
 
-    Expression::Expression(Node *parent, bool placeholder)
-        : Node(parent, Kind::Expression) {
-        if (placeholder)
-            return;
+    utils::ExpressionResult combine(
+        std::vector<utils::ExpressionResult> results,
+        std::vector<const Operator *> operators) {
+        // to support /, we need a list of operators that have the left-grouping behavior
 
-        bool exit = false;
+        // okay, so first we go through the array and look for group-to-left operators
+        // if we find one we
 
-        while (!end() && !exit) {
-            while (push<Unary>(true))
-                ;
+        assert(operators.size() == results.size() - 1);
 
-            push<Parentheses, Array, String, Special, Bool, Number, New, Reference>();
+        std::array operatorOrder = {
+            utils::BinaryOperation::Mul,
+            utils::BinaryOperation::Div,
+            utils::BinaryOperation::Add,
+            utils::BinaryOperation::Sub,
+            utils::BinaryOperation::Mod,
 
-            while (true) {
-                if (!push<Call, Index, Dot, Operator>(true)) {
-                    exit = true;
-                    break;
-                }
+            utils::BinaryOperation::Equals,
+            utils::BinaryOperation::NotEquals,
+            utils::BinaryOperation::Greater,
+            utils::BinaryOperation::GreaterEqual,
+            utils::BinaryOperation::Lesser,
+            utils::BinaryOperation::LesserEqual,
 
-                if (children.back()->is(Kind::Operator))
-                    break;
-            }
-        }
-
-        // Calculate result (operator precedence).
-        std::vector<utils::ExpressionResult> results;
-        std::vector<Operator *> operators;
-
-        {
-            std::vector<Unary *> unary;
-            utils::ExpressionNoun current;
-
-            for (const auto &child : children) {
-                if (child->is(Kind::Operator)) {
-                    operators.push_back(child->as<Operator>());
-
-                    results.emplace_back(applyUnary(current, unary));
-
-                    unary.clear();
-                    current = {};
-                } else if (child->is(Kind::Unary)) {
-                    unary.push_back(child->as<Unary>());
-                } else {
-                    current.push(child.get());
-                }
-            }
-
-            if (!current.content)
-                throw std::runtime_error("Internal expression noun issue occurred.");
-
-            results.emplace_back(applyUnary(current, unary));
-        }
-
-        postfix = pick<Ternary, As>(true);
-
-        std::vector<utils::BinaryOperation> operatorOrder = { utils::BinaryOperation::Mul, utils::BinaryOperation::Div,
-            utils::BinaryOperation::Add, utils::BinaryOperation::Sub, utils::BinaryOperation::Mod,
-
-            utils::BinaryOperation::Equals, utils::BinaryOperation::NotEquals, utils::BinaryOperation::Greater,
-            utils::BinaryOperation::GreaterEqual, utils::BinaryOperation::Lesser, utils::BinaryOperation::LesserEqual,
-
-            utils::BinaryOperation::And, utils::BinaryOperation::Or };
+            utils::BinaryOperation::And,
+            utils::BinaryOperation::Or,
+        };
 
         while (!operators.empty()) {
             for (auto order : operatorOrder) {
                 for (int64_t i = 0; i < operators.size(); i++) {
-                    Operator *op = operators[i];
+                    const Operator *op = operators[i];
 
                     if (op->op != order)
                         continue;
@@ -104,11 +71,88 @@ namespace kara::parser {
         if (results.size() != 1)
             throw std::runtime_error("Internal result picker issue occurred.");
 
-        result = std::move(results.front());
+        return std::move(results.front());
+    }
 
-        if (postfix) {
-            result = utils::ExpressionOperation(
-                std::make_unique<utils::ExpressionResult>(std::move(result)), postfix.get());
+    Expression::Expression(Node *parent, bool placeholder)
+        : Node(parent, Kind::Expression) {
+        if (placeholder)
+            return;
+
+        bool exit = false;
+
+        while (!end() && !exit) {
+            while (push<Unary>(true))
+                ;
+
+            push<Parentheses, Array, String, Special, Bool, Number, New, Reference>();
+
+            while (true) {
+                // Ternary, As, Slash here?
+                if (!push<Ternary, As, Slash, Call, Index, Dot, Operator>(true)) {
+                    exit = true;
+                    break;
+                }
+
+                if (children.back()->is(Kind::Operator))
+                    break;
+            }
+        }
+
+        // Calculate result (operator precedence).
+        std::vector<utils::ExpressionResult> results;
+        std::vector<const Operator *> operators;
+
+        std::unordered_set<parser::Kind> groupsToLeft = {
+            parser::Kind::As,
+            parser::Kind::Ternary,
+            parser::Kind::Slash,
+        };
+
+        {
+            std::vector<const Unary *> unary;
+            utils::ExpressionNoun current;
+
+            auto commit = [&]() {
+                if (current.content) {
+                    results.emplace_back(applyUnary(current, unary));
+
+                    unary.clear();
+                    current = {};
+                }
+            };
+
+            for (const auto &child : children) {
+                if (groupsToLeft.find(child->is<parser::Kind>()) != groupsToLeft.end()) {
+                    // push unary/current
+                    commit();
+
+                    // pass results/operators to combine
+                    auto combination = combine(std::move(results), std::move(operators));
+                    auto operation = utils::ExpressionOperation(
+                        std::make_unique<utils::ExpressionResult>(std::move(combination)), child.get());
+
+                    results.clear();
+
+                    results.emplace_back(std::move(operation));
+
+                    // implied
+                    // results.clear();
+                    // operators.clear();
+                } else if (child->is(Kind::Operator)) {
+                    operators.push_back(child->as<Operator>());
+
+                    commit();
+                } else if (child->is(Kind::Unary)) {
+                    unary.push_back(child->as<Unary>());
+                } else {
+                    current.push(child.get());
+                }
+            }
+
+            commit();
+
+            result = combine(std::move(results), std::move(operators));
         }
     }
 }

@@ -7,9 +7,7 @@
 #include <parser/variable.h>
 
 namespace kara::builder::ops {
-    Context Context::noIR() const {
-        return move(nullptr);
-    }
+    Context Context::noIR() const { return move(nullptr); }
 
     Context Context::move(llvm::IRBuilder<> *ir) const {
         Context context = *this;
@@ -19,21 +17,21 @@ namespace kara::builder::ops {
         return context;
     }
 
-//    Context Context::from(builder::Scope &scope) {
-//        return {
-//            scope.builder,
-//            &scope.accumulator,
-//            scope.current ? &*scope.current : nullptr,
-//            scope.cache,
-//            scope.function,
-//            ExitInfo {
-//                scope.lastBlock, // :| should probably be initial value of exitChainBegin
-//                scope.exitChainBegin,
-//                scope.exitChainType,
-//                scope.requiredPoints,
-//            }
-//        };
-//    }
+    //    Context Context::from(builder::Scope &scope) {
+    //        return {
+    //            scope.builder,
+    //            &scope.accumulator,
+    //            scope.current ? &*scope.current : nullptr,
+    //            scope.cache,
+    //            scope.function,
+    //            ExitInfo {
+    //                scope.lastBlock, // :| should probably be initial value of exitChainBegin
+    //                scope.exitChainBegin,
+    //                scope.exitChainType,
+    //                scope.requiredPoints,
+    //            }
+    //        };
+    //    }
 
     llvm::Value *get(const Context &context, const builder::Result &result) {
         if (result.isSet(builder::Result::FlagReference))

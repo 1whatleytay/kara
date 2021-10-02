@@ -89,8 +89,8 @@ namespace kara::builder {
     void ManagerFile::resolve(std::unordered_set<const ManagerFile *> &visited) const { // NOLINT(misc-no-recursion)
         visited.insert(this);
 
-        for (const auto &[depPath, type] : dependencies) {
-            const ManagerFile *f = &manager.get(depPath, fs::path(path).parent_path().string(), type);
+        for (const auto &[depPath, depType] : dependencies) {
+            const ManagerFile *f = &manager.get(depPath, fs::path(path).parent_path().string(), depType);
 
             if (visited.find(f) != visited.end())
                 continue;
@@ -192,7 +192,7 @@ namespace kara::builder {
 #pragma clang diagnostic push
 #pragma ide diagnostic ignored "UnreachableCode"
         try {
-            return Builder(file, options);
+            return { file, options };
         } catch (const VerifyError &error) {
             hermes::LineDetails details(file.state->text, error.node->index, false);
 
@@ -355,16 +355,6 @@ namespace kara::builder {
 
             if (jit->addIRModule(llvm::orc::ThreadSafeModule(std::move(base), std::move(context))))
                 throw std::runtime_error("Could not add module to jit instance.");
-
-//            void (*print)(char *, int) = [](char *buffer, int a) {
-//                char v[200];
-//                snprintf(v, 200, "%d", a);
-//
-//                strcat(buffer, v);
-//            };
-//
-//            auto error = jit->getMainJITDylib().define(llvm::orc::absoluteSymbols(
-//                { { jit->mangleAndIntern("catInt"), llvm::JITEvaluatedSymbol::fromPointer(print) } }));
 
             for (const auto &library : libraries) {
                 for (const auto &lib : library.libraries) {

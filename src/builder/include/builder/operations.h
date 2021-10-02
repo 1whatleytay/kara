@@ -37,7 +37,7 @@ namespace kara::builder::ops {
         llvm::BasicBlock *exitChainBegin = nullptr;
         llvm::Value *exitChainType = nullptr;
 
-//        std::unordered_set<ExitPoint> &requiredPoints;
+        //        std::unordered_set<ExitPoint> &requiredPoints;
     };
 
     struct Context {
@@ -54,7 +54,7 @@ namespace kara::builder::ops {
         [[nodiscard]] Context noIR() const;
         [[nodiscard]] Context move(llvm::IRBuilder<> *ir) const;
 
-//        static Context from(builder::Scope &scope);
+        //        static Context from(builder::Scope &scope);
     };
 
     llvm::Value *get(const Context &context, const builder::Result &result);
@@ -171,15 +171,10 @@ namespace kara::builder::ops {
         using CallWrapped = std::variant<builder::Result, CallError>;
 
         MatchResult match(
-            Builder &builder,
-            const std::vector<const parser::Variable *> &variables,
-            const MatchInput &input);
+            Builder &builder, const std::vector<const parser::Variable *> &variables, const MatchInput &input);
 
-        CallWrapped call(
-            const Context &context,
-            const std::vector<const hermes::Node *> &options,
-            const std::vector<ops::handlers::builtins::BuiltinFunction> &builtins,
-            const MatchInput &input);
+        CallWrapped call(const Context &context, const std::vector<const hermes::Node *> &options,
+            const std::vector<ops::handlers::builtins::BuiltinFunction> &builtins, const MatchInput &input);
 
         builder::Result unwrap(const CallWrapped &result, const hermes::Node *node);
     }
@@ -195,7 +190,6 @@ namespace kara::builder::ops {
 
         using Destinations = std::unordered_map<builder::ExitPoint, llvm::BasicBlock *>;
 
-        llvm::BasicBlock *makeScope(
-            const Context &context, const parser::Code *node, const Destinations &destinations);
+        llvm::BasicBlock *makeScope(const Context &context, const parser::Code *node, const Destinations &destinations);
     }
 }

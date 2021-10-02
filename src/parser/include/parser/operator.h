@@ -48,6 +48,10 @@ namespace kara::parser {
         explicit Ternary(Node *parent);
     };
 
+    struct Slash : public hermes::Node {
+        explicit Slash(Node *parent);
+    };
+
     struct Unary : public hermes::Node {
         utils::UnaryOperation op = utils::UnaryOperation::Not;
 

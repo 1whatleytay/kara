@@ -1,7 +1,5 @@
 import (c) 'stdio.h'
 
 main int {
-    "Hello World %f %f\n".printf(100 as double, 200 as double),
-
-    return 0
+    return 3 + 4\ * 2
 }

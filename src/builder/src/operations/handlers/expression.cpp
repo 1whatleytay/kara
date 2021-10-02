@@ -25,7 +25,7 @@ namespace kara::builder::ops::handlers {
         if (!typeNode)
             die("New parameters may only be passed to a type/struct.");
 
-        auto wrappedResult = ops::matching::call(context, { typeNode->type }, { }, input);
+        auto wrappedResult = ops::matching::call(context, { typeNode->type }, {}, input);
         auto returnResult = ops::matching::unwrap(wrappedResult, unresolved.from);
 
         auto output = ops::nouns::makeNew(context, type);
@@ -50,15 +50,14 @@ namespace kara::builder::ops::handlers {
             die("Reference did not resolve to any functions to call.");
 
         return ops::matching::unwrap(
-            ops::matching::call(context, functions, unresolved.builtins, input),
-            unresolved.from);
+            ops::matching::call(context, functions, unresolved.builtins, input), unresolved.from);
     }
 
     // moved to builtin solution, that would allow parameters to be taken and work the same as fields
-//    Maybe<builder::Wrapped> makeDotForArrayProperties(
-//        const Context &context, const builder::Result &value, const parser::Reference *node) {
-//
-//    }
+    //    Maybe<builder::Wrapped> makeDotForArrayProperties(
+    //        const Context &context, const builder::Result &value, const parser::Reference *node) {
+    //
+    //    }
 
     Maybe<builder::Wrapped> makeDotForField(
         const Context &context, const builder::Result &value, const parser::Reference *node) {
@@ -193,9 +192,7 @@ namespace kara::builder::ops::handlers {
         return true;
     }
 
-    bool makeInitializeIgnore(const Context &context, llvm::Value *ptr, const utils::Typename &type) {
-        return true;
-    }
+    bool makeInitializeIgnore(const Context &context, llvm::Value *ptr, const utils::Typename &type) { return true; }
 
     bool makeDestroyReference(const Context &context, llvm::Value *ptr, const utils::Typename &type) {
         auto reference = std::get_if<utils::ReferenceTypename>(&type);
@@ -259,16 +256,10 @@ namespace kara::builder::ops::handlers {
         // Try to call destroy invocables... call will throw if options are empty
         if (!context.builder.destroyInvocables.empty()) {
             // attempt to avoid this construction forces me to create it here
-            auto parameter = builder::Result {
-                builder::Result::FlagTemporary | builder::Result::FlagReference,
-                ptr,
-                type,
-                nullptr
-            };
+            auto parameter = builder::Result { builder::Result::FlagTemporary | builder::Result::FlagReference, ptr,
+                type, nullptr };
 
-            ops::matching::call(
-                context,
-                context.builder.destroyInvocables, { /* dwbi builtins */ },
+            ops::matching::call(context, context.builder.destroyInvocables, { /* dwbi builtins */ },
                 ops::matching::MatchInput { { parameter }, { /* no names */ } });
         }
 

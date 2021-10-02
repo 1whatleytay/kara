@@ -38,28 +38,6 @@ namespace kara::builder {
         return result;
     }
 
-//    const hermes::Node *Builder::find(const parser::Reference *node) {
-//        auto matchVariable = [node](const hermes::Node *value) -> bool {
-//            return (value->is(parser::Kind::Variable) && value->as<parser::Variable>()->name == node->name);
-//        };
-//
-//        auto match = [node](const hermes::Node *value) -> bool {
-//            return (value->is(parser::Kind::Variable) && value->as<parser::Variable>()->name == node->name)
-//                || (value->is(parser::Kind::Function) && value->as<parser::Function>()->name == node->name)
-//                || (value->is(parser::Kind::Type) && value->as<parser::Type>()->name == node->name);
-//        };
-//
-//        const hermes::Node *result = parser::search::exclusive::scopeFrom(node, matchVariable);
-//
-//        if (!result)
-//            result = searchDependencies(match);
-//
-////        if (!result)
-////            throw VerifyError(node, "Reference does not evaluate to anything.");
-//
-//        return result;
-//    }
-
     std::vector<const hermes::Node *> Builder::findAll(const parser::Reference *node) {
         auto matchVariable = [node](const hermes::Node *value) -> bool {
             return (value->is(parser::Kind::Variable) && value->as<parser::Variable>()->name == node->name);
@@ -91,8 +69,8 @@ namespace kara::builder {
         add(result);
         add(more);
 
-//        if (combine.empty())
-//            throw VerifyError(node, "Reference does not evaluate to anything.");
+        //        if (combine.empty())
+        //            throw VerifyError(node, "Reference does not evaluate to anything.");
 
         return combine;
     }

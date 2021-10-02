@@ -53,18 +53,18 @@ namespace kara::utils {
     struct ExpressionOperation {
         std::unique_ptr<ExpressionResult> a;
 
-        hermes::Node *op = nullptr;
+        const hermes::Node *op = nullptr;
 
-        ExpressionOperation(std::unique_ptr<ExpressionResult> a, hermes::Node *op);
+        ExpressionOperation(std::unique_ptr<ExpressionResult> a, const hermes::Node *op);
     };
 
     struct ExpressionCombinator {
         std::unique_ptr<ExpressionResult> a;
         std::unique_ptr<ExpressionResult> b;
 
-        parser::Operator *op = nullptr;
+        const parser::Operator *op = nullptr;
 
         ExpressionCombinator(
-            std::unique_ptr<ExpressionResult> a, std::unique_ptr<ExpressionResult> b, parser::Operator *op);
+            std::unique_ptr<ExpressionResult> a, std::unique_ptr<ExpressionResult> b, const parser::Operator *op);
     };
 }

@@ -50,7 +50,6 @@ namespace kara::builder::ops::handlers {
     Maybe<utils::Typename> negotiatePrimitive(const utils::Typename &left, const utils::Typename &right);
     Maybe<utils::Typename> negotiateReferenceAndNull(const utils::Typename &left, const utils::Typename &right);
 
-
     Maybe<builder::Result> makeConvertBridgeImplicitReference(
         const Context &context, const builder::Result &result, const utils::Typename &type, bool force); // promote
     Maybe<builder::Result> makeConvertBridgeImplicitDereference(
@@ -128,8 +127,8 @@ namespace kara::builder::ops::handlers {
         const Context &context, const builder::Unresolved &unresolved, const matching::MatchInput &input);
 
     // Marked as taking builder::Result to avoid multiple infers... new solution maybe be needed in future
-//    Maybe<builder::Wrapped> makeDotForArrayProperties(
-//        const Context &context, const builder::Result &value, const parser::Reference *node);
+    //    Maybe<builder::Wrapped> makeDotForArrayProperties(
+    //        const Context &context, const builder::Result &value, const parser::Reference *node);
     Maybe<builder::Wrapped> makeDotForField(
         const Context &context, const builder::Result &value, const parser::Reference *node);
     Maybe<builder::Wrapped> makeDotForUFCS(

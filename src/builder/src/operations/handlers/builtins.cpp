@@ -5,17 +5,7 @@
 #include <utils/typename.h>
 
 namespace kara::builder::ops::handlers::builtins {
-//    using VerifyInput = ops::matching::MatchInputFlattened;
-//    using VerifyPair = std::pair<std::string, utils::Typename>;
-
-    // I wish, but I don't think it's going to happen
-//    std::tuple<> verify(const VerifyInput &input, size_t index) {
-//        throw; // makeConvert can only deal with concrete type, not any array of type ???
-//    }
-
-    bool named(const std::string &input, const std::string &required) {
-        return input.empty() || input == required;
-    }
+    bool named(const std::string &input, const std::string &required) { return input.empty() || input == required; }
 
     namespace arrays {
         Maybe<builder::Result> size(const Context &context, const Parameters &parameters) {
@@ -135,9 +125,7 @@ namespace kara::builder::ops::handlers::builtins {
             auto input = ops::matching::flatten(parameters);
 
             // name/size check
-            if (!(input.size() == 2
-                    && named(input[0].first, "array")
-                    && named(input[1].first, "size")))
+            if (!(input.size() == 2 && named(input[0].first, "array") && named(input[1].first, "size")))
                 return std::nullopt;
 
             auto &value = input[0].second;
@@ -206,9 +194,7 @@ namespace kara::builder::ops::handlers::builtins {
             auto input = ops::matching::flatten(parameters);
 
             // name/size check
-            if (!(input.size() == 2
-                    && named(input[0].first, "array")
-                    && named(input[1].first, "size")))
+            if (!(input.size() == 2 && named(input[0].first, "array") && named(input[1].first, "size")))
                 return std::nullopt;
 
             auto &value = input[0].second;
@@ -281,9 +267,7 @@ namespace kara::builder::ops::handlers::builtins {
             auto input = ops::matching::flatten(parameters);
 
             // name/size check
-            if (!(input.size() == 2
-                    && named(input[0].first, "array")
-                    && named(input[1].first, "value")))
+            if (!(input.size() == 2 && named(input[0].first, "array") && named(input[1].first, "value")))
                 return std::nullopt;
 
             auto &value = input[0].second;
@@ -409,7 +393,6 @@ namespace kara::builder::ops::handlers::builtins {
                 nullptr,
             };
         }
-
 
         Maybe<builder::Result> list(const Context &context, const Parameters &parameters) {
             auto input = ops::matching::flatten(parameters);

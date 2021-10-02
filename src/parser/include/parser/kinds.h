@@ -36,6 +36,7 @@ namespace kara::parser {
         Type,
         Dot,
         Ternary,
+        Slash,
         As,
         Import,
         String,

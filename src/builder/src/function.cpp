@@ -4,10 +4,10 @@
 #include <builder/manager.h>
 #include <builder/operations.h>
 
-#include <parser/scope.h>
 #include <parser/assign.h>
 #include <parser/function.h>
 #include <parser/operator.h>
+#include <parser/scope.h>
 #include <parser/search.h>
 #include <parser/statement.h>
 #include <parser/type.h>
@@ -32,9 +32,7 @@ namespace kara::builder {
 
             body = responsible ? e->body() : nullptr;
             // Check for inferred type from expression node maybe?
-            if (body
-                && body->is(parser::Kind::Expression)
-                && !e->hasFixedType
+            if (body && body->is(parser::Kind::Expression) && !e->hasFixedType
                 && returnTypename == from(utils::PrimitiveType::Nothing)) {
 
                 auto astFunction = node->as<parser::Function>();
@@ -161,9 +159,11 @@ namespace kara::builder {
 
                     &bodyBuilder,
 
-                    &cache, this,
+                    &cache,
+                    this,
 
-                    nullptr, // exit info might need to be added later for ?? but right now we give resp. to makeScope
+                    // exit info might need to be added later for ?? but right now we give resp. to makeScope
+                    nullptr,
                 };
 
                 auto result = ops::expression::make(bodyContext, body->as<parser::Expression>());
@@ -190,15 +190,12 @@ namespace kara::builder {
 
                     &entry,
 
-                    &cache,
-                    this,
+                    &cache, this,
 
                     nullptr, // exit info might need to be added later for ?? but right now we give resp. to makeScope
                 };
 
-                auto scope = ops::statements::makeScope(
-                    bodyContext,
-                    body->as<parser::Code>(),
+                auto scope = ops::statements::makeScope(bodyContext, body->as<parser::Code>(),
                     {
                         { ExitPoint::Regular, exitBlock },
                         { ExitPoint::Return, exitBlock },
@@ -232,8 +229,7 @@ namespace kara::builder {
                     assert(elementType == targetType->type);
                 }
 
-                auto bodyBlock = llvm::BasicBlock::Create(
-                    builder.context, "", function, entryBlock->getNextNode());
+                auto bodyBlock = llvm::BasicBlock::Create(builder.context, "", function, entryBlock->getNextNode());
 
                 llvm::IRBuilder<> bodyBuilder(bodyBlock);
 
@@ -246,7 +242,7 @@ namespace kara::builder {
                     nullptr,
                     this,
 
-                    nullptr
+                    nullptr,
                 };
 
                 for (auto it = fields.rbegin(); it != fields.rend(); ++it) {
@@ -263,9 +259,7 @@ namespace kara::builder {
                     //     &accumulator, // might as well
                     // };
 
-                    ops::makeDestroy(
-                        bodyContext,
-                        bodyBuilder.CreateStructGEP(arg, index),
+                    ops::makeDestroy(bodyContext, bodyBuilder.CreateStructGEP(arg, index),
                         builder.resolveTypename(var->fixedType()));
                 }
 

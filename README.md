@@ -93,7 +93,7 @@ Until `1.0`.
  - [ ] Advanced Optional Unpacking, `a ?? return 0`, `a ?? skip`, `a ?? panic`
  - [x] Variable Shadowing in Same Scope
  - [x] New Operator `*[char:50]`
- - [ ] Compound Operator `\ `, `a as b\.c` = `(a as b).c`
+ - [x] Compound Operator `\ `, `a as b\.c` = `(a as b).c`
  - [ ] Result Packing Operator `where (a = b, c = d) f(a, b, c, d)`
  - [ ] Declaration for Mutable References, `takeOptions(let opts)`
  - [ ] Discard for Mutable References `giveOptions(let)`
@@ -121,7 +121,7 @@ Until `1.0`.
  - [x] LLVM JIT `--interpret`
  - [x] Binary Output on Major Platforms (macOS, Windows)
  - [ ] Language Server or Syntax Suggestion Platform
- - [ ] C Var Args Support
+ - [x] C Var Args Support
 
 ### Beyond 1.0
  - [ ] WebASM interop

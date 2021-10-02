@@ -1,17 +1,17 @@
 #include <builder/operations.h>
 
-#include <parser/scope.h>
 #include <parser/assign.h>
-#include <parser/variable.h>
-#include <parser/statement.h>
 #include <parser/expression.h>
+#include <parser/scope.h>
+#include <parser/statement.h>
+#include <parser/variable.h>
 
 namespace kara::builder::ops::statements {
     void exit(const Context &context, ExitPoint point) {
         assert(context.ir);
         assert(context.exitInfo);
 
-//        context.exitInfo->requiredPoints.insert(point);
+        //        context.exitInfo->requiredPoints.insert(point);
 
         auto exitId = static_cast<int8_t>(point);
         auto llvmExitId = llvm::ConstantInt::get(llvm::Type::getInt8Ty(context.builder.context), exitId);
@@ -20,44 +20,43 @@ namespace kara::builder::ops::statements {
         context.ir->CreateBr(context.exitInfo->exitChainBegin);
     }
 
-//    void commit(const Context &context, const Destinations &destinations) {
-//        assert(context.function);
-//
-//        assert(context.ir);
-//        assert(context.exitInfo);
-//
-//        if (!context.ir->GetInsertBlock()->getTerminator()) {
-//            ops::statements::exit(context, ExitPoint::Regular);
-//        }
-//
-//        llvm::IRBuilder<> exit(lastBlock);
-//
-//        auto value = exit.CreateLoad(exitChainType);
-//
-//        llvm::BasicBlock *pass = function->exitBlock;
-//
-//        if (parent) {
-//            pass = llvm::BasicBlock::Create(builder.context, "pass", function->function, lastBlock);
-//            llvm::IRBuilder<> passBuilder(pass);
-//
-//            passBuilder.CreateStore(value, parent->exitChainType);
-//            passBuilder.CreateBr(parent->exitChainBegin);
-//        }
-//
-//        auto type = llvm::Type::getInt8Ty(builder.context);
-//        auto inst = exit.CreateSwitch(value, pass, requiredPoints.size());
-//
-//        for (const auto &pair : destinations) {
-//            auto exitId = static_cast<int8_t>(pair.first);
-//            auto constant = llvm::ConstantInt::get(type, exitId);
-//
-//            assert(pair.second); // break/continue/return is just not allowed here
-//            // ^^^ what does that even mean?? pass block should work you're saying? isn't that everything?
-//
-//            inst->addCase(constant, pair.second);
-//        }
-//    }
-
+    //    void commit(const Context &context, const Destinations &destinations) {
+    //        assert(context.function);
+    //
+    //        assert(context.ir);
+    //        assert(context.exitInfo);
+    //
+    //        if (!context.ir->GetInsertBlock()->getTerminator()) {
+    //            ops::statements::exit(context, ExitPoint::Regular);
+    //        }
+    //
+    //        llvm::IRBuilder<> exit(lastBlock);
+    //
+    //        auto value = exit.CreateLoad(exitChainType);
+    //
+    //        llvm::BasicBlock *pass = function->exitBlock;
+    //
+    //        if (parent) {
+    //            pass = llvm::BasicBlock::Create(builder.context, "pass", function->function, lastBlock);
+    //            llvm::IRBuilder<> passBuilder(pass);
+    //
+    //            passBuilder.CreateStore(value, parent->exitChainType);
+    //            passBuilder.CreateBr(parent->exitChainBegin);
+    //        }
+    //
+    //        auto type = llvm::Type::getInt8Ty(builder.context);
+    //        auto inst = exit.CreateSwitch(value, pass, requiredPoints.size());
+    //
+    //        for (const auto &pair : destinations) {
+    //            auto exitId = static_cast<int8_t>(pair.first);
+    //            auto constant = llvm::ConstantInt::get(type, exitId);
+    //
+    //            assert(pair.second); // break/continue/return is just not allowed here
+    //            // ^^^ what does that even mean?? pass block should work you're saying? isn't that everything?
+    //
+    //            inst->addCase(constant, pair.second);
+    //        }
+    //    }
 
     namespace {
         llvm::BasicBlock *recurseIf(const Context &context, const parser::If *node, llvm::BasicBlock *next) {
@@ -72,11 +71,7 @@ namespace kara::builder::ops::statements {
                 switch (onFalse->is<parser::Kind>()) {
                 case parser::Kind::Code:
                     falseNext = ops::statements::makeScope(
-                        context,
-                        onTrue,
-                        {
-                            { ExitPoint::Regular, next }
-                        }); // yikes formatting
+                        context, onTrue, { { ExitPoint::Regular, next } }); // yikes formatting
 
                     break;
 
@@ -89,15 +84,10 @@ namespace kara::builder::ops::statements {
                 }
             }
 
-            auto trueScope = ops::statements::makeScope(
-                context,
-                onTrue,
-                {
-                    { ExitPoint::Regular, next }
-                });
+            auto trueScope = ops::statements::makeScope(context, onTrue, { { ExitPoint::Regular, next } });
 
-            auto conditionBlock = llvm::BasicBlock::Create(
-                context.builder.context, "check", context.function->function, trueScope);
+            auto conditionBlock
+                = llvm::BasicBlock::Create(context.builder.context, "check", context.function->function, trueScope);
 
             llvm::IRBuilder<> conditionBuilder(conditionBlock);
             auto conditionContext = context.move(&conditionBuilder);
@@ -107,13 +97,10 @@ namespace kara::builder::ops::statements {
             auto converted = ops::makeConvert(conditionContext, conditionResult, from(utils::PrimitiveType::Bool));
             if (!converted) {
                 throw VerifyError(
-                    node->children.front().get(),
-                    "Condition for if statement must evaluate to true or false.");
+                    node->children.front().get(), "Condition for if statement must evaluate to true or false.");
             }
 
-            conditionBuilder.CreateCondBr(
-                ops::get(conditionContext, *converted),
-                trueScope, falseNext);
+            conditionBuilder.CreateCondBr(ops::get(conditionContext, *converted), trueScope, falseNext);
 
             return conditionBlock;
         }
@@ -125,8 +112,7 @@ namespace kara::builder::ops::statements {
 
         auto after = context.ir->GetInsertBlock()->getNextNode();
 
-        auto nextBlock = llvm::BasicBlock::Create(
-            context.builder.context, "", context.function->function, after);
+        auto nextBlock = llvm::BasicBlock::Create(context.builder.context, "", context.function->function, after);
 
         auto condition = recurseIf(context, node, nextBlock);
         context.ir->CreateBr(condition);
@@ -144,16 +130,13 @@ namespace kara::builder::ops::statements {
         if (!condition) {
             auto after = context.ir->GetInsertBlock()->getNextNode();
 
-            auto jumpBlock = llvm::BasicBlock::Create(
-                context.builder.context, "jump", context.function->function, after);
+            auto jumpBlock
+                = llvm::BasicBlock::Create(context.builder.context, "jump", context.function->function, after);
 
-            auto nextBlock = llvm::BasicBlock::Create(
-                context.builder.context, "", context.function->function, after);
+            auto nextBlock = llvm::BasicBlock::Create(context.builder.context, "", context.function->function, after);
 
             // std::vector<...> scopes
-            auto scope = ops::statements::makeScope(
-                context,
-                code,
+            auto scope = ops::statements::makeScope(context, code,
                 {
                     { ExitPoint::Break, nextBlock },
                     { ExitPoint::Regular, jumpBlock },
@@ -168,11 +151,10 @@ namespace kara::builder::ops::statements {
         } else if (condition->is(parser::Kind::Expression)) {
             auto after = context.ir->GetInsertBlock()->getNextNode();
 
-            auto jumpBlock = llvm::BasicBlock::Create(
-                context.builder.context, "jump", context.function->function, after);
+            auto jumpBlock
+                = llvm::BasicBlock::Create(context.builder.context, "jump", context.function->function, after);
 
-            auto nextBlock = llvm::BasicBlock::Create(
-                context.builder.context, "", context.function->function, after);
+            auto nextBlock = llvm::BasicBlock::Create(context.builder.context, "", context.function->function, after);
 
             llvm::IRBuilder<> jumpBuilder(jumpBlock);
             auto jumpContext = context.move(&jumpBuilder);
@@ -185,13 +167,10 @@ namespace kara::builder::ops::statements {
 
             if (!converted) {
                 throw VerifyError(
-                    node, "For node must have bool as expression, got {}.",
-                    toString(conditionResult.type));
+                    node, "For node must have bool as expression, got {}.", toString(conditionResult.type));
             }
 
-            auto scope = ops::statements::makeScope(
-                jumpContext,
-                code,
+            auto scope = ops::statements::makeScope(jumpContext, code,
                 {
                     { ExitPoint::Break, nextBlock },
                     { ExitPoint::Regular, jumpBlock },
@@ -217,20 +196,14 @@ namespace kara::builder::ops::statements {
         case parser::Block::Type::Regular: {
             auto after = context.ir->GetInsertBlock()->getNextNode();
 
-            auto nextBlock = llvm::BasicBlock::Create(
-                context.builder.context, "", context.function->function, after);
+            auto nextBlock = llvm::BasicBlock::Create(context.builder.context, "", context.function->function, after);
 
-            auto scope = ops::statements::makeScope(
-                context,
-                code,
-                {
-                    { ExitPoint::Regular, nextBlock }
-                });
+            auto scope = ops::statements::makeScope(context, code, { { ExitPoint::Regular, nextBlock } });
 
             context.ir->CreateBr(scope);
             context.ir->SetInsertPoint(nextBlock);
 
-//            sub.destinations[ExitPoint::Regular] = currentBlock;
+            //            sub.destinations[ExitPoint::Regular] = currentBlock;
 
             break;
         }
@@ -240,9 +213,7 @@ namespace kara::builder::ops::statements {
 
             // Prohibit Strange Operations, by setting to nullptr,
             // this isn't done in function root scope, IDK what will happen
-            auto scope = ops::statements::makeScope(
-                context,
-                code,
+            auto scope = ops::statements::makeScope(context, code,
                 {
                     { ExitPoint::Regular, context.exitInfo->exitChainBegin },
                     { ExitPoint::Break, nullptr },
@@ -385,23 +356,21 @@ namespace kara::builder::ops::statements {
 
             auto after = parent.ir->GetInsertBlock()->getNextNode();
 
-            openingBlock = llvm::BasicBlock::Create(
-                parent.builder.context, "", parent.function->function, after);
+            openingBlock = llvm::BasicBlock::Create(parent.builder.context, "", parent.function->function, after);
 
             current.emplace(openingBlock);
 
-            exitInfo.exitChainType = parent.function->entry.CreateAlloca(
-                parent.ir->getInt8Ty(), nullptr, "exit_type");
-            exitInfo.exitChainBegin = llvm::BasicBlock::Create(
-                parent.builder.context, "exit_scope", parent.function->function, after);
+            exitInfo.exitChainType = parent.function->entry.CreateAlloca(parent.ir->getInt8Ty(), nullptr, "exit_type");
+            exitInfo.exitChainBegin
+                = llvm::BasicBlock::Create(parent.builder.context, "exit_scope", parent.function->function, after);
             exitInfo.exitChainEnd = exitInfo.exitChainBegin;
         }
 
-//        llvm::BasicBlock *moveAfter = parent ? parent->lastBlock : function.exitBlock;
+        //        llvm::BasicBlock *moveAfter = parent ? parent->lastBlock : function.exitBlock;
 
-//        if (!parent && !node->is(parser::Kind::Type)) // don't bother building parameters for type
-//            // destructor functions
-//            makeParameters(); // important!!! even if it won't be dealing with type
+        //        if (!parent && !node->is(parser::Kind::Type)) // don't bother building parameters for type
+        //            // destructor functions
+        //            makeParameters(); // important!!! even if it won't be dealing with type
 
         Accumulator accumulator;
         Cache *cache = parent.cache->create();
@@ -423,22 +392,24 @@ namespace kara::builder::ops::statements {
                 auto var = std::make_unique<builder::Variable>(child->as<parser::Variable>(), context);
 
                 //                    auto result = builder::Result {
-                //                        builder::Result::FlagReference | (var->node->isMutable ? builder::Result::FlagMutable : 0), var->value, var->type, &accumulator, // safe to put, is reference dw
+                //                        builder::Result::FlagReference | (var->node->isMutable ?
+                //                        builder::Result::FlagMutable : 0), var->value, var->type, &accumulator, //
+                //                        safe to put, is reference dw
                 //                    };
 
                 llvm::IRBuilder<> exitBuilder(exitInfo.exitChainBegin, exitInfo.exitChainBegin->begin());
 
-//                ops::Context exitContext {
-//                    context.builder,
-//                    nullptr,
-//
-//                    &exitBuilder,
-//
-//                    nullptr,
-//                    context.function,
-//
-//                    nullptr, // ?
-//                };
+                //                ops::Context exitContext {
+                //                    context.builder,
+                //                    nullptr,
+                //
+                //                    &exitBuilder,
+                //
+                //                    nullptr,
+                //                    context.function,
+                //
+                //                    nullptr, // ?
+                //                };
 
                 ops::makeDestroy(context.move(&exitBuilder), var->value, var->type);
 
@@ -475,8 +446,7 @@ namespace kara::builder::ops::statements {
             case parser::Kind::Insight: {
                 auto result = ops::expression::make(context.noIR(), child->as<parser::Insight>()->expression());
 
-                fmt::print("[INSIGHT, line {}] {}\n",
-                    hermes::LineDetails(child->state.text, child->index).lineNumber,
+                fmt::print("[INSIGHT, line {}] {}\n", hermes::LineDetails(child->state.text, child->index).lineNumber,
                     toString(result.type));
 
                 break;
@@ -489,7 +459,6 @@ namespace kara::builder::ops::statements {
             if (context.ir)
                 accumulator.commit(context.builder, *context.ir);
         }
-
 
         assert(context.function);
 

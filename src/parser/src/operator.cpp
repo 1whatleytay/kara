@@ -113,19 +113,36 @@ namespace kara::parser {
         push<Expression>();
     }
 
+    Slash::Slash(Node *parent)
+        : Node(parent, Kind::Slash) {
+        match("\\");
+    }
+
     Unary::Unary(Node *parent)
         : Node(parent, Kind::Unary) {
-        op = select<utils::UnaryOperation>(
-            { { "!", utils::UnaryOperation::Not }, { "-", utils::UnaryOperation::Negative },
-                { "&", utils::UnaryOperation::Reference }, { "@", utils::UnaryOperation::Fetch } });
+        op = select<utils::UnaryOperation>({
+            { "!", utils::UnaryOperation::Not },
+            { "-", utils::UnaryOperation::Negative },
+            { "&", utils::UnaryOperation::Reference },
+            { "@", utils::UnaryOperation::Fetch },
+        });
     }
 
     Operator::Operator(Node *parent)
         : Node(parent, Kind::Operator) {
         std::vector<std::string> doNotCapture = { "+=", "-=", "*=", "/=", "%=" };
 
-        if (maybe<bool>({ { "+=", true }, { "-=", true }, { "*=", true }, { "/=", true }, { "%=", true } }, false))
+        if (maybe<bool>(
+                {
+                    { "+=", true },
+                    { "-=", true },
+                    { "*=", true },
+                    { "/=", true },
+                    { "%=", true },
+                },
+                false)) {
             error("Operator cannot capture this text.");
+        }
 
         op = select<utils::BinaryOperation>({
             { "+", utils::BinaryOperation::Add },
