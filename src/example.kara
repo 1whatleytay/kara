@@ -1,7 +1,7 @@
 import (c) 'stdio.h'
 
-a(b ?int) => b ? @b : 2
+a(b ?int) => b ?? 2
 
 main int {
-    return a(null)
+    return a(4)
 }

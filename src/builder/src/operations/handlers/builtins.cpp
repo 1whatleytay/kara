@@ -394,7 +394,7 @@ namespace kara::builder::ops::handlers::builtins {
             };
         }
 
-        Maybe<builder::Result> list(const Context &context, const Parameters &parameters) {
+        Maybe<builder::Result> array(const Context &context, const Parameters &parameters) {
             auto input = ops::matching::flatten(parameters);
 
             // name/size check

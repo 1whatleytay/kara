@@ -127,6 +127,9 @@ namespace kara::builder::ops::handlers {
     Maybe<builder::Result> makeAndBool(
         const Context &context, const builder::Result &left, const builder::Result &right);
 
+    Maybe<builder::Result> makeFallbackOptional(
+        const Context &context, const builder::Result &left, const builder::Result &right);
+
     // here it's to be being more specific, we need a fix to the multiple code generation problem though
     Maybe<builder::Wrapped> makeCallOnNew(
         const Context &context, const builder::Unresolved &unresolved, const matching::MatchInput &input);

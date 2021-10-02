@@ -89,7 +89,7 @@ Until `1.0`.
  - [ ] Explicit Discarding of Information, `= undefined`
  - [x] Comments `//` and `/*` `*/`
  - [x] Ternaries `condition ? yesValue : noValue`
- - [ ] Optional Unpacking (`a ?? b` for default, `a!` for force unpacking)
+ - [x] Optional Unpacking (`a ?? b` for default, `a!` for force unpacking)
  - [ ] Advanced Optional Unpacking, `a ?? return 0`, `a ?? skip`, `a ?? panic`
  - [x] Variable Shadowing in Same Scope
  - [x] New Operator `*[char:50]`

@@ -35,6 +35,7 @@ namespace kara::utils {
         Lesser,
         And,
         Or,
+        Fallback,
     };
 
     struct ExpressionNoun;

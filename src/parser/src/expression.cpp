@@ -29,6 +29,8 @@ namespace kara::parser {
         assert(operators.size() == results.size() - 1);
 
         std::array operatorOrder = {
+            utils::BinaryOperation::Fallback,
+
             utils::BinaryOperation::Mul,
             utils::BinaryOperation::Div,
             utils::BinaryOperation::Add,
@@ -89,7 +91,7 @@ namespace kara::parser {
 
             while (true) {
                 // Ternary, As, Slash here?
-                if (!push<Ternary, As, Slash, Call, Index, Dot, Operator>(true)) {
+                if (!push<Call, Index, Dot, Operator, Ternary, As, Slash>(true)) {
                     exit = true;
                     break;
                 }

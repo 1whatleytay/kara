@@ -130,8 +130,7 @@ namespace kara::parser {
 
     Operator::Operator(Node *parent)
         : Node(parent, Kind::Operator) {
-        std::vector<std::string> doNotCapture = { "+=", "-=", "*=", "/=", "%=" };
-
+        // Do not capture...
         if (maybe<bool>(
                 {
                     { "+=", true },
@@ -158,6 +157,7 @@ namespace kara::parser {
             { "<", utils::BinaryOperation::Lesser },
             { "&&", utils::BinaryOperation::And },
             { "||", utils::BinaryOperation::Or },
+            { "??", utils::BinaryOperation::Fallback },
         });
     }
 }

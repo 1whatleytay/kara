@@ -403,6 +403,9 @@ namespace kara::builder::ops::expression {
         case utils::BinaryOperation::And:
             return ops::blame(combinator.op, ops::binary::makeAnd, context, left, right);
 
+        case utils::BinaryOperation::Fallback:
+            return ops::blame(combinator.op, ops::binary::makeFallback, context, left, right);
+
         default:
             throw;
         }

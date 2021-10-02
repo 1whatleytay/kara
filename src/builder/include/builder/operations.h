@@ -119,6 +119,8 @@ namespace kara::builder::ops {
 
         builder::Result makeOr(const Context &context, const builder::Result &left, const builder::Result &right);
         builder::Result makeAnd(const Context &context, const builder::Result &left, const builder::Result &right);
+
+        builder::Result makeFallback(const Context &context, const builder::Result &left, const builder::Result &right);
     }
 
     namespace modifiers {

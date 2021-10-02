@@ -935,4 +935,73 @@ namespace kara::builder::ops::handlers {
         const Context &context, const builder::Result &left, const builder::Result &right) {
         return handlerBooleanBase(context, left, right, [](auto &ir, auto a, auto b) { return ir.CreateAnd(a, b); });
     }
+
+    Maybe<builder::Result> makeFallbackOptional(
+        const Context &context, const builder::Result &left, const builder::Result &right) {
+        auto realType = findReal(left.type);
+        auto optional = std::get_if<utils::OptionalTypename>(realType);
+
+        if (!optional)
+            return std::nullopt;
+
+        auto optionalValue = makeReal(context, left);
+
+        llvm::Value *value = nullptr;
+
+        if (context.ir) {
+            auto after = context.ir->GetInsertBlock();
+
+            auto holdsTrue = llvm::BasicBlock::Create(
+                context.builder.context, "fallback_holds", context.function->function, after);
+
+            auto holdsFalse = llvm::BasicBlock::Create(
+                context.builder.context, "fallback_empty", context.function->function, after);
+
+            auto next = llvm::BasicBlock::Create(
+                context.builder.context, "", context.function->function, after);
+
+            llvm::IRBuilder<> trueBuilder(holdsTrue);
+            llvm::IRBuilder<> falseBuilder(holdsFalse);
+            auto trueContext = context.move(&trueBuilder);
+            auto falseContext = context.move(&falseBuilder);
+
+            assert(context.function);
+
+            auto destType = context.builder.makeTypename(*optional->value);
+            auto fallbackTemp = context.function->entry.CreateAlloca(destType, 0, nullptr, "fallback_temp");
+
+            // before branching
+            auto leftRef = ops::ref(context, optionalValue);
+            auto holds = context.ir->CreateLoad(context.ir->CreateStructGEP(leftRef, 0));
+            context.ir->CreateCondBr(holds, holdsTrue, holdsFalse);
+
+            // true block
+            auto leftValue = trueBuilder.CreateLoad(trueBuilder.CreateStructGEP(leftRef, 1));
+            trueBuilder.CreateStore(leftValue, fallbackTemp);
+            trueBuilder.CreateBr(next);
+
+            // false block
+            auto converted = ops::makeConvert(falseContext, right, *optional->value);
+
+            if (!converted) {
+                die("Right hand side of ?? of type {} must be convertable to value type of optional {}.",
+                    toString(right.type), toString(*realType));
+            }
+
+            falseBuilder.CreateStore(ops::get(falseContext, *converted), fallbackTemp);
+            falseBuilder.CreateBr(next);
+
+            context.ir->SetInsertPoint(next);
+            value = context.ir->CreateLoad(fallbackTemp);
+
+            // short-circuit uh oh
+        }
+
+        return builder::Result {
+            builder::Result::FlagTemporary,
+            value,
+            *optional->value,
+            context.accumulator,
+        };
+    }
 }
