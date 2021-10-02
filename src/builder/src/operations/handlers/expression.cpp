@@ -53,12 +53,6 @@ namespace kara::builder::ops::handlers {
             ops::matching::call(context, functions, unresolved.builtins, input), unresolved.from);
     }
 
-    // moved to builtin solution, that would allow parameters to be taken and work the same as fields
-    //    Maybe<builder::Wrapped> makeDotForArrayProperties(
-    //        const Context &context, const builder::Result &value, const parser::Reference *node) {
-    //
-    //    }
-
     Maybe<builder::Wrapped> makeDotForField(
         const Context &context, const builder::Result &value, const parser::Reference *node) {
         // :| might generate duplicate code here, but pretty sure it generated duplicate code in last system too

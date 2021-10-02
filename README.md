@@ -48,7 +48,7 @@ Until `1.0`.
  - [ ] Maps `[K -> V]`
  - [ ] Variants `T1 | T2 | T3`
  - [ ] Tuples `T1 & T2 & T3`
- - [ ] Optionals `?T`
+ - [x] Optionals `?T`
  - [ ] Partials `?partial T`
  - [ ] Bubbling Optionals `!T`
  - [ ] Bubbling Optionals With Error Type `!T | E1 | E2`

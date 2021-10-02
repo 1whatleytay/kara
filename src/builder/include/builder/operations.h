@@ -36,8 +36,6 @@ namespace kara::builder::ops {
         llvm::BasicBlock *exitChainEnd = nullptr;
         llvm::BasicBlock *exitChainBegin = nullptr;
         llvm::Value *exitChainType = nullptr;
-
-        //        std::unordered_set<ExitPoint> &requiredPoints;
     };
 
     struct Context {

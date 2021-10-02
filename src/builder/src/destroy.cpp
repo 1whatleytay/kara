@@ -21,16 +21,7 @@ namespace kara::builder {
         }
     }
 
-    void Accumulator::commit(builder::Builder &builder, llvm::IRBuilder<> &ir) {
-        ops::Context context {
-            builder, nullptr,
-
-            &ir,
-
-            nullptr,
-            nullptr, // please don't cause problems with null function
-        };
-
+    void Accumulator::commit(const ops::Context &context) {
         lock = true;
 
         while (!toDestroy.empty()) {

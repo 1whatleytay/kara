@@ -104,6 +104,21 @@ namespace kara::builder {
         return reallocCache;
     }
 
+    llvm::StructType *Builder::makeOptionalType(const utils::Typename &type) {
+        llvm::Type *subtype = makeTypename(type);
+
+        auto holdsType = llvm::Type::getInt1Ty(context);
+
+        /*
+         * struct OptionalType {
+         *   bool holds;
+         *   int value;
+         * }
+         */
+
+        return llvm::StructType::get(context, { holdsType, subtype });
+    }
+
     llvm::StructType *Builder::makeVariableArrayType(const utils::Typename &type) {
         llvm::Type *subtype = makeTypename(type);
 

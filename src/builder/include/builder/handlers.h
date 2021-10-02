@@ -75,7 +75,13 @@ namespace kara::builder::ops::handlers {
         const Context &context, const builder::Result &result, const utils::Typename &type, bool force);
     Maybe<builder::Result> makeConvertNullToRef(
         const Context &context, const builder::Result &result, const utils::Typename &type, bool force);
+    Maybe<builder::Result> makeConvertNullToOptional(
+        const Context &context, const builder::Result &result, const utils::Typename &type, bool force);
     Maybe<builder::Result> makeConvertRefToBool(
+        const Context &context, const builder::Result &result, const utils::Typename &type, bool force);
+    Maybe<builder::Result> makeConvertOptionalToBool(
+        const Context &context, const builder::Result &result, const utils::Typename &type, bool force);
+    Maybe<builder::Result> makeConvertTypeToOptional(
         const Context &context, const builder::Result &result, const utils::Typename &type, bool force);
     Maybe<builder::Result> makeConvertIntToFloat(
         const Context &context, const builder::Result &result, const utils::Typename &type, bool force);
@@ -88,6 +94,7 @@ namespace kara::builder::ops::handlers {
     Maybe<builder::Result> makeNegativeWithNumber(const Context &context, const builder::Result &value);
     Maybe<builder::Result> makeReferenceWithVariable(const Context &context, const builder::Result &value);
     Maybe<builder::Result> makeDereferenceWithReference(const Context &context, const builder::Result &value);
+    Maybe<builder::Result> makeDereferenceWithOptional(const Context &context, const builder::Result &value);
 
     Maybe<builder::Result> makeAddNumber(
         const Context &context, const builder::Result &left, const builder::Result &right);
@@ -127,8 +134,6 @@ namespace kara::builder::ops::handlers {
         const Context &context, const builder::Unresolved &unresolved, const matching::MatchInput &input);
 
     // Marked as taking builder::Result to avoid multiple infers... new solution maybe be needed in future
-    //    Maybe<builder::Wrapped> makeDotForArrayProperties(
-    //        const Context &context, const builder::Result &value, const parser::Reference *node);
     Maybe<builder::Wrapped> makeDotForField(
         const Context &context, const builder::Result &value, const parser::Reference *node);
     Maybe<builder::Wrapped> makeDotForUFCS(

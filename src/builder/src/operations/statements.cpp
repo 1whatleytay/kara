@@ -11,52 +11,12 @@ namespace kara::builder::ops::statements {
         assert(context.ir);
         assert(context.exitInfo);
 
-        //        context.exitInfo->requiredPoints.insert(point);
-
         auto exitId = static_cast<int8_t>(point);
         auto llvmExitId = llvm::ConstantInt::get(llvm::Type::getInt8Ty(context.builder.context), exitId);
 
         context.ir->CreateStore(llvmExitId, context.exitInfo->exitChainType);
         context.ir->CreateBr(context.exitInfo->exitChainBegin);
     }
-
-    //    void commit(const Context &context, const Destinations &destinations) {
-    //        assert(context.function);
-    //
-    //        assert(context.ir);
-    //        assert(context.exitInfo);
-    //
-    //        if (!context.ir->GetInsertBlock()->getTerminator()) {
-    //            ops::statements::exit(context, ExitPoint::Regular);
-    //        }
-    //
-    //        llvm::IRBuilder<> exit(lastBlock);
-    //
-    //        auto value = exit.CreateLoad(exitChainType);
-    //
-    //        llvm::BasicBlock *pass = function->exitBlock;
-    //
-    //        if (parent) {
-    //            pass = llvm::BasicBlock::Create(builder.context, "pass", function->function, lastBlock);
-    //            llvm::IRBuilder<> passBuilder(pass);
-    //
-    //            passBuilder.CreateStore(value, parent->exitChainType);
-    //            passBuilder.CreateBr(parent->exitChainBegin);
-    //        }
-    //
-    //        auto type = llvm::Type::getInt8Ty(builder.context);
-    //        auto inst = exit.CreateSwitch(value, pass, requiredPoints.size());
-    //
-    //        for (const auto &pair : destinations) {
-    //            auto exitId = static_cast<int8_t>(pair.first);
-    //            auto constant = llvm::ConstantInt::get(type, exitId);
-    //
-    //            assert(pair.second); // break/continue/return is just not allowed here
-    //            // ^^^ what does that even mean?? pass block should work you're saying? isn't that everything?
-    //
-    //            inst->addCase(constant, pair.second);
-    //        }
-    //    }
 
     namespace {
         llvm::BasicBlock *recurseIf(const Context &context, const parser::If *node, llvm::BasicBlock *next) {
@@ -71,7 +31,7 @@ namespace kara::builder::ops::statements {
                 switch (onFalse->is<parser::Kind>()) {
                 case parser::Kind::Code:
                     falseNext = ops::statements::makeScope(
-                        context, onTrue, { { ExitPoint::Regular, next } }); // yikes formatting
+                        context, onFalse->as<parser::Code>(), { { ExitPoint::Regular, next } });
 
                     break;
 
@@ -97,7 +57,7 @@ namespace kara::builder::ops::statements {
             auto converted = ops::makeConvert(conditionContext, conditionResult, from(utils::PrimitiveType::Bool));
             if (!converted) {
                 throw VerifyError(
-                    node->children.front().get(), "Condition for if statement must evaluate to true or false.");
+                    node->children.front().get(), "Condition for if statement must evaluate to a bool.");
             }
 
             conditionBuilder.CreateCondBr(ops::get(conditionContext, *converted), trueScope, falseNext);
@@ -321,7 +281,7 @@ namespace kara::builder::ops::statements {
 
             // might want to make ops::makeAccumulatorCommit(const Context &, const builder::Accumulator &)
             if (context.ir && context.accumulator)
-                context.accumulator->commit(context.builder, *context.ir);
+                context.accumulator->commit(context);
 
             // TODO: something needs to be done about this insert block... this is a temp solution
             ops::statements::exit(context, ExitPoint::Return);
@@ -366,12 +326,6 @@ namespace kara::builder::ops::statements {
             exitInfo.exitChainEnd = exitInfo.exitChainBegin;
         }
 
-        //        llvm::BasicBlock *moveAfter = parent ? parent->lastBlock : function.exitBlock;
-
-        //        if (!parent && !node->is(parser::Kind::Type)) // don't bother building parameters for type
-        //            // destructor functions
-        //            makeParameters(); // important!!! even if it won't be dealing with type
-
         Accumulator accumulator;
         Cache *cache = parent.cache->create();
 
@@ -391,25 +345,7 @@ namespace kara::builder::ops::statements {
             case parser::Kind::Variable: {
                 auto var = std::make_unique<builder::Variable>(child->as<parser::Variable>(), context);
 
-                //                    auto result = builder::Result {
-                //                        builder::Result::FlagReference | (var->node->isMutable ?
-                //                        builder::Result::FlagMutable : 0), var->value, var->type, &accumulator, //
-                //                        safe to put, is reference dw
-                //                    };
-
                 llvm::IRBuilder<> exitBuilder(exitInfo.exitChainBegin, exitInfo.exitChainBegin->begin());
-
-                //                ops::Context exitContext {
-                //                    context.builder,
-                //                    nullptr,
-                //
-                //                    &exitBuilder,
-                //
-                //                    nullptr,
-                //                    context.function,
-                //
-                //                    nullptr, // ?
-                //                };
 
                 ops::makeDestroy(context.move(&exitBuilder), var->value, var->type);
 
@@ -457,7 +393,7 @@ namespace kara::builder::ops::statements {
             }
 
             if (context.ir)
-                accumulator.commit(context.builder, *context.ir);
+                accumulator.commit(context);
         }
 
         assert(context.function);

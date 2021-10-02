@@ -509,7 +509,9 @@ namespace kara::builder::ops::handlers {
 
         return builder::Result {
             builder::Result::FlagTemporary,
-            context.ir ? context.ir->CreateStructGEP(ops::get(context, result), 0) : nullptr,
+            context.ir
+                ? context.ir->CreateStructGEP(ops::get(context, result), 0)
+                : nullptr,
             type,
             context.accumulator,
         };
@@ -524,7 +526,33 @@ namespace kara::builder::ops::handlers {
 
         return builder::Result {
             builder::Result::FlagTemporary,
-            context.ir ? context.ir->CreatePointerCast(ops::get(context, result), llvmType) : nullptr,
+            context.ir
+                ? context.ir->CreatePointerCast(ops::get(context, result), llvmType)
+                : nullptr,
+            type,
+            context.accumulator,
+        };
+    }
+
+
+    Maybe<builder::Result> makeConvertNullToOptional(
+        const Context &context, const builder::Result &result, const utils::Typename &type, bool) {
+        auto optional = std::get_if<utils::OptionalTypename>(&type);
+
+        if (!(asPrimTo(result.type, utils::PrimitiveType::Null) && optional))
+            return std::nullopt;
+
+        llvm::Value *value = nullptr;
+
+        if (context.ir) {
+            value = ops::makeAlloca(context, type);
+            auto holdsPtr = context.ir->CreateStructGEP(value, 0);
+            context.ir->CreateStore(context.ir->getInt1(false), holdsPtr);
+        }
+
+        return builder::Result {
+            builder::Result::FlagTemporary | builder::Result::FlagReference,
+            value,
             type,
             context.accumulator,
         };
@@ -537,7 +565,58 @@ namespace kara::builder::ops::handlers {
 
         return builder::Result {
             builder::Result::FlagTemporary,
-            context.ir ? context.ir->CreateIsNotNull(ops::get(context, result)) : nullptr,
+            context.ir
+                ? context.ir->CreateIsNotNull(ops::get(context, result))
+                : nullptr,
+            type,
+            context.accumulator,
+        };
+    }
+
+    Maybe<builder::Result> makeConvertOptionalToBool(
+        const Context &context, const builder::Result &result, const utils::Typename &type, bool) {
+        auto optional = std::get_if<utils::OptionalTypename>(&result.type);
+
+        if (!(optional && asPrimTo(type, utils::PrimitiveType::Bool)))
+            return std::nullopt;
+
+        return builder::Result {
+            builder::Result::FlagTemporary | builder::Result::FlagReference,
+            context.ir
+                ? context.ir->CreateStructGEP(ops::ref(context, result), 0)
+                : nullptr,
+            type,
+            context.accumulator,
+        };
+    }
+
+    Maybe<builder::Result> makeConvertTypeToOptional(
+        const Context &context, const builder::Result &result, const utils::Typename &type, bool force) {
+        auto optional = std::get_if<utils::OptionalTypename>(&type);
+
+        // calling makeConvert twice for safety
+        if (!(optional && ops::makeConvert(context.move(nullptr), result, *optional->value)))
+            return std::nullopt;
+
+        llvm::Value *value = nullptr;
+
+        if (context.ir) {
+            // ok for real this time
+            auto converted = ops::makeConvert(context, result, *optional->value);
+            assert(converted);
+
+            value = ops::makeAlloca(context, type);
+
+            auto holdsPtr = context.ir->CreateStructGEP(value, 0);
+            auto valuePtr = context.ir->CreateStructGEP(value, 1);
+
+            context.ir->CreateStore(context.ir->getInt1(true), holdsPtr);
+            context.ir->CreateStore(ops::get(context, *converted), valuePtr);
+        }
+
+        return builder::Result {
+            builder::Result::FlagTemporary | builder::Result::FlagReference,
+            value,
             type,
             context.accumulator,
         };
@@ -693,6 +772,22 @@ namespace kara::builder::ops::handlers {
             builder::Result::FlagReference | (refType->isMutable ? builder::Result::FlagMutable : 0),
             ops::get(context, value),
             *refType->value,
+            context.accumulator,
+        };
+    }
+
+    Maybe<builder::Result> makeDereferenceWithOptional(const Context &context, const builder::Result &value) {
+        auto optional = std::get_if<utils::OptionalTypename>(&value.type);
+
+        if (!optional)
+            return std::nullopt;
+
+        return builder::Result {
+            builder::Result::FlagReference | (value.flags & builder::Result::FlagMutable),
+            context.ir
+                ? context.ir->CreateStructGEP(ops::ref(context, value), 1)
+                : nullptr,
+            *optional->value,
             context.accumulator,
         };
     }

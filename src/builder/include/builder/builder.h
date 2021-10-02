@@ -108,7 +108,7 @@ namespace kara::builder {
 
         void consider(const Result &result);
 
-        void commit(builder::Builder &builder, llvm::IRBuilder<> &ir);
+        void commit(const ops::Context &context);
     };
 
     struct Variable {
@@ -160,39 +160,6 @@ namespace kara::builder {
     };
 
     enum class ExitPoint { Regular, Return, Break, Continue };
-
-    //    struct Scope {
-    //        builder::Builder &builder;
-    //        builder::Scope *parent = nullptr; // ?
-    //        builder::Function *function = nullptr;
-    //
-    //        Accumulator accumulator; // x
-    //        builder::Cache *cache = nullptr; // x
-    //
-    //        llvm::BasicBlock *openingBlock = nullptr; // x
-    //        llvm::BasicBlock *currentBlock = nullptr; // x
-    //
-    //        llvm::BasicBlock *lastBlock = nullptr; // ?
-    //
-    //        llvm::Value *exitChainType = nullptr; // x
-    //        llvm::BasicBlock *exitChainBegin = nullptr; // x
-    //
-    ////        std::unordered_set<ExitPoint> requiredPoints = { ExitPoint::Regular };
-    //        std::unordered_map<ExitPoint, llvm::BasicBlock *> destinations;
-    //
-    //        std::optional<llvm::IRBuilder<>> current;
-
-    // For ExpressionNode scopes, product is stored here
-    //        std::optional<Result> product;
-
-    //        Scope(const hermes::Node *node, Scope &parent, bool doCodeGen = true);
-    //        Scope(const hermes::Node *node, Function &function, bool doCodeGen = true);
-    //
-    //    private:
-    //        void makeParameters();
-    //
-    //        Scope(const hermes::Node *node, Function &function, Scope *parent, bool doCodeGen = true);
-    //    };
 
     struct Type {
         builder::Builder &builder;
@@ -284,6 +251,7 @@ namespace kara::builder {
         llvm::Type *makeTypename(const utils::Typename &type);
         [[nodiscard]] llvm::Type *makePrimitiveType(utils::PrimitiveType type) const;
 
+        llvm::StructType *makeOptionalType(const utils::Typename &of);
         // take llvm::Type * ? can use hashmap
         llvm::StructType *makeVariableArrayType(const utils::Typename &of);
 

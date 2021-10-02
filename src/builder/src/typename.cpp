@@ -124,7 +124,9 @@ namespace kara::builder {
 
             llvm::Type *operator()(const utils::NamedTypename &type) const { return builder.makeType(type.type)->type; }
 
-            llvm::Type *operator()(const utils::OptionalTypename &type) const { throw; }
+            llvm::Type *operator()(const utils::OptionalTypename &type) const {
+                return builder.makeOptionalType(*type.value);
+            }
 
             llvm::Type *operator()(const utils::ReferenceTypename &type) const {
                 return llvm::PointerType::get(builder.makeTypename(*type.value), 0);

@@ -17,22 +17,6 @@ namespace kara::builder::ops {
         return context;
     }
 
-    //    Context Context::from(builder::Scope &scope) {
-    //        return {
-    //            scope.builder,
-    //            &scope.accumulator,
-    //            scope.current ? &*scope.current : nullptr,
-    //            scope.cache,
-    //            scope.function,
-    //            ExitInfo {
-    //                scope.lastBlock, // :| should probably be initial value of exitChainBegin
-    //                scope.exitChainBegin,
-    //                scope.exitChainType,
-    //                scope.requiredPoints,
-    //            }
-    //        };
-    //    }
-
     llvm::Value *get(const Context &context, const builder::Result &result) {
         if (result.isSet(builder::Result::FlagReference))
             return context.ir ? context.ir->CreateLoad(result.value) : nullptr;
@@ -294,7 +278,10 @@ namespace kara::builder::ops {
                 handlers::makeConvertRefToUnboundedRef,
                 handlers::makeConvertFixedRefToUnboundedRef,
                 handlers::makeConvertNullToRef,
+                handlers::makeConvertNullToOptional,
                 handlers::makeConvertRefToBool,
+                handlers::makeConvertOptionalToBool,
+                handlers::makeConvertTypeToOptional,
                 handlers::makeConvertIntToFloat,
                 handlers::makeConvertFloatToInt,
                 handlers::makeConvertPrimitiveExtend,

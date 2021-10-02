@@ -188,6 +188,7 @@ namespace kara::builder::ops {
             return die(handlers::resolve(
                            std::array {
                                handlers::makeDereferenceWithReference,
+                               handlers::makeDereferenceWithOptional,
                            },
                            context, value),
                 "Cannot dereference value of non reference.");
