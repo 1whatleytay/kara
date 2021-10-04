@@ -78,13 +78,19 @@ namespace kara::parser {
         needs(")");
     }
 
-    const Reference *Dot::reference() const { return children.front()->as<Reference>(); }
+    const Unary *Dot::unary() const {
+        return children.front()->is(Kind::Unary) ? children.front()->as<Unary>() : nullptr;
+    }
+
+    const Reference *Dot::reference() const {
+        return children.front()->is(Kind::Reference) ? children.front()->as<Reference>() : nullptr;
+    }
 
     Dot::Dot(Node *parent)
         : Node(parent, Kind::Dot) {
         match(".");
 
-        push<Reference>();
+        push<Unary, Reference>();
     }
 
     const Expression *Index::index() const { return children.front()->as<Expression>(); }

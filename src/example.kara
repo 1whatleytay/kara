@@ -1,7 +1,7 @@
 import (c) 'stdio.h'
 
-a(b ?int) => b ?? 2
+a(a bool) => a.!
 
 main int {
-    return a(4)
+    return false.a ? 1 : 0
 }

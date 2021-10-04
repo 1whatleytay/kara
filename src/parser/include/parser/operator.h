@@ -30,6 +30,7 @@ namespace kara::parser {
     };
 
     struct Dot : public hermes::Node {
+        [[nodiscard]] const Unary *unary() const;
         [[nodiscard]] const Reference *reference() const;
 
         explicit Dot(Node *parent);
