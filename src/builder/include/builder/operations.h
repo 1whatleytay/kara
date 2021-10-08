@@ -134,8 +134,8 @@ namespace kara::builder::ops {
 
     namespace expression {
         builder::Wrapped makeNounContent(const Context &context, const hermes::Node *node);
-        builder::Wrapped makeNounModifier(
-            const Context &context, const builder::Wrapped &value, const hermes::Node *node);
+//        builder::Wrapped makeNounModifier(
+//            const Context &context, const builder::Wrapped &value, const hermes::Node *node);
 
         builder::Wrapped makeUnary(const Context &context, const builder::Result &result, const parser::Unary *node);
 

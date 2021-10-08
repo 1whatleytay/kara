@@ -1,7 +1,5 @@
 import (c) 'stdio.h'
 
-a(a bool) => a.!
-
 main int {
-    return false.a ? 1 : 0
+    printf('%d', 0 as int \ \\ \\ \\ \ \\ \\ \ \\ \\ \ \)
 }

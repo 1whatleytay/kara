@@ -9,7 +9,7 @@ namespace kara::parser {
     Code::Code(Node *parent)
         : Node(parent, Kind::Code) {
         while (!end() && !peek("}")) {
-            push<Block, Insight, If, For, Statement, Assign, Variable, Expression>();
+            push<Block, Insight, If, For, Statement, Variable, Assign, Expression>();
 
             while (next(","))
                 ;

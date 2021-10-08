@@ -10,9 +10,8 @@
 #include <fmt/format.h>
 
 namespace kara::builder {
-    Variable::Variable(const parser::Variable *node, builder::Builder &builder)
-        : node(node) {
-        if (node->isMutable)
+    Variable::Variable(const parser::Variable *node, builder::Builder &builder) : node(node) {
+        if (node->isMutable && !builder.options.mutableGlobals)
             throw VerifyError(node, "Global variables cannot be mutable.");
 
         if (!node->hasFixedType)
@@ -60,8 +59,12 @@ namespace kara::builder {
             defaultValue = std::visit(visitor, numberNode->value);
         }
 
-        value = new llvm::GlobalVariable(*builder.module, builder.makeTypename(type), node->isMutable,
-            node->isExternal ? L::ExternalLinkage : L::PrivateLinkage, defaultValue, node->name);
+        if (!node->isExternal && !defaultValue) {
+            throw VerifyError(node, "All constant globals must be initialized with some value.");
+        }
+
+        value = new llvm::GlobalVariable(*builder.module, builder.makeTypename(type), !node->isMutable,
+            node->isExternal ? L::ExternalLinkage : L::WeakAnyLinkage, defaultValue, node->name);
     }
 
     Variable::Variable(const parser::Variable *node, const ops::Context &context)

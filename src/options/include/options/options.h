@@ -28,6 +28,8 @@ namespace kara::options {
         std::string free = "free";
         std::string realloc = "realloc";
 
+        bool mutableGlobals = false;
+
         Options() = default;
         Options(int count, const char **args);
     };

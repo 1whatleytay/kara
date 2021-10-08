@@ -352,6 +352,33 @@ namespace kara::builder::ops::handlers {
         };
     }
 
+
+    Maybe<builder::Result> makeConvertForcedIntToBool(
+        const Context &context, const builder::Result &result, const utils::Typename &type, bool force) {
+        auto checkConvert = [&]() {
+            return ops::makeConvert(
+                context.move(nullptr), result, from(utils::PrimitiveType::Int))
+                .has_value();
+        };
+
+        if (!(force && asPrimTo(type, utils::PrimitiveType::Bool) && checkConvert()))
+            return std::nullopt;
+
+        auto intRep = ops::makeConvert(
+                context, result, from(utils::PrimitiveType::Int));
+
+        assert(intRep);
+
+        return builder::Result {
+            builder::Result::FlagTemporary,
+            context.ir
+                ? context.ir->CreateSExtOrTrunc(ops::get(context, *intRep), context.ir->getInt1Ty())
+                : nullptr,
+            type,
+            context.accumulator,
+        };
+    }
+
     Maybe<builder::Result> makeConvertUniqueOrMutableToRef(
         const Context &context, const builder::Result &result, const utils::Typename &type, bool) {
         auto typeRef = asRef(type);

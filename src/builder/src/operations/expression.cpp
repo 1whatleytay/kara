@@ -308,21 +308,13 @@ namespace kara::builder::ops::expression {
         }
     }
 
-    builder::Wrapped makeNounModifier(const Context &context, const builder::Wrapped &value, const hermes::Node *node) {
-        switch (node->is<parser::Kind>()) {
-        case parser::Kind::Call:
-            return ops::modifiers::makeCall(context, value, node->as<parser::Call>());
-
-        case parser::Kind::Dot:
-            return ops::modifiers::makeDot(context, value, node->as<parser::Dot>());
-
-        case parser::Kind::Index:
-            return ops::modifiers::makeIndex(context, value, node->as<parser::Index>());
-
-        default:
-            throw;
-        }
-    }
+//    builder::Wrapped makeNounModifier(const Context &context, const builder::Wrapped &value, const hermes::Node *node) {
+//        switch (node->is<parser::Kind>()) {
+//
+//        default:
+//            throw;
+//        }
+//    }
 
     builder::Wrapped makeUnary(const Context &context, const builder::Result &result, const parser::Unary *node) {
         switch (node->op) {
@@ -346,27 +338,38 @@ namespace kara::builder::ops::expression {
     builder::Wrapped makeNoun(const Context &context, const utils::ExpressionNoun &noun) {
         builder::Wrapped result = ops::expression::makeNounContent(context, noun.content);
 
-        for (const hermes::Node *modifier : noun.modifiers)
-            result = ops::expression::makeNounModifier(context, result, modifier);
+//        for (const hermes::Node *modifier : noun.modifiers)
+//            result = ops::expression::makeNounModifier(context, result, modifier);
 
         return result;
     }
 
     builder::Wrapped makeOperation(const Context &context, const utils::ExpressionOperation &operation) {
-        builder::Result value = ops::makeInfer(context, ops::expression::makeResult(context, *operation.a));
+        auto wrapped = ops::expression::makeResult(context, *operation.a);
+
+        auto value = [&context, &wrapped]() { return ops::makeInfer(context, wrapped); };
 
         switch (operation.op->is<parser::Kind>()) {
         case parser::Kind::Unary:
-            return ops::expression::makeUnary(context, value, operation.op->as<parser::Unary>());
+            return ops::expression::makeUnary(context, value(), operation.op->as<parser::Unary>());
 
         case parser::Kind::Ternary:
-            return ops::modifiers::makeTernary(context, value, operation.op->as<parser::Ternary>());
+            return ops::modifiers::makeTernary(context, value(), operation.op->as<parser::Ternary>());
 
         case parser::Kind::As:
-            return ops::modifiers::makeAs(context, value, operation.op->as<parser::As>());
+            return ops::modifiers::makeAs(context, value(), operation.op->as<parser::As>());
 
         case parser::Kind::Slash:
-            return value;
+            return value();
+
+        case parser::Kind::Call:
+            return ops::modifiers::makeCall(context, wrapped, operation.op->as<parser::Call>());
+
+        case parser::Kind::Dot:
+            return ops::modifiers::makeDot(context, wrapped, operation.op->as<parser::Dot>());
+
+        case parser::Kind::Index:
+            return ops::modifiers::makeIndex(context, wrapped, operation.op->as<parser::Index>());
 
         default:
             throw;

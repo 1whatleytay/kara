@@ -257,7 +257,7 @@ namespace kara::builder {
             std::stringstream buffer;
             buffer << stream.rdbuf();
 
-            libraries.emplace_back(buffer.str(), library);
+            libraries.emplace_back(buffer.str(), fs::path(library).parent_path());
         }
 
         std::unique_ptr<llvm::Module> base;

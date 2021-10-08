@@ -45,10 +45,6 @@ namespace kara::utils {
 
     struct ExpressionNoun {
         const hermes::Node *content = nullptr;
-
-        std::vector<const hermes::Node *> modifiers;
-
-        void push(const hermes::Node *node);
     };
 
     struct ExpressionOperation {

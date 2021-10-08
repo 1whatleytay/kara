@@ -28,6 +28,8 @@ namespace kara::options {
         app.add_option("--free", free, "Name of free stub function to link against (void (i8 *)).");
         app.add_option("--realloc", realloc, "Name of realloc stub function to link against (i8 * (i8 *, size_t)).");
 
+        app.add_option("--mutable-globals", mutableGlobals, "Whether or not to enable mutable globals.");
+
         try {
             app.parse(count, args);
         } catch (const CLI::Error &e) {

@@ -63,6 +63,8 @@ namespace kara::builder::ops::handlers {
         const Context &context, const builder::Result &result, const utils::Typename &type, bool force);
     Maybe<builder::Result> makeConvertForcedRefToULong(
         const Context &context, const builder::Result &result, const utils::Typename &type, bool force);
+    Maybe<builder::Result> makeConvertForcedIntToBool(
+        const Context &context, const builder::Result &result, const utils::Typename &type, bool force);
     Maybe<builder::Result> makeConvertUniqueOrMutableToRef(
         const Context &context, const builder::Result &result, const utils::Typename &type, bool force);
     Maybe<builder::Result> makeConvertUniqueToVariableArray(

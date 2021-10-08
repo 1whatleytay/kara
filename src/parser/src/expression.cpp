@@ -8,11 +8,9 @@
 #include <unordered_set>
 
 namespace kara::parser {
-    utils::ExpressionResult applyUnary(
-        const utils::ExpressionNoun &current, const std::vector<const parser::Unary *> &unary) {
-        utils::ExpressionResult value = current;
-
-        for (auto a = unary.rbegin(); a < unary.rend(); a++)
+    utils::ExpressionResult applyModifiers(
+        utils::ExpressionResult value, const std::vector<const hermes::Node *> &modifiers) {
+        for (auto a = modifiers.rbegin(); a < modifiers.rend(); a++)
             value = utils::ExpressionOperation(std::make_unique<utils::ExpressionResult>(std::move(value)), *a);
 
         return value;
@@ -105,6 +103,17 @@ namespace kara::parser {
         std::vector<utils::ExpressionResult> results;
         std::vector<const Operator *> operators;
 
+        std::unordered_set<parser::Kind> literal = {
+            parser::Kind::Parentheses,
+            parser::Kind::Array,
+            parser::Kind::String,
+            parser::Kind::Special,
+            parser::Kind::Bool,
+            parser::Kind::Number,
+            parser::Kind::New,
+            parser::Kind::Reference,
+        };
+
         std::unordered_set<parser::Kind> groupsToLeft = {
             parser::Kind::As,
             parser::Kind::Ternary,
@@ -112,16 +121,23 @@ namespace kara::parser {
         };
 
         {
-            std::vector<const Unary *> unary;
-            utils::ExpressionNoun current;
+            std::vector<const hermes::Node *> unary;
+            std::vector<const hermes::Node *> modifiers;
 
             auto commit = [&]() {
-                if (current.content) {
-                    results.emplace_back(applyUnary(current, unary));
+                assert(!results.empty());
 
-                    unary.clear();
-                    current = {};
-                }
+                modifiers.insert(modifiers.end(), unary.rbegin(), unary.rend());
+
+//                auto grab = std::move(results.back());
+//                results.pop_back();
+//
+//                results.emplace_back(applyModifiers(std::move(grab), modifiers));
+
+                results.back() = applyModifiers(std::move(results.back()), modifiers);
+
+                unary.clear();
+                modifiers.clear();
             };
 
             for (const auto &child : children) {
@@ -141,14 +157,17 @@ namespace kara::parser {
                     // implied
                     // results.clear();
                     // operators.clear();
+                } else if (literal.find(child->is<parser::Kind>()) != literal.end()) {
+                    results.emplace_back(utils::ExpressionNoun { child.get() });
                 } else if (child->is(Kind::Operator)) {
                     operators.push_back(child->as<Operator>());
 
                     commit();
                 } else if (child->is(Kind::Unary)) {
-                    unary.push_back(child->as<Unary>());
+                    // unary operators are in reverse, so we keep them separate until we concat
+                    unary.push_back(child.get());
                 } else {
-                    current.push(child.get());
+                    modifiers.push_back(child.get());
                 }
             }
 
