@@ -39,15 +39,13 @@ namespace kara::builder::ops::modifiers {
             input.parameters.push_back(ops::expression::make(context, parameter));
 
         auto resolve = [&]() {
+            // makeCallOnValue
             auto v = handlers::resolve(
                 std::array {
                     handlers::makeCallOnNew,
                     handlers::makeCallOnFunctionOrType,
                 },
                 context, *unresolved, input);
-
-            if (!v)
-                die("Could not resolve call operator.");
 
             return *v;
         };
@@ -56,11 +54,11 @@ namespace kara::builder::ops::modifiers {
     }
 
     builder::Wrapped makeDot(const Context &context, const builder::Wrapped &value, const parser::Dot *node) {
-        builder::Result infer = ops::makeInfer(context, value);
+        auto infer = [&]() { return ops::makeInfer(context, value); };
 
         switch (node->children.front()->is<parser::Kind>()) {
         case parser::Kind::Unary:
-            return ops::blame(node, ops::expression::makeUnary, context, ops::makeInfer(context, value), node->unary());
+            return ops::blame(node, ops::expression::makeUnary, context, value, node->unary());
 
         case parser::Kind::Reference: {
             auto resolve = [&]() {
@@ -69,7 +67,7 @@ namespace kara::builder::ops::modifiers {
                         handlers::makeDotForField,
                         handlers::makeDotForUFCS,
                     },
-                    context, infer, node->reference());
+                    context, infer(), node->reference());
 
                 if (!v)
                     die("Could not resolve dot operator.");
@@ -316,19 +314,21 @@ namespace kara::builder::ops::expression {
 //        }
 //    }
 
-    builder::Wrapped makeUnary(const Context &context, const builder::Result &result, const parser::Unary *node) {
+    builder::Wrapped makeUnary(const Context &context, const builder::Wrapped &wrapped, const parser::Unary *node) {
+        auto value = [&context, &wrapped]() { return ops::makeInfer(context, wrapped); };
+
         switch (node->op) {
         case utils::UnaryOperation::Not:
-            return ops::blame(node, ops::unary::makeNot, context, result);
+            return ops::blame(node, ops::unary::makeNot, context, value());
 
         case utils::UnaryOperation::Negative:
-            return ops::blame(node, ops::unary::makeNegative, context, result);
+            return ops::blame(node, ops::unary::makeNegative, context, value());
 
         case utils::UnaryOperation::Reference:
-            return ops::blame(node, ops::unary::makeReference, context, result);
+            return ops::blame(node, ops::unary::makeReference, context, wrapped);
 
         case utils::UnaryOperation::Fetch:
-            return ops::blame(node, ops::unary::makeDereference, context, result);
+            return ops::blame(node, ops::unary::makeDereference, context, wrapped);
 
         default:
             throw;
@@ -351,7 +351,7 @@ namespace kara::builder::ops::expression {
 
         switch (operation.op->is<parser::Kind>()) {
         case parser::Kind::Unary:
-            return ops::expression::makeUnary(context, value(), operation.op->as<parser::Unary>());
+            return ops::expression::makeUnary(context, wrapped, operation.op->as<parser::Unary>());
 
         case parser::Kind::Ternary:
             return ops::modifiers::makeTernary(context, value(), operation.op->as<parser::Ternary>());

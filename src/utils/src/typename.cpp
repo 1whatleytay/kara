@@ -124,7 +124,25 @@ namespace kara::utils {
         return fmt::format("{}{}{}", prefix, mutability, toString(*type.value));
     }
 
-    std::string toString(const FunctionTypename &type) { return "<func>"; }
+    std::string toString(const FunctionTypename &type) {
+        auto heading = ([type]() -> std::string {
+            switch (type.kind) {
+            case FunctionKind::Pointer:
+                return "func ptr";
+            case FunctionKind::Regular:
+                return "func";
+            default:
+                throw;
+            }
+        })();
+
+        std::vector<std::string> types(type.parameters.size());
+        std::transform(type.parameters.begin(), type.parameters.end(), types.begin(), [](const auto &t) {
+            return toString(t.second);
+        });
+
+        return fmt::format("{}({}) {}", heading, fmt::join(types, ", "), toString(*type.returnType));
+    }
 
     std::string toString(const Typename &type) {
         return std::visit([](auto &type) { return toString(type); }, type);

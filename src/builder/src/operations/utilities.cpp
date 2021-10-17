@@ -152,10 +152,14 @@ namespace kara::builder::ops {
             const Context &context;
 
             builder::Result operator()(const builder::Result &result) {
-                auto functionTypename = std::get_if<utils::FunctionTypename>(&result.type);
+                if (!result.isSet(builder::Result::FlagExplicit)) {
+                    auto func = std::get_if<utils::FunctionTypename>(&result.type);
 
-                if (functionTypename && functionTypename->kind == utils::FunctionTypename::Kind::Pointer) {
-                    throw; // unimplemented
+                    if (func) {
+                        ops::matching::MatchInput input; // no parameters
+                        auto wrapper = ops::matching::call(context, *func, ops::get(context, result), input);
+                        return ops::matching::unwrap(wrapper, nullptr);
+                    }
                 }
 
                 return result;
@@ -182,12 +186,15 @@ namespace kara::builder::ops {
                     if (!info)
                         die("Cannot find variable reference.");
 
-                    return builder::Result {
+                    // Why makeInfer here?
+                    // The idea is that I can have a variable (y func () nothing)
+                    // And then I can type `y` and have it call using the code in makeInfer.
+                    return ops::makeInfer(context, builder::Result {
                         builder::Result::FlagReference | (info->node->isMutable ? builder::Result::FlagMutable : 0),
                         info->value,
                         info->type,
                         context.accumulator,
-                    };
+                    });
                 }
 
                 auto isNew = [](const hermes::Node *node) { return node->is(parser::Kind::New); };

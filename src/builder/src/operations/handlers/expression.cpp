@@ -46,11 +46,30 @@ namespace kara::builder::ops::handlers {
         std::copy_if(unresolved.references.begin(), unresolved.references.end(), std::back_inserter(functions),
             isFunctionOrType);
 
-        if (functions.empty() && unresolved.builtins.empty())
+        if (!(functions.empty() && unresolved.builtins.empty())) {
+            return ops::matching::unwrap(
+                ops::matching::call(context, functions, unresolved.builtins, input), unresolved.from);
+        }
+
+        // okay, we don't really have anything obvious to call so let's infer it before dying...
+        // we might want to move this to another function but for now I'll keep it because it has `die()`
+        auto infer = ops::makeInfer(context, unresolved);
+        // this infer call ^^ banks on the fact that makeInfer on an unresolved
+        // will just directly return the variable name without any extra calling
+        // ^^ this is just bad code
+
+        auto realType = findReal(infer.type);
+        assert(realType);
+
+        auto functionType = std::get_if<utils::FunctionTypename>(realType);
+
+        if (!functionType)
             die("Reference did not resolve to any functions to call.");
 
-        return ops::matching::unwrap(
-            ops::matching::call(context, functions, unresolved.builtins, input), unresolved.from);
+        auto real = ops::makeReal(context, infer);
+        auto llvmReal = ops::get(context, real); // ?
+
+        return ops::matching::unwrap(ops::matching::call(context, *functionType, llvmReal, input), unresolved.from);
     }
 
     Maybe<builder::Wrapped> makeDotForField(

@@ -175,23 +175,34 @@ namespace kara::builder::ops {
                 "Cannot use operator or convert source type {} to signed or float.", toString(value.type));
         }
 
-        builder::Result makeReference(const Context &context, const builder::Result &value) {
-            return die(handlers::resolve(
-                           std::array {
-                               handlers::makeReferenceWithVariable,
-                           },
-                           context, value),
-                "Cannot get reference of temporary.");
+        builder::Result makeReference(const Context &context, const Wrapped &value) {
+            // Wrapped
+            auto result = handlers::resolve(
+                std::array {
+                    handlers::makeReferenceWithFunction,
+                },
+                context, value);
+
+            if (!result) {
+                result = handlers::resolve(
+                    std::array {
+                        handlers::makeReferenceWithVariable,
+                    },
+                    context, ops::makeInfer(context, value));
+            }
+
+            return die(result, "Cannot get reference of temporary.");
         }
 
-        builder::Result makeDereference(const Context &context, const builder::Result &value) {
-            return die(handlers::resolve(
-                           std::array {
-                               handlers::makeDereferenceWithReference,
-                               handlers::makeDereferenceWithOptional,
-                           },
-                           context, value),
-                "Cannot dereference value of non reference.");
+        builder::Result makeDereference(const Context &context, const builder::Wrapped &value) {
+            auto result = handlers::resolve(
+                std::array {
+                    handlers::makeDereferenceWithReference,
+                    handlers::makeDereferenceWithOptional,
+                },
+                context, ops::makeInfer(context, value));
+
+            return die(result, "Cannot dereference value of non reference.");
         }
     }
 

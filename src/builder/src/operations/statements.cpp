@@ -431,10 +431,8 @@ namespace kara::builder::ops::statements {
                 auto exitId = static_cast<int8_t>(pair.first);
                 auto constant = llvm::ConstantInt::get(type, exitId);
 
-                assert(pair.second); // break/continue/return is just not allowed here
-                // ^^^ what does that even mean?? pass block should work you're saying? isn't that everything?
-
-                inst->addCase(constant, pair.second);
+                if (pair.second)
+                    inst->addCase(constant, pair.second);
             }
         }
 

@@ -50,5 +50,14 @@ namespace kara::parser {
         explicit ArrayTypename(Node *parent, bool external = false);
     };
 
+    struct FunctionTypename : public hermes::Node {
+        utils::FunctionKind kind = utils::FunctionKind::Regular;
+
+        [[nodiscard]] std::vector<const Node *> parameters() const;
+        [[nodiscard]] const Node *returnType() const;
+
+        explicit FunctionTypename(Node *parent, bool external = false);
+    };
+
     void pushTypename(hermes::Node *parent);
 }

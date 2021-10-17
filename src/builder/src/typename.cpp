@@ -5,6 +5,7 @@
 #include <parser/literals.h>
 #include <parser/search.h>
 #include <parser/type.h>
+#include <parser/variable.h>
 
 #include <fmt/format.h>
 
@@ -64,16 +65,48 @@ namespace kara::builder {
                 uint64_t operator()(double v) { throw; }
             } visitor;
 
-            return utils::ArrayTypename { e->type,
+            return utils::ArrayTypename {
+                e->type,
 
                 std::make_shared<utils::Typename>(resolveTypename(e->body())),
 
                 e->type == utils::ArrayKind::FixedSize ? std::visit(visitor, e->fixedSize()->value) : 0,
-                e->type == utils::ArrayKind::UnboundedSized ? e->variableSize() : nullptr };
+                e->type == utils::ArrayKind::UnboundedSized ? e->variableSize() : nullptr,
+            };
+        }
+
+        case parser::Kind::FunctionTypename: {
+            auto e = node->as<parser::FunctionTypename>();
+
+            auto parameters = e->parameters();
+            utils::FunctionParameters paramResult(parameters.size());
+
+            std::transform(parameters.begin(), parameters.end(), paramResult.begin(), [this](const hermes::Node *p) {
+                // this is ass, where are variant types?? - taylor
+                switch (p->is<parser::Kind>()) {
+                case parser::Kind::Variable: {
+                    auto e = p->as<parser::Variable>();
+
+                    assert(e->hasFixedType);
+
+                    return std::make_pair(e->name, resolveTypename(e->fixedType()));
+                }
+
+                default:
+                    return std::make_pair(std::string(), resolveTypename(p));
+                }
+            });
+            utils::Typename returnResult = resolveTypename(e->returnType());
+
+            return utils::FunctionTypename {
+                e->kind,
+                std::move(paramResult),
+                std::make_shared<utils::Typename>(std::move(returnResult)),
+            };
         }
 
         default:
-            throw VerifyError(node, "Expected typename node, but got something else.");
+            throw;
         }
     }
 
@@ -147,7 +180,21 @@ namespace kara::builder {
                 }
             }
 
-            llvm::Type *operator()(const utils::FunctionTypename &type) const { throw; }
+            llvm::Type *operator()(const utils::FunctionTypename &type) const {
+                if (type.kind != utils::FunctionKind::Pointer)
+                    throw std::runtime_error("Function typename must be pointer type.");
+
+                auto &paramIn = type.parameters;
+
+                std::vector<llvm::Type *> parameters(type.parameters.size());
+                std::transform(paramIn.begin(), paramIn.end(), parameters.begin(), [this](const auto &v) {
+                    return builder.makeTypename(v.second);
+                });
+
+                auto functionType = llvm::FunctionType::get(builder.makeTypename(*type.returnType), parameters, false);
+
+                return llvm::PointerType::get(functionType, 0);
+            }
         } visitor { *this };
 
         return std::visit(visitor, type);

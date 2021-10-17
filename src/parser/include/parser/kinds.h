@@ -12,6 +12,7 @@ namespace kara::parser {
         OptionalTypename,
         ReferenceTypename,
         ArrayTypename,
+        FunctionTypename,
         Assign,
         Expression,
         Operator,

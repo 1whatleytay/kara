@@ -21,8 +21,21 @@ namespace kara::builder::ops::matching {
         return result;
     }
 
+    utils::FunctionParameters translate(Builder &builder, const std::vector<const parser::Variable *> &variables) {
+        utils::FunctionParameters result;
+
+        for (auto variable : variables) {
+            if (!variable->fixedType())
+                throw VerifyError(variable, "Fixed type required here.");
+
+            result.push_back(std::make_pair(variable->name, builder.resolveTypename(variable->fixedType())));
+        }
+
+        return result;
+    }
+
     MatchResult match(
-        Builder &builder, const std::vector<const parser::Variable *> &parameters, const MatchInput &input) {
+        Builder &builder, const utils::FunctionParameters &parameters, const MatchInput &input) {
         if (parameters.size() != input.parameters.size()) {
             auto error = fmt::format("Expected {} parameters but got {}.", parameters.size(), input.parameters.size());
 
@@ -44,20 +57,16 @@ namespace kara::builder::ops::matching {
                 return false;
             }
 
-            const parser::Variable *var = parameters[to];
+            auto &[name, type] = parameters[to];
             const builder::Result &value = input.parameters[from];
 
             if (taken[from])
                 throw;
 
             if (map[to]) {
-                result.failed = fmt::format("Parameter at index {} with name {} is passed twice.", to, var->name);
+                result.failed = fmt::format("Parameter at index {} with name {} is passed twice.", to, name);
                 return false;
             }
-
-            assert(var->hasFixedType);
-
-            auto type = builder.resolveTypename(var->fixedType());
 
             if (type != value.type) {
                 auto conversion = ops::makeConvert(context, value, type);
@@ -80,7 +89,7 @@ namespace kara::builder::ops::matching {
 
         for (const auto &pair : input.names) {
             auto iterator = std::find_if(
-                parameters.begin(), parameters.end(), [&pair](auto v) { return v->name == pair.second; });
+                parameters.begin(), parameters.end(), [&pair](const auto &v) { return v.first == pair.second; });
 
             if (iterator == parameters.end()) {
                 result.failed = fmt::format("Expected parameter named {}, but none found.", pair.second);
@@ -114,6 +123,39 @@ namespace kara::builder::ops::matching {
             map.begin(), map.end(), std::back_inserter(result.map), [](const auto &maybe) { return maybe.value(); });
 
         return result;
+    }
+
+    CallWrapped call(const Context &context, const utils::FunctionTypename &type,
+        llvm::Value *function, const MatchInput &input) {
+        auto match = ops::matching::match(context.builder, type.parameters, input);
+
+        if (match.failed)
+            return CallError { *match.failed, { } };
+
+        std::vector<llvm::Value *> passParameters(match.map.size());
+
+        for (auto &param : match.map)
+            param = ops::makePass(context, param);
+
+        for (size_t a = 0; a < passParameters.size(); a++) {
+            auto parameterType = type.parameters[a].second;
+
+            passParameters[a] = ops::get(context, ops::makeConvert(context, match.map[a], parameterType).value());
+        }
+
+        auto llvmType = context.builder.makeTypename(type);
+        assert(llvmType->isPointerTy());
+        auto llvmFunction = llvmType->getPointerElementType();
+        assert(llvmFunction->isFunctionTy());
+
+        llvm::FunctionCallee callee(reinterpret_cast<llvm::FunctionType *>(llvmFunction), function);
+
+        return builder::Result {
+            builder::Result::FlagTemporary,
+            context.ir ? context.ir->CreateCall(callee, passParameters) : nullptr,
+            *type.returnType,
+            context.accumulator,
+        };
     }
 
     CallWrapped call(const Context &context, const std::vector<const hermes::Node *> &options,
@@ -161,7 +203,9 @@ namespace kara::builder::ops::matching {
                 throw;
             }
 
-            return std::make_tuple(node, ops::matching::match(context.builder, parameters, inputCopy));
+            auto translatedParameters = translate(context.builder, parameters);
+
+            return std::make_tuple(node, ops::matching::match(context.builder, translatedParameters, inputCopy));
         });
 
         size_t bet = SIZE_T_MAX;
@@ -348,7 +392,12 @@ namespace kara::builder::ops::matching {
             builder::Result operator()(const builder::Result &result) const { return result; }
 
             builder::Result operator()(const CallError &error) const {
-                throw VerifyError(from, "{}\n{}", fmt::format("{}", fmt::join(error.messages, "\n")), error.problem);
+                auto text = fmt::format("{}\n{}", fmt::join(error.messages, "\n"), error.problem);
+
+                if (from)
+                    throw VerifyError(from, "{}", text);
+                else
+                    throw std::runtime_error(text);
             }
         } visitor { node };
 

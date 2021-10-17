@@ -95,6 +95,7 @@ namespace kara::builder::ops::handlers {
     Maybe<builder::Result> makeNotWithBool(const Context &context, const builder::Result &value);
     Maybe<builder::Result> makeNegativeWithNumber(const Context &context, const builder::Result &value);
     Maybe<builder::Result> makeReferenceWithVariable(const Context &context, const builder::Result &value);
+    Maybe<builder::Result> makeReferenceWithFunction(const Context &context, const builder::Wrapped &value);
     Maybe<builder::Result> makeDereferenceWithReference(const Context &context, const builder::Result &value);
     Maybe<builder::Result> makeDereferenceWithOptional(const Context &context, const builder::Result &value);
 
@@ -133,10 +134,14 @@ namespace kara::builder::ops::handlers {
         const Context &context, const builder::Result &left, const builder::Result &right);
 
     // here it's to be being more specific, we need a fix to the multiple code generation problem though
+    // we need something like makeCallOnVariable i think... no better way and might not take unresolved :|
     Maybe<builder::Wrapped> makeCallOnNew(
         const Context &context, const builder::Unresolved &unresolved, const matching::MatchInput &input);
     Maybe<builder::Wrapped> makeCallOnFunctionOrType(
         const Context &context, const builder::Unresolved &unresolved, const matching::MatchInput &input);
+
+    Maybe<builder::Wrapped> makeCallOnValue(
+        const Context &context, const builder::Result &value, const matching::MatchInput &input);
 
     // Marked as taking builder::Result to avoid multiple infers... new solution maybe be needed in future
     Maybe<builder::Wrapped> makeDotForField(

@@ -10,7 +10,7 @@
 namespace kara::parser {
     utils::ExpressionResult applyModifiers(
         utils::ExpressionResult value, const std::vector<const hermes::Node *> &modifiers) {
-        for (auto a = modifiers.rbegin(); a < modifiers.rend(); a++)
+        for (auto a = modifiers.begin(); a < modifiers.end(); a++)
             value = utils::ExpressionOperation(std::make_unique<utils::ExpressionResult>(std::move(value)), *a);
 
         return value;
@@ -156,7 +156,7 @@ namespace kara::parser {
 
                     // implied
                     // results.clear();
-                    // operators.clear();
+//                     operators.clear();
                 } else if (literal.find(child->is<parser::Kind>()) != literal.end()) {
                     results.emplace_back(utils::ExpressionNoun { child.get() });
                 } else if (child->is(Kind::Operator)) {

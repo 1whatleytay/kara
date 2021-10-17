@@ -52,6 +52,12 @@ namespace kara::utils {
         Shared, // *shared T
     };
 
+    enum class FunctionKind {
+        Regular,
+        Pointer,
+        // Pure,
+    };
+
     struct PrimitiveTypename {
         PrimitiveType type = PrimitiveType::Any;
 
@@ -77,15 +83,12 @@ namespace kara::utils {
         bool operator!=(const NamedTypename &other) const;
     };
 
-    struct FunctionTypename {
-        enum class Kind {
-            //        Regular,
-            //        Pure,
-            Pointer
-        };
+    using FunctionParameters = std::vector<std::pair<std::string, Typename>>;
 
-        Kind kind;
-        std::vector<Typename> parameters;
+    struct FunctionTypename {
+        FunctionKind kind = FunctionKind::Regular;
+
+        FunctionParameters parameters;
         std::shared_ptr<Typename> returnType;
 
         bool operator==(const FunctionTypename &other) const;

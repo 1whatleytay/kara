@@ -52,32 +52,35 @@ namespace kara::builder {
                     });
                 }
 
-                auto returnValue = ops::expression::make(tempContext, body->as<parser::Expression>());
-                returnTypename = returnValue.type;
+                auto expressionValue = ops::expression::make(tempContext, body->as<parser::Expression>());
+                returnTypename = expressionValue.type;
             }
 
             returnType = builder.makeTypename(returnTypename);
 
-            std::vector<utils::Typename> parameters(e->parameterCount);
+            utils::FunctionParameters parameters(e->parameterCount);
             std::vector<llvm::Type *> parameterTypes(e->parameterCount);
 
             auto parameterVariables = e->parameters();
 
             for (size_t a = 0; a < e->parameterCount; a++) {
-                auto fixed = parameterVariables[a]->fixedType();
+                auto var = parameterVariables[a];
 
-                if (!fixed) {
+                if (!var->hasFixedType) {
                     throw VerifyError(e->children[a].get(),
                         "Function parameter must have given type, default "
                         "parameters are not implemented.");
                 }
 
-                parameters[a] = builder.resolveTypename(fixed);
-                parameterTypes[a] = builder.makeTypename(parameters[a]);
+                parameters[a] = { var->name, builder.resolveTypename(var->fixedType()) };
+                parameterTypes[a] = builder.makeTypename(parameters[a].second);
             }
 
-            type = { utils::FunctionTypename::Kind::Pointer, std::move(parameters),
-                std::make_shared<utils::Typename>(returnTypename) };
+            type = {
+                utils::FunctionKind::Pointer,
+                std::move(parameters),
+                std::make_shared<utils::Typename>(returnTypename),
+            };
 
             llvm::FunctionType *valueType = llvm::FunctionType::get(returnType, parameterTypes, e->isCVarArgs);
             function = llvm::Function::Create(

@@ -70,6 +70,7 @@ namespace kara::builder {
             FlagTemporary = 1u << 0u,
             FlagMutable = 1u << 1u,
             FlagReference = 1u << 2u,
+            FlagExplicit = 1u << 3u,
         };
 
         uint32_t flags = 0;

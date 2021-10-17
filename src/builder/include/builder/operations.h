@@ -99,8 +99,8 @@ namespace kara::builder::ops {
     namespace unary {
         builder::Result makeNot(const Context &context, const builder::Result &value);
         builder::Result makeNegative(const Context &context, const builder::Result &value);
-        builder::Result makeReference(const Context &context, const builder::Result &value);
-        builder::Result makeDereference(const Context &context, const builder::Result &value);
+        builder::Result makeReference(const Context &context, const builder::Wrapped &value);
+        builder::Result makeDereference(const Context &context, const builder::Wrapped &value);
     }
 
     namespace binary {
@@ -137,7 +137,7 @@ namespace kara::builder::ops {
 //        builder::Wrapped makeNounModifier(
 //            const Context &context, const builder::Wrapped &value, const hermes::Node *node);
 
-        builder::Wrapped makeUnary(const Context &context, const builder::Result &result, const parser::Unary *node);
+        builder::Wrapped makeUnary(const Context &context, const builder::Wrapped &result, const parser::Unary *node);
 
         builder::Wrapped makeNoun(const Context &context, const utils::ExpressionNoun &noun);
         builder::Wrapped makeOperation(const Context &context, const utils::ExpressionOperation &operation);
@@ -172,9 +172,14 @@ namespace kara::builder::ops {
 
         using CallWrapped = std::variant<builder::Result, CallError>;
 
-        MatchResult match(
-            Builder &builder, const std::vector<const parser::Variable *> &variables, const MatchInput &input);
+        utils::FunctionParameters translate(Builder &builder, const std::vector<const parser::Variable *> &variables);
 
+        MatchResult match(
+            Builder &builder, const utils::FunctionParameters &parameters, const MatchInput &input);
+
+        // FunctionTypename needs rework... this is a lot more work than I thought it would be
+        CallWrapped call(const Context &context, const utils::FunctionTypename &type,
+            llvm::Value *function, const MatchInput &input);
         CallWrapped call(const Context &context, const std::vector<const hermes::Node *> &options,
             const std::vector<ops::handlers::builtins::BuiltinFunction> &builtins, const MatchInput &input);
 

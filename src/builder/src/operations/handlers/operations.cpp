@@ -1,5 +1,7 @@
 #include <builder/handlers.h>
 
+#include <parser/function.h> // im sorry
+
 namespace kara::builder::ops::handlers {
     const utils::PrimitiveTypename *asPrim(const utils::Typename &type) {
         return std::get_if<utils::PrimitiveTypename>(&type);
@@ -785,6 +787,34 @@ namespace kara::builder::ops::handlers {
             utils::ReferenceTypename {
                 std::make_shared<utils::Typename>(value.type),
             },
+            context.accumulator,
+        };
+    }
+
+    Maybe<builder::Result> makeReferenceWithFunction(const Context &context, const builder::Wrapped &wrapped) {
+        auto unresolved = std::get_if<builder::Unresolved>(&wrapped);
+
+        if (!unresolved)
+            return std::nullopt;
+
+        // should be able to capture variables too?
+
+        auto iterator = std::find_if(unresolved->references.begin(), unresolved->references.end(), [](auto e) {
+            return e->is(parser::Kind::Function);
+        });
+
+        // multiple functions? what does it capture? random?
+        if (iterator == unresolved->references.end())
+            return std::nullopt;
+
+        // never captures builtins
+
+        auto function = context.builder.makeFunction((*iterator)->as<parser::Function>());
+
+        return builder::Result {
+            builder::Result::FlagTemporary | builder::Result::FlagExplicit,
+            function->function,
+            function->type,
             context.accumulator,
         };
     }
