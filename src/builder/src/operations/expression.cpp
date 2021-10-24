@@ -449,6 +449,10 @@ namespace kara::builder::ops::expression {
     }
 
     builder::Result make(const Context &context, const parser::Expression *expression) {
-        return ops::makeInfer(context, ops::expression::makeResult(context, expression->result));
+        auto result = ops::expression::makeResult(context, expression->result);
+
+        // Double make infer/strong infer to allow for calling of result types
+        // like if y is a var func ptr, and I just type y it will go -> Unresolved -> Result -> Call Result
+        return ops::makeInfer(context, ops::makeInfer(context, result));
     }
 }

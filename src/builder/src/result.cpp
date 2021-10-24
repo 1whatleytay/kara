@@ -2,6 +2,8 @@
 
 #include <hermes/node.h>
 
+#include <fmt/printf.h>
+
 namespace kara::builder {
     bool Result::isSet(Flags flag) const { return flags & flag; }
 

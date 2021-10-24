@@ -85,13 +85,21 @@ namespace kara::builder::ops {
                 ptr = context.ir->CreateStructGEP(variable, 0);
             }
 
+            auto stringType = utils::ReferenceTypename {
+                std::make_shared<utils::Typename>(utils::ArrayTypename {
+                    utils::ArrayKind::Unbounded,
+                    std::make_shared<utils::Typename>(utils::PrimitiveTypename {
+                        utils::PrimitiveType::Byte,
+                    }),
+                }),
+                false,
+                utils::ReferenceKind::Regular,
+            };
+
             return builder::Result {
                 builder::Result::FlagTemporary,
                 ptr,
-                utils::ReferenceTypename {
-                    std::make_shared<utils::Typename>(utils::ArrayTypename { utils::ArrayKind::Unbounded,
-                        std::make_shared<utils::Typename>(utils::PrimitiveTypename { utils::PrimitiveType::Byte }) }),
-                    false },
+                stringType,
                 context.accumulator,
             };
         }

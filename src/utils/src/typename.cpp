@@ -12,7 +12,21 @@ namespace kara::utils {
     bool NamedTypename::operator!=(const NamedTypename &other) const { return !operator==(other); }
 
     bool FunctionTypename::operator==(const FunctionTypename &other) const {
-        return kind == other.kind && *returnType == *other.returnType && parameters == other.parameters;
+        auto check = [this, &other]() -> bool {
+            if (parameters.size() != other.parameters.size())
+                return false;
+
+            // TODO: find some elegant solution for names and func pointers
+            for (size_t a = 0; a < parameters.size(); a++) {
+                if (parameters[a].second != other.parameters[a].second) {
+                    return false;
+                }
+            }
+
+            return true;
+        };
+
+        return kind == other.kind && *returnType == *other.returnType && check();
     }
 
     bool FunctionTypename::operator!=(const FunctionTypename &other) const { return !operator==(other); }

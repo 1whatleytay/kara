@@ -53,6 +53,8 @@ namespace kara::parser {
     struct FunctionTypename : public hermes::Node {
         utils::FunctionKind kind = utils::FunctionKind::Regular;
 
+        bool isLocked = false;
+
         [[nodiscard]] std::vector<const Node *> parameters() const;
         [[nodiscard]] const Node *returnType() const;
 

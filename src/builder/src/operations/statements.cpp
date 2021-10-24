@@ -341,55 +341,59 @@ namespace kara::builder::ops::statements {
         };
 
         for (const auto &child : node->children) {
-            switch (child->is<parser::Kind>()) {
-            case parser::Kind::Variable: {
-                auto var = std::make_unique<builder::Variable>(child->as<parser::Variable>(), context);
+            try {
+                switch (child->is<parser::Kind>()) {
+                case parser::Kind::Variable: {
+                    auto var = std::make_unique<builder::Variable>(child->as<parser::Variable>(), context);
 
-                llvm::IRBuilder<> exitBuilder(exitInfo.exitChainBegin, exitInfo.exitChainBegin->begin());
+                    llvm::IRBuilder<> exitBuilder(exitInfo.exitChainBegin, exitInfo.exitChainBegin->begin());
 
-                ops::makeDestroy(context.move(&exitBuilder), var->value, var->type);
+                    ops::makeDestroy(context.move(&exitBuilder), var->value, var->type);
 
-                cache->variables[child->as<parser::Variable>()] = std::move(var);
+                    cache->variables[child->as<parser::Variable>()] = std::move(var);
 
-                break;
-            }
+                    break;
+                }
 
-            case parser::Kind::Assign:
-                ops::statements::makeAssign(context, child->as<parser::Assign>());
-                break;
+                case parser::Kind::Assign:
+                    ops::statements::makeAssign(context, child->as<parser::Assign>());
+                    break;
 
-            case parser::Kind::Statement:
-                ops::statements::makeStatement(context, child->as<parser::Statement>());
-                continue; // skip statementCommit.commit, makeStatement should do that
-                          // at the right time
+                case parser::Kind::Statement:
+                    ops::statements::makeStatement(context, child->as<parser::Statement>());
+                    continue; // skip statementCommit.commit, makeStatement should do that
+                              // at the right time
 
-            case parser::Kind::Block:
-                ops::statements::makeBlock(context, child->as<parser::Block>());
-                break;
+                case parser::Kind::Block:
+                    ops::statements::makeBlock(context, child->as<parser::Block>());
+                    break;
 
-            case parser::Kind::If:
-                ops::statements::makeIf(context, child->as<parser::If>());
-                break;
+                case parser::Kind::If:
+                    ops::statements::makeIf(context, child->as<parser::If>());
+                    break;
 
-            case parser::Kind::For:
-                ops::statements::makeFor(context, child->as<parser::For>());
-                break;
+                case parser::Kind::For:
+                    ops::statements::makeFor(context, child->as<parser::For>());
+                    break;
 
-            case parser::Kind::Expression:
-                ops::expression::make(context, child->as<parser::Expression>());
-                break;
+                case parser::Kind::Expression:
+                    ops::expression::make(context, child->as<parser::Expression>());
+                    break;
 
-            case parser::Kind::Insight: {
-                auto result = ops::expression::make(context.noIR(), child->as<parser::Insight>()->expression());
+                case parser::Kind::Insight: {
+                    auto result = ops::expression::make(context.noIR(), child->as<parser::Insight>()->expression());
 
-                fmt::print("[INSIGHT, line {}] {}\n", hermes::LineDetails(child->state.text, child->index).lineNumber,
-                    toString(result.type));
+                    fmt::print("[INSIGHT, line {}] {}\n",
+                        hermes::LineDetails(child->state.text, child->index).lineNumber, toString(result.type));
 
-                break;
-            }
+                    break;
+                }
 
-            default:
-                throw;
+                default:
+                    throw;
+                }
+            } catch (const std::runtime_error &e) {
+                throw VerifyError(child.get(), "{}", e.what());
             }
 
             if (context.ir)

@@ -102,6 +102,7 @@ namespace kara::builder {
                 e->kind,
                 std::move(paramResult),
                 std::make_shared<utils::Typename>(std::move(returnResult)),
+                e->isLocked,
             };
         }
 

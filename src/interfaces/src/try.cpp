@@ -77,6 +77,31 @@ std::string toTypeString(const hermes::Node *node) {
         }
     }
 
+    case parser::Kind::FunctionTypename: {
+        auto e = node->as<parser::FunctionTypename>();
+
+        auto parameters = e->parameters();
+
+        std::vector<std::string> text(parameters.size());
+        std::transform(parameters.begin(), parameters.end(), text.begin(), [](const auto &p) {
+            return toTypeString(p);
+        });
+
+        auto locked = e->isLocked ? " locked" : "";
+        const char *flags = "";
+
+        switch (e->kind) {
+        case utils::FunctionKind::Pointer:
+            flags = " ptr";
+        case utils::FunctionKind::Regular:
+            break;
+        default:
+            throw;
+        }
+
+        return fmt::format("func{}{}({}) {}", locked, flags, fmt::join(text, ", "), toTypeString(e->returnType()));
+    }
+
     default:
         throw;
     }

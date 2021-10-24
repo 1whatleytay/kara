@@ -164,6 +164,25 @@ namespace kara::interfaces::header {
 
             auto pointee = e->getPointeeType();
 
+            if (type.isFunctionPointerType()) {
+                if (!pointee->isFunctionProtoType())
+                    return die();
+
+                auto funcType = pointee->castAs<clang::FunctionProtoType>();
+
+                auto func = std::make_unique<parser::FunctionTypename>(parent, true);
+                func->kind = utils::FunctionKind::Pointer;
+                func->isLocked = true;
+
+                for (const auto &param : funcType->param_types()) {
+                    func->children.push_back(make(func.get(), param, false));
+                }
+
+                func->children.push_back(make(func.get(), funcType->getReturnType(), false));
+
+                return func;
+            }
+
             auto ref = std::make_unique<parser::ReferenceTypename>(parent, true);
 
             if (type.isVoidPointerType()) {
@@ -408,8 +427,10 @@ namespace kara::interfaces::header {
         : node(node) { }
 
     InterfaceResult create(int count, const char **args) {
-        auto parser
-            = clang::tooling::CommonOptionsParser::create(count, args, llvm::cl::GeneralCategory, llvm::cl::OneOrMore);
+        auto category = llvm::cl::getGeneralCategory();
+        auto flags = llvm::cl::OneOrMore;
+
+        auto parser = clang::tooling::CommonOptionsParser::create(count, args, category, flags);
         if (!parser)
             throw std::runtime_error(toString(parser.takeError()));
 

@@ -149,6 +149,9 @@ namespace kara::parser {
 
         match("func", true);
 
+        if (next("locked", true))
+            isLocked = true;
+
         if (next("ptr", true))
             kind = utils::FunctionKind::Pointer;
 

@@ -91,6 +91,9 @@ namespace kara::utils {
         FunctionParameters parameters;
         std::shared_ptr<Typename> returnType;
 
+        // true when a function should not be implicitly called
+        bool isLocked = false;
+
         bool operator==(const FunctionTypename &other) const;
         bool operator!=(const FunctionTypename &other) const;
     };

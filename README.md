@@ -52,7 +52,7 @@ Until `1.0`.
  - [ ] Partials `?partial T`
  - [ ] Bubbling Optionals `!T`
  - [ ] Bubbling Optionals With Error Type `!T | E1 | E2`
- - [ ] Function Pointers `fun ptr (T1, T2, T3) ReturnType`
+ - [x] Function Pointers `fun ptr (T1, T2, T3) ReturnType`
  - [ ] Function Type + Captures `fun (T1, T2, T3) Return Type`
  - [ ] Ranges `(1..<3)`
  - [ ] Named Tuples `type { a TypeA, b TypeB }`
