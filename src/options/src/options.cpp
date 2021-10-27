@@ -10,9 +10,7 @@ namespace kara::options {
     OptionsError::OptionsError(std::string reason)
         : reason(std::move(reason)) { }
 
-    Options::Options(int count, const char **args) {
-        CLI::App app("Kara Language");
-
+    void Options::connect(CLI::App &app) {
         app.add_option("-i,--input", inputs, "Input source files.")->required();
         auto outputOption = app.add_option("-o,--output", output, "Output binary files.");
 
@@ -28,7 +26,13 @@ namespace kara::options {
         app.add_option("--free", free, "Name of free stub function to link against (void (i8 *)).");
         app.add_option("--realloc", realloc, "Name of realloc stub function to link against (i8 * (i8 *, size_t)).");
 
-        app.add_option("--mutable-globals", mutableGlobals, "Whether or not to enable mutable globals.");
+        app.add_flag("--mutable-globals", mutableGlobals, "Whether or not to enable mutable globals.");
+    }
+
+    Options::Options(int count, const char **args) {
+        CLI::App app("Kara Compiler");
+
+        connect(app);
 
         try {
             app.parse(count, args);

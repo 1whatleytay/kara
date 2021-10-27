@@ -1,3 +1,4 @@
+add_subdirectory(cli)
 add_subdirectory(utils)
 add_subdirectory(parser)
 add_subdirectory(builder)

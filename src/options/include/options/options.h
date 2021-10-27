@@ -3,6 +3,10 @@
 #include <set>
 #include <string>
 
+namespace CLI {
+    struct App;
+}
+
 namespace kara::options {
     struct OptionsError : std::exception {
         std::string reason;
@@ -29,6 +33,8 @@ namespace kara::options {
         std::string realloc = "realloc";
 
         bool mutableGlobals = false;
+
+        void connect(CLI::App &app);
 
         Options() = default;
         Options(int count, const char **args);

@@ -30,7 +30,7 @@ namespace kara::builder {
 
         [[nodiscard]] std::optional<std::string> match(const std::string &header) const;
 
-        explicit LibraryDocument(const std::string &json, const fs::path &root);
+        explicit LibraryDocument(const std::string &text, const fs::path &root);
     };
 
     struct ManagerFile {
@@ -62,21 +62,31 @@ namespace kara::builder {
         explicit ManagerTarget(const std::string &suggestedTriple);
     };
 
-    struct Manager {
-        const options::Options &options;
+    enum class ManagerCallbackReason {
+        Parsing,
+        Building,
+        Cleanup,
+    };
 
+    using ManagerCallback = std::function<void(ManagerCallbackReason,
+        const fs::path &path, const std::string &type)>;
+
+    struct Manager {
         ManagerTarget target;
+
+        const options::Options &options;
+        std::unique_ptr<llvm::LLVMContext> context;
+
+        ManagerCallback callback;
 
         std::vector<LibraryDocument> libraries;
 
-        // Param 1 is absolute path
+        // key is absolute path
         std::unordered_map<std::string, std::unique_ptr<ManagerFile>> nodes;
 
-        std::unique_ptr<llvm::LLVMContext> context;
-
-        Builder create(const ManagerFile &file);
+        Builder build(const ManagerFile &file);
         const ManagerFile &get(const fs::path &path, const fs::path &root = "", const std::string &type = "");
 
-        explicit Manager(const options::Options &options);
+        explicit Manager(const options::Options &options, ManagerCallback callback = ManagerCallback());
     };
 }

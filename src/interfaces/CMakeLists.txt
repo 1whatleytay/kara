@@ -8,5 +8,5 @@ target_include_directories(interfaces PUBLIC include)
 target_link_libraries(interfaces PRIVATE clang-global fmt)
 target_link_libraries(interfaces PUBLIC parser)
 
-add_executable(try src/try.cpp)
-target_link_libraries(try PRIVATE interfaces)
+add_executable(try interfaces.cpp)
+target_link_libraries(try PRIVATE rapidjson interfaces)

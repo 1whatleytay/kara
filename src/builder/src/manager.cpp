@@ -29,7 +29,7 @@
 #include <llvm/Analysis/TargetTransformInfo.h>
 #include <llvm/IR/Dominators.h>
 
-#include <rapidjson/document.h>
+#include <yaml-cpp/yaml.h>
 
 #include <fstream>
 #include <sstream>
@@ -47,16 +47,15 @@ namespace kara::builder {
         return std::nullopt;
     }
 
-    LibraryDocument::LibraryDocument(const std::string &json, const fs::path &root) {
-        rapidjson::Document doc;
-        doc.Parse(json.c_str());
+    LibraryDocument::LibraryDocument(const std::string &text, const fs::path &root) {
+        auto doc = YAML::Load(text);
 
-        language = doc["language"].GetString();
+        language = doc["language"].as<std::string>();
 
         assert(language == "c");
 
-        for (const auto &i : doc["includes"].GetArray()) {
-            fs::path k = i.GetString();
+        for (const auto &i : doc["includes"]) {
+            fs::path k = i.as<std::string>();
 
             if (k.is_absolute())
                 includes.push_back(k);
@@ -64,8 +63,8 @@ namespace kara::builder {
                 includes.push_back(root / k);
         }
 
-        for (const auto &i : doc["libraries"].GetArray()) {
-            fs::path k = i.GetString();
+        for (const auto &i : doc["libraries"]) {
+            fs::path k = i.as<std::string>();
 
             if (k.is_absolute())
                 libraries.push_back(k);
@@ -73,8 +72,8 @@ namespace kara::builder {
                 libraries.push_back(root / k);
         }
 
-        for (const auto &i : doc["dynamic-libraries"].GetArray()) {
-            fs::path k = i.GetString();
+        for (const auto &i : doc["dynamic-libraries"]) {
+            fs::path k = i.as<std::string>();
 
             if (k.is_absolute())
                 dynamicLibraries.push_back(k);
@@ -82,8 +81,8 @@ namespace kara::builder {
                 dynamicLibraries.push_back(root / k);
         }
 
-        for (const auto &k : doc["arguments"].GetArray())
-            arguments.emplace_back(k.GetString());
+        for (const auto &k : doc["arguments"])
+            arguments.emplace_back(k.as<std::string>());
     }
 
     void ManagerFile::resolve(std::unordered_set<const ManagerFile *> &visited) const { // NOLINT(misc-no-recursion)
@@ -188,10 +187,12 @@ namespace kara::builder {
         layout = std::make_unique<llvm::DataLayout>(machine->createDataLayout());
     }
 
-    Builder Manager::create(const ManagerFile &file) {
+    Builder Manager::build(const ManagerFile &file) {
 #pragma clang diagnostic push
 #pragma ide diagnostic ignored "UnreachableCode"
         try {
+            callback(ManagerCallbackReason::Building, file.path, file.type);
+
             return { file, options };
         } catch (const VerifyError &error) {
             hermes::LineDetails details(file.state->text, error.node->index, false);
@@ -234,6 +235,8 @@ namespace kara::builder {
         if (iterator != nodes.end())
             return *iterator->second;
 
+        callback(ManagerCallbackReason::Parsing, path, type);
+
         auto file = std::make_unique<ManagerFile>(*this, fullPath, type, doc);
         auto *ref = file.get();
         nodes[fullPath] = std::move(file);
@@ -241,10 +244,11 @@ namespace kara::builder {
         return *ref;
     }
 
-    Manager::Manager(const options::Options &options)
+    Manager::Manager(const options::Options &options, ManagerCallback callback)
         : context(std::make_unique<llvm::LLVMContext>())
         , target(options.triple)
-        , options(options) {
+        , options(options)
+        , callback(std::move(callback)) {
 
         if (!target.valid())
             throw std::runtime_error("Could not initialize target.");
@@ -266,7 +270,7 @@ namespace kara::builder {
         std::unordered_set<const ManagerFile *> built;
 
         auto buildFile = [&](const ManagerFile &file) {
-            Builder b = create(file);
+            Builder b = build(file);
 
             if (!linker) {
                 base = std::move(b.module);
@@ -294,6 +298,8 @@ namespace kara::builder {
         }
 
         linker.reset();
+
+        callback(ManagerCallbackReason::Cleanup, "", "");
 
         if (verifyModule(*base, &llvm::errs(), nullptr)) {
             base->print(llvm::outs(), nullptr);
@@ -357,7 +363,7 @@ namespace kara::builder {
                 throw std::runtime_error("Could not add module to jit instance.");
 
             for (const auto &library : libraries) {
-                for (const auto &lib : library.libraries) {
+                for (const auto &lib : library.external) {
                     auto loader
                         = llvm::orc::StaticLibraryDefinitionGenerator::Load(jit->getObjLinkingLayer(), lib.c_str());
 

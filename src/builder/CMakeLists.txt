@@ -25,4 +25,4 @@ add_library(builder STATIC
 	src/operations/handlers/builtins.cpp src/operations/statements.cpp)
 
 target_include_directories(builder PUBLIC include)
-target_link_libraries(builder PUBLIC parser options llvm rapidjson interfaces)
+target_link_libraries(builder PUBLIC parser options llvm yaml-cpp interfaces)
