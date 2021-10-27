@@ -62,31 +62,23 @@ namespace kara::builder {
         explicit ManagerTarget(const std::string &suggestedTriple);
     };
 
-    enum class ManagerCallbackReason {
-        Parsing,
-        Building,
-        Cleanup,
-    };
-
-    using ManagerCallback = std::function<void(ManagerCallbackReason,
-        const fs::path &path, const std::string &type)>;
+    using ManagerCallback = std::function<void(const fs::path &path, const std::string &type)>;
 
     struct Manager {
         ManagerTarget target;
 
-        const options::Options &options;
-        std::unique_ptr<llvm::LLVMContext> context;
-
         ManagerCallback callback;
 
-        std::vector<LibraryDocument> libraries;
+        std::unique_ptr<llvm::LLVMContext> context;
 
         // key is absolute path
+        std::unordered_map<std::string, std::unique_ptr<LibraryDocument>> libraries;
         std::unordered_map<std::string, std::unique_ptr<ManagerFile>> nodes;
 
-        Builder build(const ManagerFile &file);
+        const LibraryDocument &add(const fs::path &library);
+
         const ManagerFile &get(const fs::path &path, const fs::path &root = "", const std::string &type = "");
 
-        explicit Manager(const options::Options &options, ManagerCallback callback = ManagerCallback());
+        explicit Manager(const std::string &triple, ManagerCallback callback = ManagerCallback());
     };
 }

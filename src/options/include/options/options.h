@@ -17,16 +17,12 @@ namespace kara::options {
     };
 
     struct Options {
-        std::set<std::string> inputs;
-        std::string output;
+//        std::set<std::string> inputs;
+//        std::string output;
+//
+        std::string triple; // unused?
 
-        std::string triple;
-
-        std::set<std::string> libraries;
-
-        bool printIR = false;
-        bool optimize = false;
-        bool interpret = false;
+//        std::set<std::string> libraries;
 
         std::string malloc = "malloc";
         std::string free = "free";
@@ -35,6 +31,8 @@ namespace kara::options {
         bool mutableGlobals = false;
 
         void connect(CLI::App &app);
+
+        void merge(const Options &other);
 
         Options() = default;
         Options(int count, const char **args);

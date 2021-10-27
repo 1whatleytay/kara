@@ -187,21 +187,25 @@ namespace kara::builder {
         layout = std::make_unique<llvm::DataLayout>(machine->createDataLayout());
     }
 
-    Builder Manager::build(const ManagerFile &file) {
-#pragma clang diagnostic push
-#pragma ide diagnostic ignored "UnreachableCode"
-        try {
-            callback(ManagerCallbackReason::Building, file.path, file.type);
 
-            return { file, options };
-        } catch (const VerifyError &error) {
-            hermes::LineDetails details(file.state->text, error.node->index, false);
+    const LibraryDocument &Manager::add(const fs::path &path) {
+        auto absolute = fs::absolute(path);
+        auto it = libraries.find(absolute.string());
+        if (it != libraries.end())
+            return *it->second;
 
-            fmt::print("{} [line {}]\n{}\n{}\n", error.issue, details.lineNumber, details.line, details.marker);
+        std::ifstream stream(absolute);
+        if (!stream.good())
+            throw std::runtime_error(fmt::format("Could not load from stream {}.", path.string()));
 
-            throw;
-        }
-#pragma clang diagnostic pop
+        std::stringstream buffer;
+        buffer << stream.rdbuf();
+
+        auto library = std::make_unique<LibraryDocument>(buffer.str(), path.parent_path());
+        auto &ref = *library;
+        auto out = libraries.insert({ absolute.string(), std::move(library) });
+
+        return ref;
     }
 
     const ManagerFile &Manager::get(const fs::path &path, const fs::path &root, const std::string &type) {
@@ -215,11 +219,11 @@ namespace kara::builder {
 
             if (path.is_relative()) {
                 for (const auto &library : libraries) {
-                    std::optional<std::string> subPath = library.match(path);
+                    std::optional<std::string> subPath = library.second->match(path);
 
                     if (subPath) {
                         fullPath = *subPath;
-                        doc = &library;
+                        doc = library.second.get();
                         matches = true;
 
                         break;
@@ -235,7 +239,8 @@ namespace kara::builder {
         if (iterator != nodes.end())
             return *iterator->second;
 
-        callback(ManagerCallbackReason::Parsing, path, type);
+        if (callback)
+            callback(path, type);
 
         auto file = std::make_unique<ManagerFile>(*this, fullPath, type, doc);
         auto *ref = file.get();
@@ -244,155 +249,54 @@ namespace kara::builder {
         return *ref;
     }
 
-    Manager::Manager(const options::Options &options, ManagerCallback callback)
+    Manager::Manager(const std::string &triple, ManagerCallback callback)
         : context(std::make_unique<llvm::LLVMContext>())
-        , target(options.triple)
-        , options(options)
+        , target(triple)
         , callback(std::move(callback)) {
 
         if (!target.valid())
             throw std::runtime_error("Could not initialize target.");
 
-        for (const std::string &library : options.libraries) {
-            std::ifstream stream(library);
-            if (!stream.good())
-                throw std::runtime_error(fmt::format("Could not load from stream {}.", library));
+//        std::unique_ptr<llvm::Module> base;
+//        std::optional<llvm::Linker> linker;
+//
+//        auto buildFile = [&](const ManagerFile &file) {
+//            Builder b = build(file);
+//
+//            if (!linker) {
+//                base = std::move(b.module);
+//                linker.emplace(*base);
+//            } else {
+//                linker->linkInModule(std::move(b.module));
+//            }
+//        };
+//
+//        for (const auto &s : options.inputs) {
+//            auto &file = get(s);
+//
+//            built.insert(&file);
+//            buildFile(file);
+//        }
 
-            std::stringstream buffer;
-            buffer << stream.rdbuf();
+        // build all depended on files too, this can be handled by build system
+//        if (options.interpret) {
+//            for (const auto &pair : nodes) {
+//                if (built.find(pair.second.get()) == built.end()) {
+//                    if (pair.second->type != "c") {
+//                        buildFile(*pair.second);
+//                    }
+//                }
+//            }
+//        }
 
-            libraries.emplace_back(buffer.str(), fs::path(library).parent_path());
-        }
-
-        std::unique_ptr<llvm::Module> base;
-        std::optional<llvm::Linker> linker;
-
-        std::unordered_set<const ManagerFile *> built;
-
-        auto buildFile = [&](const ManagerFile &file) {
-            Builder b = build(file);
-
-            if (!linker) {
-                base = std::move(b.module);
-                linker.emplace(*base);
-            } else {
-                linker->linkInModule(std::move(b.module));
-            }
-        };
-
-        for (const auto &s : options.inputs) {
-            auto &file = get(s);
-
-            built.insert(&file);
-            buildFile(file);
-        }
-
-        if (options.interpret) {
-            for (const auto &pair : nodes) {
-                if (built.find(pair.second.get()) == built.end()) {
-                    if (pair.second->type != "c") {
-                        buildFile(*pair.second);
-                    }
-                }
-            }
-        }
-
-        linker.reset();
-
-        callback(ManagerCallbackReason::Cleanup, "", "");
-
-        if (verifyModule(*base, &llvm::errs(), nullptr)) {
-            base->print(llvm::outs(), nullptr);
-
-            throw std::runtime_error("Aborted.");
-        }
-
-        if (options.optimize) {
-            llvm::FunctionAnalysisManager fam;
-
-            fam.registerPass([]() { return llvm::PassInstrumentationAnalysis(); });
-            fam.registerPass([]() { return llvm::DominatorTreeAnalysis(); });
-            fam.registerPass([]() { return llvm::AssumptionAnalysis(); });
-            fam.registerPass([]() { return llvm::LazyValueAnalysis(); });
-            fam.registerPass([]() { return llvm::TargetLibraryAnalysis(); });
-            fam.registerPass([]() { return llvm::TargetIRAnalysis(); });
-
-            llvm::ModuleAnalysisManager mam;
-            mam.registerPass([]() { return llvm::PassInstrumentationAnalysis(); });
-
-            mam.registerPass([&fam]() { return llvm::FunctionAnalysisManagerModuleProxy(fam); });
-            fam.registerPass([&mam]() { return llvm::ModuleAnalysisManagerFunctionProxy(mam); });
-
-            llvm::FunctionPassManager fpm;
-            fpm.addPass(llvm::LowerSwitchPass());
-            fpm.addPass(llvm::SimplifyCFGPass());
-            fpm.addPass(llvm::PromotePass());
-
-            llvm::ModulePassManager mpm;
-            mpm.addPass(createModuleToFunctionPassAdaptor(std::move(fpm)));
-            mpm.run(*base, mam);
-        }
-
-        if (options.printIR)
-            base->print(llvm::outs(), nullptr);
-
-        if (!options.output.empty()) {
-            llvm::legacy::PassManager pass;
-
-            std::error_code error;
-            llvm::raw_fd_ostream output(options.output, error);
-
-            if (error)
-                throw std::runtime_error(fmt::format("Cannot open file {} for output", options.output));
-
-            if (target.machine->addPassesToEmitFile(pass, output, nullptr, llvm::CodeGenFileType::CGFT_ObjectFile))
-                throw std::runtime_error("Target machine does not support object output.");
-
-            pass.run(*base);
-        }
-
-        if (options.interpret) {
-            auto expectedJit = llvm::orc::LLJITBuilder().create();
-
-            if (!expectedJit)
-                throw std::runtime_error("Could not create jit instance.");
-
-            auto &jit = expectedJit.get();
-
-            if (jit->addIRModule(llvm::orc::ThreadSafeModule(std::move(base), std::move(context))))
-                throw std::runtime_error("Could not add module to jit instance.");
-
-            for (const auto &library : libraries) {
-                for (const auto &lib : library.external) {
-                    auto loader
-                        = llvm::orc::StaticLibraryDefinitionGenerator::Load(jit->getObjLinkingLayer(), lib.c_str());
-
-                    if (!loader) {
-                        fmt::print("Failed to load library {}.\n", lib.string());
-                    } else {
-                        jit->getMainJITDylib().addGenerator(std::move(loader.get()));
-                    }
-                }
-
-                for (const auto &lib : library.dynamicLibraries) {
-                    auto loader
-                        = llvm::orc::DynamicLibrarySearchGenerator::Load(lib.c_str(), target.layout->getGlobalPrefix());
-
-                    if (!loader) {
-                        fmt::print("Failed to load dynamic library {}.\n", lib.string());
-                    } else {
-                        jit->getMainJITDylib().addGenerator(std::move(loader.get()));
-                    }
-                }
-            }
-
-            auto expectedMain = jit->lookup("main");
-            if (!expectedMain)
-                throw std::runtime_error("Could not find main symbol.");
-
-            auto *entry = reinterpret_cast<int (*)()>(expectedMain.get().getAddress());
-
-            fmt::print("Returned {}.\n", entry());
-        }
+//        linker.reset();
+//
+//        callback(ManagerCallbackReason::Cleanup, "", "");
+//
+//        if (verifyModule(*base, &llvm::errs(), nullptr)) {
+//            base->print(llvm::outs(), nullptr);
+//
+//            throw std::runtime_error("Aborted.");
+//        }
     }
 }
