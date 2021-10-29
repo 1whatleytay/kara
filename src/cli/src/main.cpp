@@ -24,6 +24,8 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include <git2.h>
+
 #include <unistd.h>
 
 namespace fs = std::filesystem;
@@ -116,6 +118,7 @@ struct TargetConfig {
 struct ProjectConfig {
     std::string defaultTarget;
     std::string outputDirectory = "build";
+    std::string packagesDirectory = "build";
 
     std::unordered_map<std::string, TargetConfig> targets;
 
@@ -128,12 +131,27 @@ struct ProjectConfig {
         return ProjectConfig(YAML::Load(stream));
     }
 
+    static ProjectConfig loadFromThrows(const std::string &path) {
+        auto config = loadFrom(path);
+
+        if (!config) {
+            auto absolute = fs::absolute(fs::path(path)).string();
+
+            throw std::runtime_error(fmt::format("Cannot find config file at {}.", absolute));
+        }
+
+        return *config;
+    }
+
     explicit ProjectConfig(const YAML::Node &node) {
         if (auto value = node["default"])
             defaultTarget = value.as<std::string>();
 
         if (auto value = node["output"])
             outputDirectory = value.as<std::string>();
+
+        if (auto value = node["packages"])
+            packagesDirectory = value.as<std::string>();
 
         if (auto value = node["targets"]) {
             if (value.IsMap()) {
@@ -175,6 +193,34 @@ std::string invokeLinker(const std::string &linker, const std::vector<std::strin
     return "";
 }
 
+std::string invokeCmake(const std::string &buildDirectory, std::vector<std::string> arguments) {
+    auto process = fork();
+
+    if (!process) {
+        chdir(fs::absolute(buildDirectory).string().c_str());
+
+        std::vector<char *> cstrings;
+        cstrings.reserve(arguments.size());
+
+        for (auto &arg : arguments)
+            cstrings.push_back(arg.data());
+
+        fmt::print("args: {}\n", fmt::join(cstrings, " "));
+        std::cout.flush();
+
+        cstrings.push_back(nullptr);
+
+        execvp("cmake", cstrings.data());
+        exit(0);
+    }
+
+    int status;
+    waitpid(process, &status, 0);
+
+    fmt::print("cmake returned.\n");
+
+    return "";
+}
 
 void managerLogMark(const std::string &text, fmt::color color) {
     fmt::print("[");
@@ -394,9 +440,76 @@ struct CLICreateOptions {
 };
 
 struct CLIInstallOptions {
+    std::string name;
+    std::string url;
+    std::string projectFile = "project.yaml";
 
     void connect(CLI::App &app) {
+        auto opt = app.add_option("name", name, "URL to a Kara/CMake package.");
+        app.add_option("url", url, "URL to a Kara/CMake package.")->needs(opt);
+        app.add_option("-p,--project", projectFile, "Project file to use.");
 
+        app.parse_complete_callback([this]() {
+            auto config = ProjectConfig::loadFromThrows(projectFile);
+
+            auto packagesDirectory = fs::path(config.packagesDirectory);
+
+            if (name.empty())
+                throw;
+
+            auto package = packagesDirectory / name;
+
+            git_clone_options options = GIT_CLONE_OPTIONS_INIT;
+
+            auto sideband = [](const char *str, int len, void *payload) -> int {
+                fmt::print("{}", std::string_view(str, len));
+
+                return 0;
+            };
+
+            if (!fs::is_directory(package.parent_path()))
+                fs::create_directories(package.parent_path());
+
+            if (fs::is_directory(package)) {
+                fmt::print("Removing existing directory {}\n", package.string());
+                fs::remove_all(package);
+            }
+
+            options.fetch_opts.callbacks.sideband_progress = sideband;
+
+            git_libgit2_init();
+
+            git_repository *repository = nullptr;
+            int result = git_clone(&repository, url.c_str(), package.string().c_str(), &options);
+
+            fmt::print("\n");
+
+            if (result != 0) {
+                auto error = git_error_last();
+                assert(error);
+
+                throw std::runtime_error(fmt::format("git2: {} (code: {})", error->message, error->klass));
+            }
+
+            if (fs::exists(package / "project.yaml")) {
+                fmt::print("Kara Project Detected");
+            } else if (fs::exists(package / "CMakeLists.txt")) {
+                auto packageBuild = package / "build"; // conflict :O
+                if (!fs::is_directory(packageBuild))
+                    fs::create_directories(packageBuild);
+
+                std::vector<std::string> arguments = {
+                    "-S", fs::absolute(package).string(),
+                    "-G", "Code Blocks - Unix Makefiles",
+                };
+
+                invokeCmake(packageBuild.string(), arguments);
+
+                fmt::print("Returned From Cmake.\n");
+            } else {
+                throw std::runtime_error("Unknown project type.");
+            }
+        });
     }
 };
 
@@ -414,18 +527,12 @@ struct CLICleanOptions {
         app.add_option("-p,--project", projectFile, "Project file to use.");
 
         app.parse_complete_callback([this]() {
-            auto config = ProjectConfig::loadFrom(projectFile);
+            auto config = ProjectConfig::loadFromThrows(projectFile);
 
-            if (!config) {
-                auto path = fs::absolute(fs::path(projectFile)).string();
-
-                throw std::runtime_error(fmt::format("Cannot find config file at {}.", path));
-            }
+            fs::remove_all(config.outputDirectory);
 
             managerLogMark("TAR", fmt::color::green_yellow);
             fmt::print("Cleaned\n");
-
-            fs::remove_all(config->outputDirectory);
         });
     }
 };
