@@ -381,6 +381,28 @@ namespace kara::builder::ops::handlers {
         };
     }
 
+    Maybe<builder::Result> makeConvertForcedFuncPtrToFuncPtr(
+        const Context &context, const builder::Result &result, const utils::Typename &type, bool force) {
+        auto resultFunc = std::get_if<utils::FunctionTypename>(&result.type);
+        auto typeFunc = std::get_if<utils::FunctionTypename>(&type);
+
+        if (!(force && resultFunc && typeFunc
+                    && resultFunc->kind == utils::FunctionKind::Pointer
+                    && typeFunc->kind == utils::FunctionKind::Pointer))
+            return std::nullopt;
+
+        auto destType = context.builder.makeTypename(type);
+
+        return builder::Result {
+            builder::Result::FlagTemporary | builder::Result::FlagExplicit,
+            context.ir
+                ? context.ir->CreatePointerCast(ops::get(context, result), destType)
+                : nullptr,
+            type,
+            context.accumulator,
+        };
+    }
+
     Maybe<builder::Result> makeConvertUniqueOrMutableToRef(
         const Context &context, const builder::Result &result, const utils::Typename &type, bool) {
         auto typeRef = asRef(type);

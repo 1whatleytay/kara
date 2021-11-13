@@ -15,8 +15,8 @@ set_property(GLOBAL PROPERTY CTEST_TARGETS_ADDED 1)
 add_subdirectory(fmt)
 add_subdirectory(CLI11)
 add_subdirectory(hermes)
+add_subdirectory(pugixml)
 add_subdirectory(yaml-cpp)
-add_subdirectory(libgit2)
 
 find_package(LLVM REQUIRED CONFIG)
 find_package(Clang REQUIRED CONFIG)
@@ -44,7 +44,3 @@ add_library(lld-global INTERFACE)
 target_link_libraries(lld-global INTERFACE
     lldMachO lldYAML lldReaderWriter lldCOFF lldELF lldMachO2 lldMinGW lldWasm lldDriver lldCore lldCommon)
 target_include_directories(lld-global INTERFACE ${LLD_INCLUDE_DIRS})
-
-add_library(git2-global INTERFACE)
-target_link_libraries(git2-global INTERFACE git2)
-target_include_directories(git2-global INTERFACE libgit2/include)
