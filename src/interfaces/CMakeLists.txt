@@ -1,4 +1,4 @@
-add_library(interfaces
+add_library(interfaces STATIC
     include/interfaces/header.h
     include/interfaces/interfaces.h
 

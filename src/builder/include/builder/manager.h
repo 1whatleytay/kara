@@ -1,5 +1,7 @@
 #pragma once
 
+#include <builder/library.h>
+
 #include <parser/root.h>
 
 #include <options/options.h>
@@ -19,19 +21,6 @@ namespace fs = std::filesystem;
 namespace kara::builder {
     struct Builder;
     struct Manager;
-
-    struct LibraryDocument {
-        std::string language;
-
-        std::vector<fs::path> includes;
-        std::vector<fs::path> libraries;
-        std::vector<fs::path> dynamicLibraries;
-        std::vector<std::string> arguments;
-
-        [[nodiscard]] std::optional<std::string> match(const std::string &header) const;
-
-        explicit LibraryDocument(const std::string &text, const fs::path &root);
-    };
 
     struct ManagerFile {
         Manager &manager;

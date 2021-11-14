@@ -5,6 +5,7 @@ add_library(builder STATIC
     include/builder/operations.h
     include/builder/handlers.h
 	include/builder/builtins.h
+	include/builder/library.h
 
     src/manager.cpp
     src/builder.cpp
@@ -16,6 +17,7 @@ add_library(builder STATIC
     src/result.cpp
     src/destroy.cpp
     src/type.cpp
+	src/library.cpp
     src/operations/call.cpp
 	src/operations/utilities.cpp
 	src/operations/operations.cpp

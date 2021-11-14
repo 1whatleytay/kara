@@ -2,7 +2,7 @@
 
 namespace kara::cli {
     LogSource LogSource::package = {
-        "PAC", fmt::fg(fmt::color::peach_puff)
+        "PAC", fmt::fg(fmt::color::coral)
     };
     LogSource LogSource::target = {
         "TAR", fmt::fg(fmt::color::yellow_green)
