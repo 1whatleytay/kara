@@ -8,7 +8,6 @@
 
 namespace kara::cli {
     void CLIRunOptions::execute() {
-
         auto config = ProjectConfig::loadFrom(projectFile);
 
         if (!config) {
@@ -29,25 +28,25 @@ namespace kara::cli {
 
         auto it = config->targets.find(targetToBuild);
         if (it == config->targets.end())
-            throw std::runtime_error(fmt::format("Cannot find target {} in project file.", target));
+            throw std::runtime_error(fmt::format("Cannot find target {} in project file.", targetToBuild));
 
         if (it->second.type != TargetType::Executable)
-            throw std::runtime_error(fmt::format("Target {} does not have executable type.", target));
+            throw std::runtime_error(fmt::format("Target {} does not have executable type.", targetToBuild));
 
         manager.makeTarget(targetToBuild, root, linkerType);
 
         auto directory = manager.createTargetDirectory(targetToBuild);
-        auto executable = directory / target; // ?
+        auto executable = directory / targetToBuild; // ?
 
         log(LogSource::target, "Running {}", targetToBuild);
 
         auto process = fork();
 
         if (!process) {
-            std::vector<char *const> arguments = { nullptr };
+            std::vector<char *> arguments = { nullptr };
             execv(executable.string().c_str(), arguments.data());
 
-            exit(0);
+            exit(1);
         }
 
         int status {};

@@ -32,7 +32,7 @@ namespace kara::cli {
          */
 
         std::array prefix = { "", "lib", "lib-", "lib_" };
-        std::array postfix = { "", "_static", "-static", "_shared", "-shared", "_lib", "-lib" };
+        std::array postfix = { "", "_static", "-static", "_shared", "-shared", "lib", "_lib", "-lib" };
 
         // Really slow, but I can deal with this later.
         for (auto start : prefix) {

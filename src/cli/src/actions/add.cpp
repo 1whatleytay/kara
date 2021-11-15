@@ -95,13 +95,13 @@ namespace kara::cli {
             if (!fs::is_directory(packageBuild))
                 fs::create_directories(packageBuild);
 
-            std::vector<std::string> arguments = {
+            std::vector<std::string> cmakeArguments = {
                 root,
-                "-S", fs::absolute(package).string(),
+                fs::absolute(package).string(),
                 "-G", "CodeBlocks - Unix Makefiles",
             };
 
-            if (invokeCLI("cmake", arguments, packageBuild.string()))
+            if (invokeCLI("cmake", cmakeArguments, packageBuild.string()))
                 throw std::runtime_error("Failed to build CMake project.");
 
             fs::path cbpPath;
@@ -253,8 +253,23 @@ namespace kara::cli {
             auto command = commandIt->second;
 
             log(LogSource::package, "Building CMake Target {}", target);
-            if (invokeSystem(command, targetInfo.workingDirectory) != 0)
-                throw std::runtime_error(fmt::format("Failed to build target {}.", target));
+
+            std::vector<std::string> buildArguments = {
+                root,
+                "--build", ".",
+//                fs::absolute(package).string(),
+                "--target", targetInfo.name
+            };
+
+            if (!arguments.empty()) {
+                buildArguments.emplace_back("--");
+                buildArguments.insert(buildArguments.end(), arguments.begin(), arguments.end());
+            }
+
+            if (invokeCLI("cmake", buildArguments, packageBuild.string()))
+                throw std::runtime_error("Failed to build CMake project.");
+//            if (invokeSystem(command, targetInfo.workingDirectory) != 0)
+//                throw std::runtime_error(fmt::format("Failed to build target {}.", target));
 
             kara::builder::LibraryDocument library;
 

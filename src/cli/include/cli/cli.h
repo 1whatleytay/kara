@@ -3,6 +3,7 @@
 #include <options/options.h>
 
 #include <string>
+#include <vector>
 
 namespace CLI {
     struct App;
@@ -25,8 +26,8 @@ namespace kara::cli {
     };
 
     struct CLICreateOptions : public CLIHook {
-        virtual void execute() override;
-        virtual void connect() override;
+        void execute() override;
+        void connect() override;
     };
 
     struct CLIAddOptions : public CLIHook {
@@ -34,20 +35,22 @@ namespace kara::cli {
         std::string url;
         std::string projectFile = "project.yaml";
 
-        virtual void execute() override;
-        virtual void connect() override;
+        std::vector<std::string> arguments;
+
+        void execute() override;
+        void connect() override;
     };
 
     struct CLIRemoveOptions : public CLIHook {
-        virtual void execute() override;
-        virtual void connect() override;
+        void execute() override;
+        void connect() override;
     };
 
     struct CLICleanOptions : public CLIHook {
         std::string projectFile = "project.yaml";
 
-        virtual void execute() override;
-        virtual void connect() override;
+        void execute() override;
+        void connect() override;
     };
 
     struct CLIRunOptions : public CLIHook {
@@ -56,8 +59,8 @@ namespace kara::cli {
         std::string linkerType = "macho";
         std::string projectFile = "project.yaml";
 
-        virtual void execute() override;
-        virtual void connect() override;
+        void execute() override;
+        void connect() override;
     };
 
     struct CLIBuildOptions : public CLIHook {
@@ -68,15 +71,15 @@ namespace kara::cli {
 
         bool printIr = false;
 
-        virtual void execute() override;
-        virtual void connect() override;
+        void execute() override;
+        void connect() override;
     };
 
     struct CLICompileOptions : public CLIHook {
         kara::options::Options compileOptions;
 
-        virtual void execute() override;
-        virtual void connect() override;
+        void execute() override;
+        void connect() override;
     };
 
     struct CLIOptions {
