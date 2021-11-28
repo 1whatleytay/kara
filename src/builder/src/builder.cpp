@@ -1,6 +1,7 @@
 #include <builder/builder.h>
 
 #include <builder/error.h>
+#include <builder/target.h>
 #include <builder/manager.h>
 
 #include <parser/expression.h>
@@ -136,17 +137,23 @@ namespace kara::builder {
         return llvm::StructType::get(context, { sizeType, sizeType, pointerType });
     }
 
-    Builder::Builder(const ManagerFile &file, const options::Options &opts)
+    Builder::Builder(
+        const SourceFile &file,
+        SourceManager &manager,
+        const Target &target,
+        const options::Options &opts)
         : root(file.root.get())
         , file(file)
-        , dependencies(file.resolve())
-        , context(*file.manager.context)
+        , manager(manager)
+        , target(target)
+        , dependencies(manager.resolve(file))
+        , context(*target.context)
         , options(opts) {
 
         module = std::make_unique<llvm::Module>(file.path.filename().string(), context);
 
-        module->setDataLayout(*file.manager.target.layout);
-        module->setTargetTriple(file.manager.target.triple);
+        module->setDataLayout(*target.layout);
+        module->setTargetTriple(target.triple);
 
         destroyInvocables = searchAllDependencies([](const hermes::Node *node) -> bool {
             if (!node->is(parser::Kind::Function))
@@ -160,7 +167,7 @@ namespace kara::builder {
         for (const auto &node : root->children) {
             switch (node->is<parser::Kind>()) {
             case parser::Kind::Import:
-                // Handled by ManagerFile
+                // Handled by SourceFile
                 break;
 
             case parser::Kind::Variable:

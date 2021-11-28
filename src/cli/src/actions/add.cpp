@@ -271,7 +271,7 @@ namespace kara::cli {
 //            if (invokeSystem(command, targetInfo.workingDirectory) != 0)
 //                throw std::runtime_error(fmt::format("Failed to build target {}.", target));
 
-            kara::builder::LibraryDocument library;
+            kara::builder::Library library;
 
             library.language = "c";
 
@@ -284,17 +284,17 @@ namespace kara::cli {
                 library.arguments.emplace_back(fmt::format("-I{}", include));
             }
 
-            auto libraryOutput = library.serialize();
-            auto libraryOutputPath = packagesDirectory / fmt::format("{}.yaml", name);
+//            auto libraryOutput = library.serialize();
+//            auto libraryOutputPath = packagesDirectory / fmt::format("{}.yaml", name);
+//
+//            {
+//                std::ofstream stream(libraryOutputPath);
+//                if (!stream.is_open())
+//                    throw std::runtime_error(fmt::format("Cannot write library source file for {}", target));
+//                stream << libraryOutput;
+//            }
 
-            {
-                std::ofstream stream(libraryOutputPath);
-                if (!stream.is_open())
-                    throw std::runtime_error(fmt::format("Cannot write library source file for {}", target));
-                stream << libraryOutput;
-            }
-
-            log(LogSource::package, "Generated library source file at {}", fs::absolute(libraryOutputPath).string());
+//            log(LogSource::package, "Generated library source file at {}", fs::absolute(libraryOutputPath).string());
         } else {
             throw std::runtime_error("Unknown project type.");
         }

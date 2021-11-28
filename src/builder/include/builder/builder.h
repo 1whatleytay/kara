@@ -9,9 +9,9 @@
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
 
-#include <optional>
-#include <queue>
 #include <set>
+#include <queue>
+#include <optional>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -40,12 +40,12 @@ namespace kara::parser {
 }
 
 namespace kara::builder {
-    struct Manager;
-    struct ManagerFile;
+    struct SourceFile;
+    struct SourceManager;
 
+    struct Target;
     struct Builder;
 
-    //    struct Scope;
     struct Result;
     struct Function;
     struct Accumulator;
@@ -211,14 +211,18 @@ namespace kara::builder {
     struct Builder {
         const parser::Root *root = nullptr;
 
-        const ManagerFile &file;
+        const Target &target;
+
+        const SourceFile &file;
+        SourceManager &manager;
+
         const options::Options &options;
 
         llvm::Function *mallocCache = nullptr;
         llvm::Function *freeCache = nullptr;
         llvm::Function *reallocCache = nullptr;
 
-        std::unordered_set<const ManagerFile *> dependencies;
+        std::unordered_set<const SourceFile *> dependencies;
 
         llvm::LLVMContext &context;
         std::unique_ptr<llvm::Module> module;
@@ -239,7 +243,6 @@ namespace kara::builder {
         llvm::Function *getFree();
         llvm::Function *getRealloc();
 
-        //        const hermes::Node *find(const parser::Reference *node);
         std::vector<const hermes::Node *> findAll(const parser::Reference *node);
 
         using SearchChecker = std::function<bool(const hermes::Node *)>;
@@ -256,6 +259,10 @@ namespace kara::builder {
         // take llvm::Type * ? can use hashmap
         llvm::StructType *makeVariableArrayType(const utils::Typename &of);
 
-        Builder(const ManagerFile &file, const options::Options &opts);
+        Builder(
+            const SourceFile &file,
+            SourceManager &manager,
+            const Target &target,
+            const options::Options &opts);
     };
 }

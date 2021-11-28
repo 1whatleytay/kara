@@ -1,7 +1,8 @@
 #include <builder/operations.h>
 
-#include <builder/handlers.h>
+#include <builder/target.h>
 #include <builder/manager.h>
+#include <builder/handlers.h>
 
 #include <parser/literals.h>
 #include <parser/variable.h>
@@ -9,10 +10,10 @@
 namespace kara::builder::ops {
     Context Context::noIR() const { return move(nullptr); }
 
-    Context Context::move(llvm::IRBuilder<> *ir) const {
+    Context Context::move(llvm::IRBuilder<> *n) const {
         Context context = *this;
 
-        context.ir = ir;
+        context.ir = n;
 
         return context;
     }
@@ -106,7 +107,7 @@ namespace kara::builder::ops {
                 // i dont think it will
 
                 auto llvmElementType = context.builder.makeTypename(*array->value);
-                size_t elementSize = context.builder.file.manager.target.layout->getTypeStoreSize(llvmElementType);
+                size_t elementSize = context.builder.target.layout->getTypeStoreSize(llvmElementType);
 
                 auto sizeType = llvm::Type::getInt64Ty(context.builder.context);
 
@@ -123,7 +124,7 @@ namespace kara::builder::ops {
         auto llvmType = context.builder.makeTypename(type);
         auto pointerType = llvm::PointerType::get(llvmType, 0);
 
-        size_t bytes = context.builder.file.manager.target.layout->getTypeStoreSize(llvmType);
+        size_t bytes = context.builder.target.layout->getTypeStoreSize(llvmType);
         auto malloc = context.builder.getMalloc();
 
         // if statement above can adjust size...

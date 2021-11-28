@@ -1,5 +1,6 @@
 #include <builder/builtins.h>
 
+#include <builder/target.h>
 #include <builder/manager.h>
 
 #include <utils/typename.h>
@@ -165,7 +166,7 @@ namespace kara::builder::ops::handlers::builtins {
 
                 auto dataElementType = dataPtrRealType->getPointerElementType();
 
-                auto dataSize = context.builder.file.manager.target.layout->getTypeAllocSize(dataElementType);
+                auto dataSize = context.builder.target.layout->getTypeAllocSize(dataElementType);
                 auto constantSize = llvm::ConstantInt::get(llvm::Type::getInt64Ty(context.builder.context), dataSize);
 
                 auto dataCasted = context.ir->CreatePointerCast(context.ir->CreateLoad(dataPtr), dataPtrType);
@@ -234,7 +235,7 @@ namespace kara::builder::ops::handlers::builtins {
 
                 auto dataElementType = dataPtrRealType->getPointerElementType();
 
-                auto dataSize = context.builder.file.manager.target.layout->getTypeAllocSize(dataElementType);
+                auto dataSize = context.builder.target.layout->getTypeAllocSize(dataElementType);
                 auto constantSize = llvm::ConstantInt::get(llvm::Type::getInt64Ty(context.builder.context), dataSize);
 
                 auto dataCasted = context.ir->CreatePointerCast(context.ir->CreateLoad(dataPtr), dataPtrType);
@@ -305,7 +306,7 @@ namespace kara::builder::ops::handlers::builtins {
 
                 auto dataElementType = dataPtrRealType->getPointerElementType();
 
-                auto dataSize = context.builder.file.manager.target.layout->getTypeAllocSize(dataElementType);
+                auto dataSize = context.builder.target.layout->getTypeAllocSize(dataElementType);
                 auto constantSize = llvm::ConstantInt::get(llvm::Type::getInt64Ty(context.builder.context), dataSize);
 
                 auto dataCasted = context.ir->CreatePointerCast(context.ir->CreateLoad(dataPtr), dataPtrType);

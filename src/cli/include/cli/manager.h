@@ -2,7 +2,10 @@
 
 #include <cli/config.h>
 
+#include <builder/target.h>
 #include <builder/manager.h>
+
+#include <llvm/IR/Module.h>
 
 namespace kara::cli {
     struct TargetResult {
@@ -17,8 +20,9 @@ namespace kara::cli {
     };
 
     struct ProjectManager {
+        builder::Target builderTarget;
         ProjectConfig config;
-        kara::builder::Manager manager; // unique_ptr?
+        builder::SourceDatabase database;
 
         std::unordered_map<std::string, std::unique_ptr<TargetResult>> updatedTargets;
 

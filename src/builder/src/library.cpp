@@ -3,34 +3,34 @@
 #include <yaml-cpp/yaml.h>
 
 namespace kara::builder {
-    std::string LibraryDocument::serialize() const {
-        YAML::Emitter emitter;
+//    std::string Library::serialize() const {
+//        YAML::Emitter emitter;
+//
+//        emitter << YAML::BeginMap;
+//
+//        emitter << YAML::Key << "language";
+//        emitter << YAML::Value << language;
+//
+//        // This will probably be a problem in MSVC builds?
+//        // unless YAML cpp is actually aware of std::filesystem, impressive!!
+//        emitter << YAML::Key << "includes";
+//        emitter << YAML::Value << includes;
+//
+//        emitter << YAML::Key << "libraries";
+//        emitter << YAML::Value << libraries;
+//
+//        emitter << YAML::Key << "dynamic-libraries";
+//        emitter << YAML::Value << dynamicLibraries;
+//
+//        emitter << YAML::Key << "arguments";
+//        emitter << YAML::Value << arguments;
+//
+//        emitter << YAML::EndMap;
+//
+//        return emitter.c_str();
+//    }
 
-        emitter << YAML::BeginMap;
-
-        emitter << YAML::Key << "language";
-        emitter << YAML::Value << language;
-
-        // This will probably be a problem in MSVC builds?
-        // unless YAML cpp is actually aware of std::filesystem, impressive!!
-        emitter << YAML::Key << "includes";
-        emitter << YAML::Value << includes;
-
-        emitter << YAML::Key << "libraries";
-        emitter << YAML::Value << libraries;
-
-        emitter << YAML::Key << "dynamic-libraries";
-        emitter << YAML::Value << dynamicLibraries;
-
-        emitter << YAML::Key << "arguments";
-        emitter << YAML::Value << arguments;
-
-        emitter << YAML::EndMap;
-
-        return emitter.c_str();
-    }
-
-    std::optional<std::string> LibraryDocument::match(const std::string &header) const {
+    std::optional<std::string> Library::match(const std::string &header) const {
         for (const auto &include : includes) {
             fs::path test = include / header;
 
@@ -42,7 +42,7 @@ namespace kara::builder {
         return std::nullopt;
     }
 
-    LibraryDocument::LibraryDocument(const std::string &text, const fs::path &root) {
+    Library::Library(const std::string &text, const fs::path &root) {
         auto doc = YAML::Load(text);
 
         language = doc["language"].as<std::string>();

@@ -13,7 +13,7 @@
 
 namespace kara::builder {
     const hermes::Node *Builder::searchDependencies(const SearchChecker &match) {
-        for (const ManagerFile *f : dependencies) {
+        for (const SourceFile *f : dependencies) {
             for (const auto &c : f->root->children) {
                 if (match(c.get())) {
                     return c.get();
@@ -27,7 +27,7 @@ namespace kara::builder {
     std::vector<const hermes::Node *> Builder::searchAllDependencies(const SearchChecker &match) {
         std::vector<const hermes::Node *> result;
 
-        for (const ManagerFile *f : dependencies) {
+        for (const SourceFile *f : dependencies) {
             for (const auto &c : f->root->children) {
                 if (match(c.get())) {
                     result.push_back(c.get());

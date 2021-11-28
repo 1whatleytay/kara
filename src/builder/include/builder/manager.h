@@ -6,10 +6,6 @@
 
 #include <options/options.h>
 
-#include <llvm/IR/LLVMContext.h>
-#include <llvm/Support/TargetRegistry.h>
-#include <llvm/Target/TargetMachine.h>
-
 #include <filesystem>
 #include <set>
 #include <unordered_map>
@@ -19,12 +15,9 @@
 namespace fs = std::filesystem;
 
 namespace kara::builder {
-    struct Builder;
-    struct Manager;
+    struct SourceManager;
 
-    struct ManagerFile {
-        Manager &manager;
-
+    struct SourceFile {
         fs::path path;
 
         std::string type;
@@ -34,40 +27,31 @@ namespace kara::builder {
 
         std::set<std::tuple<fs::path, std::string>> dependencies;
 
-        void resolve(std::unordered_set<const ManagerFile *> &visited) const;
-        [[nodiscard]] std::unordered_set<const ManagerFile *> resolve() const;
-
-        ManagerFile(Manager &manager, fs::path path, std::string type, const LibraryDocument *library = nullptr);
+        SourceFile(fs::path path, std::string type, const Library *library = nullptr);
     };
 
-    struct ManagerTarget {
-        std::string triple;
-        const llvm::Target *target;
-        llvm::TargetMachine *machine;
-        std::unique_ptr<llvm::DataLayout> layout;
+    using SourceDatabaseCallback = std::function<void(const fs::path &path, const std::string &type)>;
 
-        [[nodiscard]] bool valid() const;
+    struct SourceDatabase {
+        SourceDatabaseCallback callback;
 
-        explicit ManagerTarget(const std::string &suggestedTriple);
+        std::unordered_map<std::string, std::unique_ptr<SourceFile>> nodes;
+
+        const SourceFile &get(const fs::path &absolute, const std::string &type = "", const Library *library = nullptr);
+
+        explicit SourceDatabase(SourceDatabaseCallback callback = SourceDatabaseCallback());
     };
 
-    using ManagerCallback = std::function<void(const fs::path &path, const std::string &type)>;
+    struct SourceManager {
+        SourceDatabase &database;
 
-    struct Manager {
-        ManagerTarget target;
+        std::vector<Library> libraries;
 
-        ManagerCallback callback;
+        void resolve(const SourceFile &file, std::unordered_set<const SourceFile *> &visited);
+        [[nodiscard]] std::unordered_set<const SourceFile *> resolve(const SourceFile &file);
 
-        std::unique_ptr<llvm::LLVMContext> context;
+        const SourceFile &get(const fs::path &path, const fs::path &root = "", const std::string &type = "");
 
-        // key is absolute path
-        std::unordered_map<std::string, std::unique_ptr<LibraryDocument>> libraries;
-        std::unordered_map<std::string, std::unique_ptr<ManagerFile>> nodes;
-
-        const LibraryDocument &add(const fs::path &library);
-
-        const ManagerFile &get(const fs::path &path, const fs::path &root = "", const std::string &type = "");
-
-        explicit Manager(const std::string &triple, ManagerCallback callback = ManagerCallback());
+        SourceManager(SourceDatabase &database, std::vector<Library> libraries);
     };
 }

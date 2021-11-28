@@ -8,7 +8,7 @@
 namespace fs = std::filesystem;
 
 namespace kara::builder {
-    struct LibraryDocument {
+    struct Library {
         std::string language;
 
         std::vector<fs::path> includes;
@@ -16,11 +16,11 @@ namespace kara::builder {
         std::vector<fs::path> dynamicLibraries;
         std::vector<std::string> arguments;
 
-        [[nodiscard]] std::string serialize() const;
+//        [[nodiscard]] std::string serialize() const;
 
         [[nodiscard]] std::optional<std::string> match(const std::string &header) const;
 
-        LibraryDocument() = default;
-        explicit LibraryDocument(const std::string &text, const fs::path &root);
+        Library() = default;
+        explicit Library(const std::string &text, const fs::path &root);
     };
 }

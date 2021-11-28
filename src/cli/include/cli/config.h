@@ -35,7 +35,7 @@ namespace kara::cli {
     };
 
     struct ProjectConfig {
-        std::string defaultTarget;
+        std::string defaultTarget; // get rid of
         std::string outputDirectory = "build";
         std::string packagesDirectory = "build";
 

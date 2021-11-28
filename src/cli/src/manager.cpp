@@ -11,6 +11,9 @@
 
 #include <lld/Common/Driver.h>
 
+#include <fstream>
+#include <sstream>
+
 namespace kara::cli {
     std::string invokeLinker(const std::string &linker, const std::vector<std::string> &arguments) {
         using LinkFunction = bool (*)(
@@ -113,17 +116,30 @@ namespace kara::cli {
 
         log(LogSource::target, "Building {}", outputFile.string());
 
+        std::vector<builder::Library> libraries;
         // this isn't really caring for order, its just adding whatever no matter the target
         // not really desired but I don't have the brain power to think of a better system
-        for (const auto &library : result->external)
-            manager.add(fs::path(library));
+        for (const auto &library : result->external) {
+            fs::path libraryPath(library);
+
+            std::ifstream stream(libraryPath);
+            if (!stream.good())
+                throw std::runtime_error(fmt::format("Could not load from stream {}.", library));
+
+            std::stringstream buffer;
+            buffer << stream.rdbuf();
+
+            libraries.emplace_back(buffer.str(), libraryPath.parent_path());
+        }
+
+        builder::SourceManager manager(database, libraries);
 
         std::vector<std::unique_ptr<llvm::Module>> modules;
         for (const auto &file : targetConfig.files) {
             auto &managerFile = manager.get(file);
 
             try {
-                kara::builder::Builder builder { managerFile, options };
+                kara::builder::Builder builder { managerFile, manager, builderTarget, options };
 
                 LogSource source = LogSource::target;
 
@@ -148,7 +164,7 @@ namespace kara::cli {
             }
         }
 
-        auto base = std::make_unique<llvm::Module>(target, *manager.context);
+        auto base = std::make_unique<llvm::Module>(target, *builderTarget.context);
         llvm::Linker linker(*base);
 
         for (auto &module : modules)
@@ -175,7 +191,7 @@ namespace kara::cli {
             if (error)
                 throw std::runtime_error(fmt::format("Cannot open file {} for output", outputFile.string()));
 
-            auto emitResult = manager.target.machine->addPassesToEmitFile(
+            auto emitResult = builderTarget.machine->addPassesToEmitFile(
                 passManager, output, nullptr, llvm::CodeGenFileType::CGFT_ObjectFile);
 
             if (emitResult)
@@ -228,6 +244,7 @@ namespace kara::cli {
 
     ProjectManager::ProjectManager(ProjectConfig config, const std::string &triple)
         : config(std::move(config))
-        , manager(triple, managerCallback) { }
+        , builderTarget(triple)
+        , database(managerCallback) { }
 
 }
