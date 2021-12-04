@@ -16,3 +16,6 @@
 [submodule "external/pugixml"]
 	path = external/pugixml
 	url = https://github.com/zeux/pugixml.git
+[submodule "external/uriparser"]
+	path = external/uriparser
+	url = https://github.com/uriparser/uriparser.git

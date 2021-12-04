@@ -26,7 +26,8 @@ add_library(builder STATIC
 	src/operations/expression.cpp
 	src/operations/handlers/expression.cpp
 	src/operations/handlers/operations.cpp
-	src/operations/handlers/builtins.cpp src/operations/statements.cpp)
+	src/operations/handlers/builtins.cpp
+	src/operations/statements.cpp)
 
 target_include_directories(builder PUBLIC include)
 target_link_libraries(builder PUBLIC parser options llvm yaml-cpp interfaces)

@@ -45,9 +45,9 @@ namespace kara::builder {
     Library::Library(const std::string &text, const fs::path &root) {
         auto doc = YAML::Load(text);
 
-        language = doc["language"].as<std::string>();
-
-        assert(language == "c");
+//        language = doc["language"].as<std::string>();
+//
+//        assert(language == "c");
 
         for (const auto &i : doc["includes"]) {
             fs::path k = i.as<std::string>();

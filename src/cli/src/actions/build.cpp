@@ -6,7 +6,7 @@
 
 namespace kara::cli {
     void CLIBuildOptions::execute() {
-        auto config = ProjectConfig::loadFrom(projectFile);
+        auto config = TargetConfig::loadFrom(projectFile);
 
         if (!config) {
             auto path = fs::absolute(fs::path(projectFile)).string();
@@ -19,7 +19,7 @@ namespace kara::cli {
         std::string targetToBuild = target;
 
         if (targetToBuild.empty())
-            targetToBuild = config->defaultTarget;
+            targetToBuild = config->resolveName();
 
         if (targetToBuild.empty())
             throw std::runtime_error("Target to build must be specified over command line.");

@@ -66,8 +66,6 @@ namespace kara::builder {
     SourceFile::SourceFile(fs::path path, std::string type, const Library *library)
         : path(std::move(path))
         , type(std::move(type)) {
-        assert(!library || library->language == this->type);
-
         if (this->type.empty() || this->type == "kara") {
             auto [dataState, dataRoot] = files::makeKara(this->path);
 

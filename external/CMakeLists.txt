@@ -9,6 +9,12 @@ set(CLI11_BUILD_EXAMPLES OFF)
 set(BUILD_TESTS OFF)
 set(BUILD_SHARED_LIBS OFF)
 
+set(URIPARSER_BUILD_DOCS OFF)
+set(URIPARSER_BUILD_TESTS OFF)
+set(URIPARSER_BUILD_TOOLS OFF)
+set(URIPARSER_ENABLE_INSTALL OFF)
+set(URIPARSER_WARNINGS_AS_ERRORS OFF)
+
 # CLI11 annoyingly adds CTest targets...
 set_property(GLOBAL PROPERTY CTEST_TARGETS_ADDED 1)
 
@@ -17,6 +23,7 @@ add_subdirectory(CLI11)
 add_subdirectory(hermes)
 add_subdirectory(pugixml)
 add_subdirectory(yaml-cpp)
+add_subdirectory(uriparser)
 
 find_package(LLVM REQUIRED CONFIG)
 find_package(Clang REQUIRED CONFIG)

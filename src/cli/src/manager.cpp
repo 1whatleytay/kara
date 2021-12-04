@@ -45,9 +45,9 @@ namespace kara::cli {
         return "";
     }
 
-    fs::path ProjectManager::createTargetDirectory(
-        const std::string &target) const { // NOLINT(modernize-use-nodiscard)
-        fs::path directory = fs::path(config.outputDirectory) / target;
+    // NOLINT(readability-convert-member-functions-to-static)
+    fs::path ProjectManager::createTargetDirectory(const std::string &target) {
+        fs::path directory = fs::path(main.outputDirectory) / target;
 
         if (!fs::is_directory(directory))
             fs::create_directories(directory);
@@ -76,31 +76,32 @@ namespace kara::cli {
         if (it != updatedTargets.end())
             return *it->second;
 
-        auto targetIt = config.targets.find(target);
-        if (targetIt == config.targets.end())
+        auto targetIt = configs.find(target);
+        if (targetIt == configs.end())
             throw std::runtime_error(fmt::format("Cannot find target {} in project file.", target));
 
         auto &targetConfig = targetIt->second;
 
         auto result = std::make_unique<TargetResult>();
-        result->external = targetConfig.external;
-        result->linkerOptions = targetConfig.linkerOptions;
-        result->libraries = targetConfig.libraries;
+//        result->external = targetConfig;
+        result->linkerOptions = targetConfig->linkerOptions;
+        result->libraries = targetConfig->libraries;
 
-        for (const auto &library : targetConfig.libraries) {
+        for (const auto &library : targetConfig->libraries) {
             auto &otherResult = makeTarget(library, root, linkerType);
 
             result->defaultOptions.merge(otherResult.defaultOptions);
 
-            result->libraries.insert(otherResult.libraries.begin(), otherResult.libraries.end());
-            result->external.insert(otherResult.external.begin(), otherResult.external.end());
+            result->libraries.insert(result->libraries.end(),
+                otherResult.libraries.begin(), otherResult.libraries.end());
+//            result->external.insert(otherResult.external.begin(), otherResult.external.end());
             result->linkerOptions.insert(
                 result->linkerOptions.begin(), otherResult.linkerOptions.begin(), otherResult.linkerOptions.end());
         }
 
-        result->defaultOptions.merge(targetConfig.defaultOptions);
+        result->defaultOptions.merge(targetConfig->defaultOptions);
 
-        if (targetConfig.type == TargetType::Interface) {
+        if (targetConfig->type == TargetType::Interface) {
             auto &ref = *result;
             updatedTargets.insert({ target, std::move(result) });
 
@@ -119,23 +120,23 @@ namespace kara::cli {
         std::vector<builder::Library> libraries;
         // this isn't really caring for order, its just adding whatever no matter the target
         // not really desired but I don't have the brain power to think of a better system
-        for (const auto &library : result->external) {
-            fs::path libraryPath(library);
-
-            std::ifstream stream(libraryPath);
-            if (!stream.good())
-                throw std::runtime_error(fmt::format("Could not load from stream {}.", library));
-
-            std::stringstream buffer;
-            buffer << stream.rdbuf();
-
-            libraries.emplace_back(buffer.str(), libraryPath.parent_path());
-        }
+//        for (const auto &library : result->external) {
+//            fs::path libraryPath(library);
+//
+//            std::ifstream stream(libraryPath);
+//            if (!stream.good())
+//                throw std::runtime_error(fmt::format("Could not load from stream {}.", library));
+//
+//            std::stringstream buffer;
+//            buffer << stream.rdbuf();
+//
+//            libraries.emplace_back(buffer.str(), libraryPath.parent_path());
+//        }
 
         builder::SourceManager manager(database, libraries);
 
         std::vector<std::unique_ptr<llvm::Module>> modules;
-        for (const auto &file : targetConfig.files) {
+        for (const auto &file : targetConfig->files) {
             auto &managerFile = manager.get(file);
 
             try {
@@ -177,7 +178,6 @@ namespace kara::cli {
         if (llvm::verifyModule(*result->module, &llvm::errs()))
             throw std::runtime_error(fmt::format("Module for target {} failed to verify.", target));
 
-
         logHeader(LogSource::target);
         fmt::print("Writing ");
         fmt::print(fmt::emphasis::italic, "{}\n", outputFile.string());
@@ -200,9 +200,8 @@ namespace kara::cli {
             passManager.run(*result->module);
         }
 
-        if (targetConfig.type == TargetType::Executable) {
+        if (targetConfig->type == TargetType::Executable) {
             auto linkFile = directory / target;
-
 
             logHeader(LogSource::target);
             fmt::print("Linking ");
@@ -242,9 +241,10 @@ namespace kara::cli {
         return ref;
     }
 
-    ProjectManager::ProjectManager(ProjectConfig config, const std::string &triple)
-        : config(std::move(config))
+    ProjectManager::ProjectManager(TargetConfig main, const std::string &triple)
+        : main(std::move(main))
         , builderTarget(triple)
-        , database(managerCallback) { }
-
+        , database(managerCallback) {
+        configs = this->main.resolveConfigs(); // oya
+    }
 }

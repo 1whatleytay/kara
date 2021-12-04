@@ -18,10 +18,11 @@ namespace kara::cli {
     }
 
     void CLIAddOptions::connect() {
-        auto opt = app->add_option("name", name, "URL to a Kara/CMake package.");
-        app->add_option("url", url, "URL to a Kara/CMake package.")->needs(opt);
+        app->add_option("url", url, "URL to a Kara/CMake package.")->required();
+        app->add_option("--name", name, "URL to a Kara/CMake package.");
         app->add_option("-p,--project", projectFile, "Project file to use.");
         app->add_option("-a,--arg", arguments, "Arguments to pass to CMake build.");
+        app->add_option("--no-write", noWrite, "If set, the main config file will not be updated.");
     }
 
     void CLIRunOptions::connect() {

@@ -2,6 +2,7 @@
 
 #include <options/options.h>
 
+#include <set>
 #include <string>
 #include <vector>
 #include <filesystem>
@@ -13,38 +14,55 @@ namespace fs = std::filesystem;
 namespace YAML { struct Node; }
 
 namespace kara::cli {
+    struct TargetConfig;
+
     enum class TargetType {
         Library,
         Executable,
         Interface,
     };
 
+    using ConfigMap = std::unordered_map<std::string, const TargetConfig *>;
+
     struct TargetConfig {
+        fs::path root;
+
+        std::string name;
+
         TargetType type = TargetType::Library;
 
-        std::unordered_set<std::string> files;
-        std::unordered_set<std::string> libraries;
-        std::unordered_set<std::string> external;
+        std::set<std::string> files;
+
+        // ? what about defaults for subtargets?
+        std::string outputDirectory = "build";
+        std::string packagesDirectory = "build";
+
+        std::vector<TargetConfig> configs;
+        std::set<std::string> import;
+
+        std::unordered_map<std::string, std::vector<std::string>> packages;
+
+        std::vector<std::string> includes;
+        std::vector<std::string> includeArguments;
+
+        std::vector<std::string> libraries;
+        std::vector<std::string> dynamicLibraries;
 
         std::vector<std::string> linkerOptions;
 
         kara::options::Options defaultOptions;
 
+        [[nodiscard]] std::string serialize() const;
+
+        [[nodiscard]] std::string resolveName() const;
+
+        void resolveConfigs(ConfigMap &configs) const;
+        [[nodiscard]] ConfigMap resolveConfigs() const;
+
+        static std::optional<TargetConfig> loadFrom(const std::string &path);
+        static TargetConfig loadFromThrows(const std::string &path);
+
         TargetConfig() = default;
-        explicit TargetConfig(const YAML::Node &node);
-    };
-
-    struct ProjectConfig {
-        std::string defaultTarget; // get rid of
-        std::string outputDirectory = "build";
-        std::string packagesDirectory = "build";
-
-        std::unordered_map<std::string, TargetConfig> targets;
-
-        static std::optional<ProjectConfig> loadFrom(const std::string &path);
-        static ProjectConfig loadFromThrows(const std::string &path);
-
-        ProjectConfig() = default;
-        explicit ProjectConfig(const YAML::Node &node);
+        explicit TargetConfig(fs::path root, const YAML::Node &node);
     };
 }

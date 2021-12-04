@@ -8,7 +8,7 @@
 
 namespace kara::cli {
     void CLIRunOptions::execute() {
-        auto config = ProjectConfig::loadFrom(projectFile);
+        auto config = TargetConfig::loadFrom(projectFile);
 
         if (!config) {
             auto path = fs::absolute(fs::path(projectFile)).string();
@@ -16,21 +16,21 @@ namespace kara::cli {
             throw std::runtime_error(fmt::format("Cannot find config file at {}.", path));
         }
 
-        ProjectManager manager(*config, triple);
+        ProjectManager manager(*config, triple); // massive copy here :(
 
         std::string targetToBuild = target;
 
         if (targetToBuild.empty())
-            targetToBuild = config->defaultTarget;
+            targetToBuild = config->resolveName();
 
         if (targetToBuild.empty())
             throw std::runtime_error("Target to build must be specified over command line.");
 
-        auto it = config->targets.find(targetToBuild);
-        if (it == config->targets.end())
+        auto it = manager.configs.find(targetToBuild);
+        if (it == manager.configs.end())
             throw std::runtime_error(fmt::format("Cannot find target {} in project file.", targetToBuild));
 
-        if (it->second.type != TargetType::Executable)
+        if (it->second->type != TargetType::Executable)
             throw std::runtime_error(fmt::format("Target {} does not have executable type.", targetToBuild));
 
         manager.makeTarget(targetToBuild, root, linkerType);

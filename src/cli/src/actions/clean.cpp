@@ -5,7 +5,7 @@
 
 namespace kara::cli {
     void CLICleanOptions::execute() {
-        auto config = ProjectConfig::loadFromThrows(projectFile);
+        auto config = TargetConfig::loadFromThrows(projectFile);
 
         fs::remove_all(config.outputDirectory);
 

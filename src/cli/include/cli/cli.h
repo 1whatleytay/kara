@@ -31,11 +31,13 @@ namespace kara::cli {
     };
 
     struct CLIAddOptions : public CLIHook {
-        std::string name;
         std::string url;
+        std::string name;
         std::string projectFile = "project.yaml";
 
         std::vector<std::string> arguments;
+
+        bool noWrite = false;
 
         void execute() override;
         void connect() override;

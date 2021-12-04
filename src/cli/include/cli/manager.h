@@ -9,8 +9,8 @@
 
 namespace kara::cli {
     struct TargetResult {
-        std::unordered_set<std::string> libraries;
-        std::unordered_set<std::string> external;
+        std::vector<std::string> libraries;
+//        std::unordered_set<std::string> external;
 
         std::vector<std::string> linkerOptions;
 
@@ -21,17 +21,18 @@ namespace kara::cli {
 
     struct ProjectManager {
         builder::Target builderTarget;
-        ProjectConfig config;
+        TargetConfig main;
+        ConfigMap configs;
         builder::SourceDatabase database;
 
         std::unordered_map<std::string, std::unique_ptr<TargetResult>> updatedTargets;
 
-        fs::path createTargetDirectory(const std::string &target) const;
+        fs::path createTargetDirectory(const std::string &target);
 
         const TargetResult &makeTarget(
             const std::string &target, const std::string &root, const std::string &linkerType = "");
 
-        ProjectManager(ProjectConfig config, const std::string &triple);
+        ProjectManager(TargetConfig main, const std::string &triple);
     };
 }
 
