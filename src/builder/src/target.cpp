@@ -12,10 +12,17 @@ namespace kara::builder {
         if (triple.empty())
             throw std::runtime_error("Unknown default triple.");
 
-        if (allTargets)
-            llvm::InitializeAllTargets();
-        else
-            llvm::InitializeNativeTarget();
+        LLVMInitializeX86AsmParser();
+        LLVMInitializeX86AsmPrinter();
+        LLVMInitializeX86Disassembler();
+
+        LLVMInitializeX86Target();
+        LLVMInitializeX86TargetInfo();
+        LLVMInitializeX86TargetMC();
+
+//        if (allTargets)
+//        else
+//            llvm::InitializeNativeTarget();
 
 //        LLVMInitializeX86TargetInfo();
 //

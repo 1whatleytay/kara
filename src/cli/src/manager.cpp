@@ -15,6 +15,36 @@
 #include <sstream>
 
 namespace kara::cli {
+    void tracePackages(const TargetConfig &config, PackageManager &packages, ConfigHold &hold, ConfigMap &out) {
+        for (const auto &package : config.packages) {
+            if (out.find(package.first) != out.end())
+                continue;
+
+            assert(package.second.size() == 1); // okay...
+
+            auto name = package.second.front();
+
+            auto paths = packages.install(package.first, name);
+
+            assert(paths.size() == 1);
+
+            // concerning...
+            for (const auto &path : paths) {
+                auto loaded = TargetConfig::loadFromThrows(path);
+                auto ptr = std::make_unique<TargetConfig>(std::move(loaded));
+                auto ref = ptr.get();
+
+                hold.push_back(std::move(ptr));
+
+                out[name] = ref;
+                tracePackages(*ref, packages, hold, out);
+            }
+        }
+
+        for (const auto &imported : config.configs)
+            tracePackages(imported, packages, hold, out);
+    }
+
     std::string invokeLinker(const std::string &linker, const std::vector<std::string> &arguments) {
         using LinkFunction = bool (*)(
             llvm::ArrayRef<const char *>, bool,
@@ -83,18 +113,52 @@ namespace kara::cli {
         auto &targetConfig = targetIt->second;
 
         auto result = std::make_unique<TargetResult>();
-//        result->external = targetConfig;
-        result->linkerOptions = targetConfig->linkerOptions;
-        result->libraries = targetConfig->libraries;
 
-        for (const auto &library : targetConfig->libraries) {
-            auto &otherResult = makeTarget(library, root, linkerType);
+        result->depends = std::vector<std::string>(targetConfig->configs.size());
+        std::transform(targetConfig->configs.begin(), targetConfig->configs.end(), result->depends.begin(),
+            [](const auto &r) { return r.resolveName(); });
+
+        result->linkerOptions = targetConfig->linkerOptions;
+
+        result->libraries = targetConfig->libraries;
+        result->dynamicLibraries = targetConfig->dynamicLibraries;
+
+        if (!targetConfig->includes.empty()) {
+            std::vector<fs::path> paths;
+            paths.reserve(targetConfig->includes.size());
+            std::transform(targetConfig->includes.begin(), targetConfig->includes.end(), std::back_inserter(paths),
+                [](const auto &r) { return fs::path(r); });
+
+            result->includes.push_back(builder::Library {
+                std::move(paths),
+                targetConfig->includeArguments,
+            });
+        }
+
+        // Add packages to list of targets to build.
+        for (const auto &package : targetConfig->packages) {
+            assert(package.second.size() == 1); // mistake
+
+            result->depends.push_back(package.second.front());
+        }
+
+        // Build targets that are depended on
+        for (const auto &toBuild : result->depends) {
+            // is a cycle possible here?
+            auto &otherResult = makeTarget(toBuild, root, linkerType);
 
             result->defaultOptions.merge(otherResult.defaultOptions);
 
             result->libraries.insert(result->libraries.end(),
                 otherResult.libraries.begin(), otherResult.libraries.end());
-//            result->external.insert(otherResult.external.begin(), otherResult.external.end());
+
+            result->dynamicLibraries.insert(result->dynamicLibraries.end(),
+                otherResult.dynamicLibraries.begin(), otherResult.dynamicLibraries.end());
+
+            // might have duplicates
+            result->includes.insert(result->includes.end(),
+                otherResult.includes.begin(), otherResult.includes.end());
+
             result->linkerOptions.insert(
                 result->linkerOptions.begin(), otherResult.linkerOptions.begin(), otherResult.linkerOptions.end());
         }
@@ -117,23 +181,7 @@ namespace kara::cli {
 
         log(LogSource::target, "Building {}", outputFile.string());
 
-        std::vector<builder::Library> libraries;
-        // this isn't really caring for order, its just adding whatever no matter the target
-        // not really desired but I don't have the brain power to think of a better system
-//        for (const auto &library : result->external) {
-//            fs::path libraryPath(library);
-//
-//            std::ifstream stream(libraryPath);
-//            if (!stream.good())
-//                throw std::runtime_error(fmt::format("Could not load from stream {}.", library));
-//
-//            std::stringstream buffer;
-//            buffer << stream.rdbuf();
-//
-//            libraries.emplace_back(buffer.str(), libraryPath.parent_path());
-//        }
-
-        builder::SourceManager manager(database, libraries);
+        builder::SourceManager manager(database, result->includes);
 
         std::vector<std::unique_ptr<llvm::Module>> modules;
         for (const auto &file : targetConfig->files) {
@@ -207,22 +255,49 @@ namespace kara::cli {
             fmt::print("Linking ");
             fmt::print(fmt::emphasis::italic, "{}\n", linkFile.string());
 
+            std::unordered_set<std::string> libraryPaths;
+            std::unordered_set<std::string> libraryNames;
+
+            for (const auto &libraryPath : result->libraries) {
+                fs::path path(libraryPath);
+
+                auto file = path.filename().string();
+
+                std::string prefix = "lib";
+                std::string postfix = ".a";
+
+                if (file.size() > prefix.size() && file.size() > postfix.size()
+                    && file.substr(0, prefix.size()) == prefix
+                    && file.substr(file.size() - postfix.size(), postfix.size()) == postfix) {
+                    file = file.substr(prefix.size(), file.size() - prefix.size() - postfix.size());
+                }
+
+                libraryPaths.insert(fs::absolute(path.parent_path()).string());
+                libraryNames.insert(file);
+            }
+
             std::vector<std::string> arguments = {
                 root,
                 outputFile.string(),
                 "-o",
                 linkFile.string(),
                 "-arch",
-                "x86_64",
-                "-lSystem",
+                "x86_64", // yikes
+                "-lSystem", // macos only...
                 "-L/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib",
                 "-syslibroot",
                 "/Library/Developer/CommandLineTools/SDKs/MacOSX11.sdk",
                 "-platform_version",
                 "macos",
-                "11.0.0",
-                "11.0.0",
+                "12.0.0",
+                "12.0.0",
             };
+
+            for (const auto &path : libraryPaths)
+                arguments.push_back(fmt::format("-L{}", path));
+
+            for (const auto &name : libraryNames)
+                arguments.push_back(fmt::format("-l{}", name));
 
             auto &linkOpts = result->linkerOptions;
 
@@ -241,10 +316,13 @@ namespace kara::cli {
         return ref;
     }
 
-    ProjectManager::ProjectManager(TargetConfig main, const std::string &triple)
-        : main(std::move(main))
+    ProjectManager::ProjectManager(const TargetConfig &main, const std::string &triple, const std::string &root)
+        : main(main) // cannot std::move because i need the data later in constructor
         , builderTarget(triple)
-        , database(managerCallback) {
+        , database(managerCallback)
+        , packages(main.packagesDirectory, root) {
         configs = this->main.resolveConfigs(); // oya
+
+        tracePackages(this->main, packages, packageConfigs, configs);
     }
 }

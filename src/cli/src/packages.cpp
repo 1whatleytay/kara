@@ -83,6 +83,12 @@ namespace kara::cli {
                 name = std::string(
                     uriData.pathTail->text.first,
                     uriData.pathTail->text.afterLast);
+
+                // drop .git
+                std::string trail = ".git";
+
+                if (name.size() > trail.size() && name.substr(name.size() - trail.size()) == trail)
+                    name = name.substr(0, name.size() - trail.size());
             }
 
             uriFreeUriMembersA(&uriData);
@@ -295,8 +301,9 @@ namespace kara::cli {
 
             TargetConfig library;
 
+            library.name = target;
+            library.type = TargetType::Interface;
             library.libraries.emplace_back(targetInfo.output);
-
             library.includeArguments.emplace_back("--");
 
             for (const auto &include : targetInfo.includes) {
@@ -305,7 +312,8 @@ namespace kara::cli {
             }
 
             auto libraryOutput = library.serialize();
-            auto libraryOutputPath = packagesDirectory / fmt::format("{}.yaml", name);
+            auto libraryOutputFilename = fmt::format("{}.yaml", name);
+            auto libraryOutputPath = packagesDirectory / libraryOutputFilename;
 
             {
                 std::ofstream stream(libraryOutputPath);
@@ -317,7 +325,7 @@ namespace kara::cli {
 
             log(LogSource::package, "Generated library source file at {}", fs::absolute(libraryOutputPath).string());
 
-            lockFile.packagesInstalled[url] = { libraryOutputPath };
+            lockFile.packagesInstalled[url] = { libraryOutputFilename };
             lockFileWriteStream() << lockFile.serialize();
 
             return PackageDownloadResult { { libraryOutputPath }, { target } };
@@ -337,7 +345,12 @@ namespace kara::cli {
         if (it == lockFile.packagesInstalled.end())
             return download(url, suggestTarget, arguments).configFiles;
 
-        return it->second;
+        std::vector<std::string> output(it->second.size());
+        std::transform(it->second.begin(), it->second.end(), output.begin(), [this](const auto &r) {
+            return (packagesDirectory / r).string();
+        });
+
+        return output;
     }
 
 

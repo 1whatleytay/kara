@@ -14,7 +14,7 @@ namespace kara::cli {
             throw std::runtime_error(fmt::format("Cannot find config file at {}.", path));
         }
 
-        ProjectManager manager(*config, triple);
+        ProjectManager manager(*config, triple, root);
 
         std::string targetToBuild = target;
 
