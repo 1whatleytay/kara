@@ -185,7 +185,7 @@ namespace kara::cli {
                 bool first = true;
 
                 // limit line length
-                constexpr size_t maxLength = 60;
+                constexpr size_t maxLength = 40;
                 size_t lineLength = 0;
 
                 for (const auto &targetName : highlightedTargets) {
@@ -218,7 +218,7 @@ namespace kara::cli {
                 bool first = true;
 
                 // limit line length
-                constexpr size_t maxLength = 60;
+                constexpr size_t maxLength = 40;
                 size_t lineLength = 0;
 
                 for (const auto &targetName : otherTargets) {
@@ -327,6 +327,9 @@ namespace kara::cli {
 
             lockFile.packagesInstalled[url] = { libraryOutputFilename };
             lockFileWriteStream() << lockFile.serialize();
+
+            logHeader(LogSource::package);
+            fmt::print(fmt::emphasis::bold | fmt::fg(fmt::color::forest_green), "Package {} installed.\n", name);
 
             return PackageDownloadResult { { libraryOutputPath }, { target } };
         } else {

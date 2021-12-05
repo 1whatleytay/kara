@@ -26,6 +26,8 @@ namespace kara::cli {
     };
 
     struct CLICreateOptions : public CLIHook {
+        std::string name;
+
         void execute() override;
         void connect() override;
     };
@@ -91,6 +93,7 @@ namespace kara::cli {
         CLIRunOptions run;
         CLIBuildOptions build;
         CLICompileOptions compile;
+        CLICreateOptions create;
 
         CLIOptions(int count, const char **args);
     };

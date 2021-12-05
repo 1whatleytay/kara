@@ -11,6 +11,7 @@ add_executable(cli
     src/actions/clean.cpp
     src/actions/remove.cpp
     src/actions/run.cpp
+    src/actions/create.cpp
     src/actions/compile.cpp
 
     src/cbp.cpp

@@ -1,7 +1,6 @@
 #include <cli/cli.h>
 
 #include <cli/log.h>
-#include <cli/config.h>
 
 #include <CLI/App.hpp>
 #include <CLI/Config.hpp>
@@ -15,6 +14,10 @@ namespace kara::cli {
         connect();
 
         app->parse_complete_callback([this]() { execute(); });
+    }
+
+    void CLICreateOptions::connect() {
+        app->add_option("name", name, "Name of the project.")->required();
     }
 
     void CLIAddOptions::connect() {
@@ -60,16 +63,17 @@ namespace kara::cli {
 
         auto root = count != 0 ? args[0] : "";
 
-        auto hook = [&root](CLIHook &hook, CLI::App *app) {
-            hook.attach(app, root); // ?
+        auto hook = [&root, &app](CLIHook &hook, const char *name, const char *description) {
+            hook.attach(app.add_subcommand(name, description), root); // ?
         };
 
-        hook(install, app.add_subcommand("install", "Install an additional dependency."));
-        hook(remove, app.add_subcommand("remove", "Remove an existing dependency."));
-        hook(clean, app.add_subcommand("clean", "Remove all files in build folder."));
-        hook(run, app.add_subcommand("run", "Run a target from this project directory."));
-        hook(build, app.add_subcommand("build", "Build a target from this project directory."));
-        hook(compile, app.add_subcommand("compile", "Invoke compiler on a single source file."));
+        hook(create, "create", "Create a new project.");
+        hook(install, "install", "Install an additional dependency.");
+        hook(remove, "remove", "Remove an existing dependency.");
+        hook(clean, "clean", "Remove all files in build folder.");
+        hook(run, "run", "Run a target from this project directory.");
+        hook(build, "build", "Build a target from this project directory.");
+        hook(compile, "compile", "Invoke compiler on a single source file.");
 
         try {
             app.parse(count, args);
