@@ -9,7 +9,7 @@
 #include <llvm/IR/Module.h>
 
 namespace kara::cli {
-    struct TargetResult {
+    struct TargetInfo {
         std::vector<std::string> depends;
 
         std::vector<std::string> libraries;
@@ -20,6 +20,10 @@ namespace kara::cli {
         std::vector<std::string> linkerOptions;
 
         kara::options::Options defaultOptions;
+    };
+
+    struct TargetResult {
+        const TargetInfo &info;
 
         std::unique_ptr<llvm::Module> module;
     };
@@ -38,9 +42,12 @@ namespace kara::cli {
         ConfigHold packageConfigs;
         PackageManager packages;
 
+        std::unordered_map<std::string, std::unique_ptr<TargetInfo>> targetInfos;
         std::unordered_map<std::string, std::unique_ptr<TargetResult>> updatedTargets;
 
         fs::path createTargetDirectory(const std::string &target);
+
+        const TargetInfo &readTarget(const std::string &target);
 
         const TargetResult &makeTarget(
             const std::string &target, const std::string &root, const std::string &linkerType = "");

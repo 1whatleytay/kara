@@ -56,6 +56,15 @@ namespace kara::cli {
         compileOptions.connect(*app);
     }
 
+    void CLIExposeOptions::connect() {
+        app->add_option("file", filePath, "The path of the file to expose.")->required();
+        // app->add_option("--relative-to", relativeTo, "Optionally, a relative path to base the file path.");
+        app->add_option("--type", type, "Type of file (kara, c, ...).");
+        app->add_option("--target", target, "Target to use as reference point.");
+
+        app->add_option("-p,--project", projectFile, "Project file to use.");
+    }
+
     CLIOptions::CLIOptions(int count, const char **args) {
         CLI::App app;
 
@@ -74,6 +83,7 @@ namespace kara::cli {
         hook(run, "run", "Run a target from this project directory.");
         hook(build, "build", "Build a target from this project directory.");
         hook(compile, "compile", "Invoke compiler on a single source file.");
+        hook(expose, "expose", "Parse file and return structure data.");
 
         try {
             app.parse(count, args);

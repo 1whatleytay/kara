@@ -100,10 +100,9 @@ namespace kara::cli {
         fmt::print(fmt::emphasis::italic, "{}\n", path.string());
     }
 
-    const TargetResult &ProjectManager::makeTarget(
-        const std::string &target, const std::string &root, const std::string &linkerType) {
-        auto it = updatedTargets.find(target);
-        if (it != updatedTargets.end())
+    const TargetInfo &ProjectManager::readTarget(const std::string &target) {
+        auto it = targetInfos.find(target);
+        if (it != targetInfos.end())
             return *it->second;
 
         auto targetIt = configs.find(target);
@@ -112,7 +111,7 @@ namespace kara::cli {
 
         auto &targetConfig = targetIt->second;
 
-        auto result = std::make_unique<TargetResult>();
+        auto result = std::make_unique<TargetInfo>();
 
         result->depends = std::vector<std::string>(targetConfig->configs.size());
         std::transform(targetConfig->configs.begin(), targetConfig->configs.end(), result->depends.begin(),
@@ -126,7 +125,9 @@ namespace kara::cli {
         if (!targetConfig->includes.empty()) {
             std::vector<fs::path> paths;
             paths.reserve(targetConfig->includes.size());
-            std::transform(targetConfig->includes.begin(), targetConfig->includes.end(), std::back_inserter(paths),
+            std::transform(
+                targetConfig->includes.begin(), targetConfig->includes.end(),
+                std::back_inserter(paths),
                 [](const auto &r) { return fs::path(r); });
 
             result->includes.push_back(builder::Library {
@@ -145,7 +146,7 @@ namespace kara::cli {
         // Build targets that are depended on
         for (const auto &toBuild : result->depends) {
             // is a cycle possible here?
-            auto &otherResult = makeTarget(toBuild, root, linkerType);
+            auto &otherResult = readTarget(toBuild);
 
             result->defaultOptions.merge(otherResult.defaultOptions);
 
@@ -165,6 +166,33 @@ namespace kara::cli {
 
         result->defaultOptions.merge(targetConfig->defaultOptions);
 
+        auto &ptr = *result;
+        targetInfos[target] = std::move(result);
+
+        return ptr;
+    }
+
+    const TargetResult &ProjectManager::makeTarget(
+        const std::string &target, const std::string &root, const std::string &linkerType) {
+        auto it = updatedTargets.find(target);
+        if (it != updatedTargets.end())
+            return *it->second;
+
+        auto targetIt = configs.find(target);
+        if (targetIt == configs.end())
+            throw std::runtime_error(fmt::format("Cannot find target {} in project file.", target));
+
+        auto &targetConfig = targetIt->second;
+
+        auto &targetInfo = readTarget(target);
+
+        auto result = std::make_unique<TargetResult>(TargetResult {
+            targetInfo, nullptr
+        });
+
+        for (const auto &toBuild : targetInfo.depends)
+            makeTarget(toBuild, root, linkerType);
+
         if (targetConfig->type == TargetType::Interface) {
             auto &ref = *result;
             updatedTargets.insert({ target, std::move(result) });
@@ -174,14 +202,14 @@ namespace kara::cli {
 
         log(LogSource::targetStart, "Building target {}", target);
 
-        auto &options = result->defaultOptions;
+        auto &options = targetInfo.defaultOptions;
 
         auto directory = createTargetDirectory(target);
         auto outputFile = directory / fmt::format("{}.o", target);
 
         log(LogSource::target, "Building {}", outputFile.string());
 
-        builder::SourceManager manager(database, result->includes);
+        builder::SourceManager manager(database, targetInfo.includes);
 
         std::vector<std::unique_ptr<llvm::Module>> modules;
         for (const auto &file : targetConfig->files) {
@@ -258,7 +286,7 @@ namespace kara::cli {
             std::unordered_set<std::string> libraryPaths;
             std::unordered_set<std::string> libraryNames;
 
-            for (const auto &libraryPath : result->libraries) {
+            for (const auto &libraryPath : targetInfo.libraries) {
                 fs::path path(libraryPath);
 
                 auto file = path.filename().string();
@@ -299,7 +327,7 @@ namespace kara::cli {
             for (const auto &name : libraryNames)
                 arguments.push_back(fmt::format("-l{}", name));
 
-            auto &linkOpts = result->linkerOptions;
+            auto &linkOpts = targetInfo.linkerOptions;
 
             arguments.insert(arguments.end(), linkOpts.begin(), linkOpts.end());
 

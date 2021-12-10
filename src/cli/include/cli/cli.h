@@ -86,6 +86,18 @@ namespace kara::cli {
         void connect() override;
     };
 
+    struct CLIExposeOptions : public CLIHook {
+        std::string filePath;
+        // std::string relativeTo;
+        std::string type;
+        std::string target;
+
+        std::string projectFile = "project.yaml";
+
+        void execute() override;
+        void connect() override;
+    };
+
     struct CLIOptions {
         CLIAddOptions install;
         CLIRemoveOptions remove;
@@ -94,6 +106,7 @@ namespace kara::cli {
         CLIBuildOptions build;
         CLICompileOptions compile;
         CLICreateOptions create;
+        CLIExposeOptions expose;
 
         CLIOptions(int count, const char **args);
     };

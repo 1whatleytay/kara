@@ -46,6 +46,7 @@ namespace kara::builder {
             auto thisPath = fs::current_path();
             auto fullPath = fs::absolute(path);
 
+            // TODO: thisPath should probably be executable or root?
             std::vector<const char *> arguments = { thisPath.c_str(), fullPath.c_str() };
             arguments.reserve(arguments.size() + library.arguments.size());
 

@@ -4,6 +4,7 @@ add_executable(cli
     include/cli/config.h
     include/cli/manager.h
     include/cli/packages.h
+    include/cli/exposer.h
     include/cli/log.h
 
     src/actions/add.cpp
@@ -13,13 +14,16 @@ add_executable(cli
     src/actions/run.cpp
     src/actions/create.cpp
     src/actions/compile.cpp
+    src/actions/expose.cpp
 
     src/cbp.cpp
     src/cli.cpp
+    src/exposer.cpp
     src/config.cpp
     src/manager.cpp
     src/log.cpp
     src/packages.cpp
     src/main.cpp)
 target_include_directories(cli PUBLIC include)
-target_link_libraries(cli PRIVATE CLI11 yaml-cpp builder fmt lld-global pugixml-static uriparser)
+target_link_libraries(cli PRIVATE
+    fmt utils builder parser interfaces lld-global pugixml-static yaml-cpp uriparser CLI11)
