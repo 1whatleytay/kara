@@ -153,7 +153,11 @@ namespace kara::interfaces::header {
             auto num = std::make_unique<parser::Number>(arr.get(), true);
             num->value = size;
 
-            arr->children.push_back(make(arr.get(), constant->getElementType(), true));
+            auto arrayContained = make(arr.get(), constant->getElementType(), true);
+            if (!arrayContained)
+                return die();
+
+            arr->children.push_back(std::move(arrayContained));
             arr->children.push_back(std::move(num));
 
             return arr;
@@ -175,10 +179,20 @@ namespace kara::interfaces::header {
                 func->isLocked = true;
 
                 for (const auto &param : funcType->param_types()) {
-                    func->children.push_back(make(func.get(), param, false));
+                    auto pointerType = make(func.get(), param, false);
+
+                    if (!pointerType)
+                        return die();
+
+                    func->children.push_back(std::move(pointerType));
                 }
 
-                func->children.push_back(make(func.get(), funcType->getReturnType(), false));
+                auto returnType = make(func.get(), funcType->getReturnType(), false);
+
+                if (!returnType)
+                    return die();
+
+                func->children.push_back(std::move(returnType));
 
                 return func;
             }
@@ -218,6 +232,84 @@ namespace kara::interfaces::header {
             }
 
             return ref;
+        }
+
+        if (type.isEnumeralType()) {
+            auto e = type.castAs<EnumType>();
+
+            auto decl = e->getDecl();
+
+            std::string typeName;
+
+            auto it = factory->prebuiltEnums.find(decl);
+            if (it != factory->prebuiltEnums.end()) {
+                typeName = it->second;
+            } else {
+                size_t size = context.getTypeSize(wrapper);
+
+                typeName = decl->getNameAsString();
+
+                auto typeAlias = std::make_unique<parser::Type>(factory->node, true);
+                typeAlias->name = decl->getNameAsString();
+                typeAlias->isAlias = true;
+
+                auto primitive = std::make_unique<parser::PrimitiveTypename>(typeAlias.get(), true);
+
+                utils::PrimitiveType prim;
+
+                switch (size) {
+                case 8:
+                    prim = utils::PrimitiveType::Byte;
+                    break;
+                case 16:
+                    prim = utils::PrimitiveType::Short;
+                    break;
+                case 32:
+                    prim = utils::PrimitiveType::Int;
+                    break;
+                case 64:
+                    prim = utils::PrimitiveType::Long;
+                    break;
+                default:
+                    return die();
+                }
+
+                primitive->type = prim;
+
+                typeAlias->children.push_back(std::move(primitive));
+                factory->node->children.push_back(std::move(typeAlias));
+
+                for (const auto &element : decl->enumerators()) {
+                    auto varNode = std::make_unique<parser::Variable>(factory->node, false, true);
+
+                    varNode->name = element->getNameAsString();
+                    varNode->isMutable = false;
+                    varNode->hasFixedType = true;
+                    varNode->hasConstantValue = true;
+
+                    auto namedNode = std::make_unique<parser::NamedTypename>(varNode.get(), true);
+                    namedNode->name = typeName;
+
+                    auto ap = element->getInitVal();
+
+                    auto numberNode = std::make_unique<parser::Number>(varNode.get(), true);
+                    numberNode->value = ap.getSExtValue();
+
+                    varNode->children.push_back(std::move(namedNode));
+                    varNode->children.push_back(std::move(numberNode));
+
+                    factory->node->children.push_back(std::move(varNode));
+                }
+            }
+
+            assert(!typeName.empty());
+
+            auto namedTypename = std::make_unique<parser::NamedTypename>(parent, true);
+            namedTypename->name = typeName;
+
+            factory->prebuiltEnums[decl] = typeName;
+
+            return namedTypename;
         }
 
         if (type.isBuiltinType()) {
@@ -326,12 +418,27 @@ namespace kara::interfaces::header {
     }
 
     [[maybe_unused]] bool TranslateVisitor::VisitTypedefDecl(TypedefDecl *decl) const {
+        auto underlying = decl->getUnderlyingType();
+
+        if (underlying->isRecordType()) {
+            auto recordDecl = underlying->getAsRecordDecl();
+
+            if (recordDecl->getNameAsString() == decl->getNameAsString()) {
+                auto it = factory->prebuiltTypes.find(recordDecl);
+
+                if (it == factory->prebuiltTypes.end())
+                    make(factory->node, underlying, true);
+
+                return true;
+            }
+        }
+
         auto type = std::make_unique<parser::Type>(factory->node, true);
 
         type->name = decl->getNameAsString();
         type->isAlias = true;
 
-        auto underlyingType = make(type.get(), decl->getUnderlyingType(), true);
+        auto underlyingType = make(type.get(), underlying, true);
 
         if (!underlyingType) {
 //            fmt::print("Cannot construct typedef {}.\n", decl->getNameAsString());

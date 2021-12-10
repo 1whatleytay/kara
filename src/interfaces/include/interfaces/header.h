@@ -64,6 +64,7 @@ namespace kara::interfaces::header {
         size_t id = 0;
 
         parser::Root *node;
+        std::unordered_map<clang::EnumDecl *, std::string> prebuiltEnums;
         std::unordered_map<clang::RecordDecl *, std::string> prebuiltTypes;
 
         std::unique_ptr<clang::FrontendAction> create() override;

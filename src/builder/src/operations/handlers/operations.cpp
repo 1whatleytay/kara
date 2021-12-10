@@ -251,6 +251,9 @@ namespace kara::builder::ops::handlers {
 
     Maybe<builder::Result> makeConvertBridgeImplicitReference(
         const Context &context, const builder::Result &result, const utils::Typename &type, bool) {
+        if (asPrimTo(result.type, utils::PrimitiveType::Null))
+            return std::nullopt;
+
         auto typeRef = asRef(type);
         auto resultRef = asRef(result.type);
 
@@ -570,6 +573,9 @@ namespace kara::builder::ops::handlers {
 
     Maybe<builder::Result> makeConvertNullToRef(
         const Context &context, const builder::Result &result, const utils::Typename &type, bool) {
+        auto a = toString(result.type);
+        auto b = toString(type);
+
         if (!(asPrimTo(result.type, utils::PrimitiveType::Null) && asRef(type)))
             return std::nullopt;
 

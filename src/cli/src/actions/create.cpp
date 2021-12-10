@@ -35,7 +35,7 @@ namespace kara::cli {
             if (!stream.is_open())
                 throw std::runtime_error("Failed to write project.yaml.");
 
-            stream << fmt::format("main int => 0");
+            stream << fmt::format("main int => 0\n");
         }
 
         log(LogSource::target, "Created project {}.", name);

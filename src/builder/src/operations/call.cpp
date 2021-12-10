@@ -92,7 +92,9 @@ namespace kara::builder::ops::matching {
                 parameters.begin(), parameters.end(), [&pair](const auto &v) { return v.first == pair.second; });
 
             if (iterator == parameters.end()) {
-                result.failed = fmt::format("Expected parameter named {}, but none found.", pair.second);
+                result.failed = fmt::format(
+                    "Function was passed parameter named {}, but function does not contain this parameter.",
+                    pair.second);
                 return result;
             }
 
@@ -195,9 +197,13 @@ namespace kara::builder::ops::matching {
                 break;
             }
 
-            case parser::Kind::Type:
-                parameters = node->as<parser::Type>()->fields();
+            case parser::Kind::Type: {
+                auto e = node->as<parser::Type>();
+                assert(!e->isAlias);
+
+                parameters = e->fields();
                 break;
+            }
 
             default:
                 throw;
