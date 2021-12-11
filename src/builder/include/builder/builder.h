@@ -227,7 +227,11 @@ namespace kara::builder {
         llvm::LLVMContext &context;
         std::unique_ptr<llvm::Module> module;
 
-        std::vector<const hermes::Node *> destroyInvocables;
+        // TypeName -> Callable (probably should be parser::Function *)
+        std::unordered_map<std::string, const hermes::Node *> destroyInvocables;
+
+        const hermes::Node *lookupDestroy(const utils::Typename &type);
+        bool needsDestroy(const utils::Typename &type);
 
         std::unordered_map<const parser::Type *, std::unique_ptr<Function>> implicitDestructors;
 

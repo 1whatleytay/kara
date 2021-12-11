@@ -21,7 +21,25 @@ namespace kara::builder {
 
         type->setBody(types);
 
-        implicitDestructor->build();
+        // might cause infinite loop, move to build?
+        auto needsImplicitDestructor = std::any_of(fields.begin(), fields.end(), [this](auto field) {
+            assert(field->hasFixedType);
+
+            auto fieldType = field->fixedType();
+
+            return builder.needsDestroy(builder.resolveTypename(fieldType));
+        });
+
+        if (needsImplicitDestructor) {
+            auto ptr = std::make_unique<builder::Function>(node, builder);
+            implicitDestructor = ptr.get();
+
+            // huh, why do i do this? shouldn't i just be checking the type, or else it wont build it?
+            // i should delete this!!
+            builder.implicitDestructors[node] = std::move(ptr);
+
+            implicitDestructor->build();
+        }
     }
 
     Type::Type(const parser::Type *node, builder::Builder &builder)
@@ -31,9 +49,6 @@ namespace kara::builder {
 
         type = llvm::StructType::create(builder.context, {}, node->name);
 
-        auto ptr = std::make_unique<builder::Function>(node, builder);
-        implicitDestructor = ptr.get();
-
-        builder.implicitDestructors[node] = std::move(ptr);
+        auto fields = node->fields();
     }
 }

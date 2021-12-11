@@ -267,31 +267,37 @@ namespace kara::builder::ops::handlers {
 
     bool makeDestroyRegular(const Context &context, llvm::Value *ptr, const utils::Typename &type) {
         // Try to call destroy invocables... call will throw if options are empty
-        if (!context.builder.destroyInvocables.empty()) {
+        auto destroyFunction = context.builder.lookupDestroy(type);
+
+        if (destroyFunction) {
             // attempt to avoid this construction forces me to create it here
             auto parameter = builder::Result { builder::Result::FlagTemporary | builder::Result::FlagReference, ptr,
                 type, nullptr };
 
-            ops::matching::call(context, context.builder.destroyInvocables, { /* dwbi builtins */ },
+            auto result = ops::matching::call(context, { destroyFunction }, { /* dwbi builtins */ },
                 ops::matching::MatchInput { { parameter }, { /* no names */ } });
+
+            assert(!std::holds_alternative<matching::CallError>(result));
         }
 
         if (auto named = std::get_if<utils::NamedTypename>(&type)) {
             auto containedType = named->type;
             auto builderType = context.builder.makeType(containedType);
 
-            auto func = builderType->implicitDestructor->function;
+            if (builderType->implicitDestructor) {
+                auto func = builderType->implicitDestructor->function;
 
-            // duplicate sanity check
-            {
-                auto paramType = ptr->getType();
-                assert(paramType->isPointerTy());
+                // duplicate sanity check
+                {
+                    auto paramType = ptr->getType();
+                    assert(paramType->isPointerTy());
 
-                auto elementType = paramType->getPointerElementType();
-                assert(elementType == builderType->type);
+                    auto elementType = paramType->getPointerElementType();
+                    assert(elementType == builderType->type);
+                }
+
+                context.ir->CreateCall(func, { ptr });
             }
-
-            context.ir->CreateCall(func, { ptr });
         }
 
         return true;

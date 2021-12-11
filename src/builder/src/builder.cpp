@@ -137,6 +137,55 @@ namespace kara::builder {
         return llvm::StructType::get(context, { sizeType, sizeType, pointerType });
     }
 
+    const hermes::Node *Builder::lookupDestroy(const utils::Typename &type) {
+         std::string name;
+
+         if (auto other = std::get_if<utils::NamedTypename>(&type)) { // i think this is dangerous to support
+             name = other->type->name;
+         } else if (auto ref = std::get_if<utils::ReferenceTypename>(&type)) { // ? hmm this doesnt make sense idt
+             if (auto sub = std::get_if<utils::NamedTypename>(ref->value.get())) {
+                 name = sub->type->name;
+             }
+         }
+
+         if (name.empty())
+             return nullptr;
+
+         auto it = destroyInvocables.find(name);
+         if (it == destroyInvocables.end())
+             return nullptr;
+
+         return it->second;
+    }
+
+    bool Builder::needsDestroy(const utils::Typename &type) {
+        struct {
+            Builder &builder;
+
+            bool operator()(const utils::NamedTypename &type) {
+                auto base = builder.makeType(type.type); // cycle?
+                return builder.lookupDestroy(type) || base->implicitDestructor; // might need some better checking here
+            }
+            bool operator()(const utils::ArrayTypename &type) {
+                return type.kind == utils::ArrayKind::VariableSize;
+            }
+            bool operator()(const utils::FunctionTypename &type) {
+                return type.kind == utils::FunctionKind::Regular;
+            }
+            bool operator()(const utils::OptionalTypename &type) {
+                return builder.needsDestroy(*type.value); // ?
+            }
+            bool operator()(const utils::PrimitiveTypename &type) {
+                return false;
+            }
+            bool operator()(const utils::ReferenceTypename &type) {
+                return type.kind != utils::ReferenceKind::Regular;
+            }
+        } visitor { *this };
+
+        return std::visit(visitor, type);
+    }
+
     Builder::Builder(
         const SourceFile &file,
         SourceManager &manager,
@@ -155,7 +204,7 @@ namespace kara::builder {
         module->setDataLayout(*target.layout);
         module->setTargetTriple(target.triple);
 
-        destroyInvocables = searchAllDependencies([](const hermes::Node *node) -> bool {
+        auto destroyInvocablesRaw = searchAllDependencies([](const hermes::Node *node) -> bool {
             if (!node->is(parser::Kind::Function))
                 return false;
 
@@ -163,6 +212,35 @@ namespace kara::builder {
 
             return e->name == "destroy" && e->parameterCount == 1;
         });
+
+        destroyInvocables.reserve(destroyInvocablesRaw.size());
+        for (auto invocable : destroyInvocablesRaw) {
+            auto function = invocable->as<parser::Function>();
+
+            auto parameters = function->parameters();
+            if (parameters.size() != 1)
+                continue;
+
+            auto parameter = parameters.front();
+            assert(parameter->hasFixedType);
+
+            auto nodeType = parameter->fixedType();
+            auto type = resolveTypename(nodeType);
+
+            std::string name;
+            if (auto other = std::get_if<utils::NamedTypename>(&type)) { // i think this is dangerous to support
+                name = other->type->name;
+            } else if (auto ref = std::get_if<utils::ReferenceTypename>(&type)) {
+                if (auto sub = std::get_if<utils::NamedTypename>(ref->value.get())) {
+                    name = sub->type->name;
+                }
+            }
+
+            if (name.empty())
+                continue;
+
+            destroyInvocables[name] = function;
+        }
 
         for (const auto &node : root->children) {
             switch (node->is<parser::Kind>()) {
