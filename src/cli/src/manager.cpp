@@ -11,38 +11,152 @@
 
 #include <lld/Common/Driver.h>
 
+#include <uriparser/Uri.h>
+
 #include <fstream>
 #include <sstream>
 
 namespace kara::cli {
-    void tracePackages(const TargetConfig &config, PackageManager &packages, ConfigHold &hold, ConfigMap &out) {
-        for (const auto &package : config.packages) {
-            if (out.find(package.first) != out.end())
-                continue;
+    namespace {
+        bool isHttpOrHttps(const char *text) {
+            UriUriA uri;
 
-            assert(package.second.size() == 1); // okay...
+            // not a url
+            if (uriParseSingleUriA(&uri, text, nullptr))
+                return false;
 
-            auto name = package.second.front();
+            auto exit = [&uri](bool value) {
+                uriFreeUriMembersA(&uri);
 
-            auto paths = packages.install(package.first, name);
+                return value;
+            };
+
+            // exit { uri.uriFreeUriMembersA }
+
+            auto size = uri.scheme.afterLast - uri.scheme.first;
+
+            if (size >= 5 && memcmp(uri.scheme.first, "https", 5) == 0)
+                return exit(true);
+
+            if (size >= 4 && memcmp(uri.scheme.first, "http", 4) == 0)
+                return exit(true);
+
+            return exit(false);
+        }
+    }
+
+    // could just be root as first param
+    // duplicate code in TargetCache::add
+    const TargetConfig *TargetCache::resolveImport(const TargetConfig &parent, const TargetImport &package) const {
+        if (isHttpOrHttps(package.from.c_str())) {
+            assert(package.import.size() == 1); // for name...
+            auto suggestedTarget = package.import.front();
+
+            auto it = configsByUrl.find(package.from);
+
+            if (it == configsByUrl.end()) {
+                throw std::runtime_error(fmt::format(
+                    "Failed to resolve import in {} for {}.", parent.root.string(), package.from));
+            }
+
+            return it->second;
+        } else {
+            auto pathToConfig = parent.root.parent_path() / package.from; // absolute
+
+            auto it = configsByPath.find(pathToConfig.string());
+            if (it == configsByPath.end()) {
+                throw std::runtime_error(fmt::format(
+                    "Failed to resolve import in {} for {}.", parent.root.string(), package.from));
+            }
+
+            return it->second;
+        }
+    }
+
+    void TargetCache::add(const TargetConfig &config, PackageManager &packages) {
+        {
+            auto name = config.resolveName();
+
+            auto it = configsByName.find(name);
+
+            if (it != configsByName.end()) {
+                throw std::runtime_error(fmt::format(
+                    "Name conflict between config files, name `{}` is taken by {} and {}.",
+                    name, it->second->root.string(), config.root.string()));
+            }
+
+            configsByName[name] = &config;
+        }
+
+        for (const auto &package : config.import) {
+            // watch for continue
+
+            std::vector<std::string> paths;
+
+            // set to a value if the following statements determine package.from is any of these types
+            std::optional<std::string> urlValue;
+            std::optional<std::string> pathValue;
+
+            // I'm not concerned about checking if configsByName is filled to prevent infinity recursion
+            // It's more of an information kind of deal that can be used by other functions
+
+            // This can probably be taken out into another function
+            if (isHttpOrHttps(package.from.c_str())) {
+                assert(package.import.size() == 1); // for name...
+                auto suggestedTarget = package.import.front();
+
+                if (configsByUrl.find(package.from) != configsByUrl.end())
+                    continue;
+
+                urlValue = package.from;
+                paths = packages.install(package.from, suggestedTarget, package.buildArguments);
+            } else {
+                // path
+
+                auto pathToConfig = config.root.parent_path() / package.from; // absolute
+
+                if (configsByPath.find(pathToConfig.string()) != configsByPath.end())
+                    continue;
+
+                pathValue = pathToConfig.string();
+
+                if (!fs::exists(pathToConfig)) {
+                    throw std::runtime_error(fmt::format(
+                        "Attempted to import file at {}, but file did not exist.", fs::absolute(pathToConfig)));
+                }
+
+                if (pathToConfig.filename() == "CMakeLists.txt") {
+                    assert(package.import.size() == 1); // for name...
+                    auto suggestedTarget = package.import.front();
+
+                    auto result = packages.build(pathToConfig,
+                        suggestedTarget, suggestedTarget, package.buildArguments);
+
+                    paths = result.configFiles; // name?
+                } else {
+                    paths = { pathToConfig };
+                }
+            }
 
             assert(paths.size() == 1);
 
-            // concerning...
-            for (const auto &path : paths) {
-                auto loaded = TargetConfig::loadFromThrows(path);
-                auto ptr = std::make_unique<TargetConfig>(std::move(loaded));
-                auto ref = ptr.get();
+            // fix later...
+            auto resolvedPath = paths.front();
 
-                hold.push_back(std::move(ptr));
+            auto loaded = TargetConfig::loadFromThrows(resolvedPath);
+            auto ptr = std::make_unique<TargetConfig>(std::move(loaded)); // yikes move
+            auto ref = ptr.get();
 
-                out[name] = ref;
-                tracePackages(*ref, packages, hold, out);
-            }
+            configHold.push_back(std::move(ptr));
+
+            // I think there's a lot of simplifications that can be done here
+            if (urlValue)
+                configsByUrl[*urlValue] = ref;
+            if (pathValue)
+                configsByPath[*pathValue] = ref;
+
+            add(*ref, packages);
         }
-
-        for (const auto &imported : config.configs)
-            tracePackages(imported, packages, hold, out);
     }
 
     std::string invokeLinker(const std::string &linker, const std::vector<std::string> &arguments) {
@@ -75,9 +189,8 @@ namespace kara::cli {
         return "";
     }
 
-    // NOLINT(readability-convert-member-functions-to-static)
-    fs::path ProjectManager::createTargetDirectory(const std::string &target) {
-        fs::path directory = fs::path(main.outputDirectory) / target;
+    fs::path ProjectManager::createTargetDirectory(const std::string &target) const {
+        fs::path directory = fs::path(mainTarget.outputDirectory) / target;
 
         if (!fs::is_directory(directory))
             fs::create_directories(directory);
@@ -100,48 +213,57 @@ namespace kara::cli {
         fmt::print(fmt::emphasis::italic, "{}\n", path.string());
     }
 
-    const TargetInfo &ProjectManager::readTarget(const std::string &target) {
+    const TargetConfig *ProjectManager::getTarget(const std::string &name) {
+        auto targetIt = targetCache.configsByName.find(name);
+        if (targetIt == targetCache.configsByName.end())
+            throw std::runtime_error(fmt::format("Cannot find target {} in project file.", name));
+
+        return targetIt->second;
+    }
+
+    const TargetInfo &ProjectManager::readTarget(const TargetConfig *target) {
         auto it = targetInfos.find(target);
         if (it != targetInfos.end())
             return *it->second;
 
-        auto targetIt = configs.find(target);
-        if (targetIt == configs.end())
-            throw std::runtime_error(fmt::format("Cannot find target {} in project file.", target));
+//        auto targetIt = targetCache.configsByName.find(target);
+//        if (targetIt == targetCache.configsByName.end())
+//            throw std::runtime_error(fmt::format("Cannot find target {} in project file.", target));
 
-        auto &targetConfig = targetIt->second;
+//        auto &targetConfig = targetIt->second;
+        auto targetConfig = target; // change later, is just test alias right now for target
 
         auto result = std::make_unique<TargetInfo>();
 
-        result->depends = std::vector<std::string>(targetConfig->configs.size());
-        std::transform(targetConfig->configs.begin(), targetConfig->configs.end(), result->depends.begin(),
-            [](const auto &r) { return r.resolveName(); });
+        result->depends = std::vector<const TargetConfig *>(targetConfig->import.size());
+        std::transform(targetConfig->import.begin(), targetConfig->import.end(), result->depends.begin(),
+            [this, targetConfig](const auto &import) { return targetCache.resolveImport(*targetConfig, import); });
 
-        result->linkerOptions = targetConfig->linkerOptions;
+        result->linkerOptions = targetConfig->options.linkerOptions;
 
-        result->libraries = targetConfig->libraries;
-        result->dynamicLibraries = targetConfig->dynamicLibraries;
+        result->libraries = targetConfig->options.libraries;
+        result->dynamicLibraries = targetConfig->options.dynamicLibraries;
 
-        if (!targetConfig->includes.empty()) {
+        if (!targetConfig->options.includes.empty()) {
             std::vector<fs::path> paths;
-            paths.reserve(targetConfig->includes.size());
+            paths.reserve(targetConfig->options.includes.size());
             std::transform(
-                targetConfig->includes.begin(), targetConfig->includes.end(),
+                targetConfig->options.includes.begin(), targetConfig->options.includes.end(),
                 std::back_inserter(paths),
                 [](const auto &r) { return fs::path(r); });
 
             result->includes.push_back(builder::Library {
                 std::move(paths),
-                targetConfig->includeArguments,
+                targetConfig->options.includeArguments,
             });
         }
 
         // Add packages to list of targets to build.
-        for (const auto &package : targetConfig->packages) {
-            assert(package.second.size() == 1); // mistake
-
-            result->depends.push_back(package.second.front());
-        }
+//        for (const auto &package : targetConfig->packages) {
+//            assert(package.second.size() == 1); // mistake
+//
+//            result->depends.push_back(package.second.front());
+//        }
 
         // Build targets that are depended on
         for (const auto &toBuild : result->depends) {
@@ -164,7 +286,7 @@ namespace kara::cli {
                 result->linkerOptions.begin(), otherResult.linkerOptions.begin(), otherResult.linkerOptions.end());
         }
 
-        result->defaultOptions.merge(targetConfig->defaultOptions);
+        result->defaultOptions.merge(targetConfig->options.defaultOptions);
 
         auto &ptr = *result;
         targetInfos[target] = std::move(result);
@@ -173,16 +295,19 @@ namespace kara::cli {
     }
 
     const TargetResult &ProjectManager::makeTarget(
-        const std::string &target, const std::string &root, const std::string &linkerType) {
+        const TargetConfig *target, const std::string &root, const std::string &linkerType) {
         auto it = updatedTargets.find(target);
         if (it != updatedTargets.end())
             return *it->second;
 
-        auto targetIt = configs.find(target);
-        if (targetIt == configs.end())
-            throw std::runtime_error(fmt::format("Cannot find target {} in project file.", target));
+//        auto targetIt = targetCache.configsByName.find(target);
+//        if (targetIt == targetCache.configsByName.end())
+//            throw std::runtime_error(fmt::format("Cannot find target {} in project file.", target));
+//
+//        auto &targetConfig = targetIt->second;
 
-        auto &targetConfig = targetIt->second;
+        auto targetConfig = target;
+        auto name = target->resolveName();
 
         auto &targetInfo = readTarget(target);
 
@@ -200,16 +325,16 @@ namespace kara::cli {
             return ref;
         }
 
-        log(LogSource::targetStart, "Building target {}", target);
+        log(LogSource::targetStart, "Building target {}", name);
 
         auto &options = targetInfo.defaultOptions;
 
-        auto directory = createTargetDirectory(target);
-        auto outputFile = directory / fmt::format("{}.o", target);
+        auto directory = createTargetDirectory(name);
+        auto outputFile = directory / fmt::format("{}.o", name);
 
         log(LogSource::target, "Building {}", outputFile.string());
 
-        builder::SourceManager manager(database, targetInfo.includes);
+        builder::SourceManager manager(sourceDatabase, targetInfo.includes);
 
         std::vector<std::unique_ptr<llvm::Module>> modules;
         for (const auto &file : targetConfig->files) {
@@ -241,7 +366,7 @@ namespace kara::cli {
             }
         }
 
-        auto base = std::make_unique<llvm::Module>(target, *builderTarget.context);
+        auto base = std::make_unique<llvm::Module>(name, *builderTarget.context);
         llvm::Linker linker(*base);
 
         for (auto &module : modules)
@@ -252,7 +377,7 @@ namespace kara::cli {
         result->module = std::move(base);
 
         if (llvm::verifyModule(*result->module, &llvm::errs()))
-            throw std::runtime_error(fmt::format("Module for target {} failed to verify.", target));
+            throw std::runtime_error(fmt::format("Module for target {} failed to verify.", name));
 
         logHeader(LogSource::target);
         fmt::print("Writing ");
@@ -277,7 +402,7 @@ namespace kara::cli {
         }
 
         if (targetConfig->type == TargetType::Executable) {
-            auto linkFile = directory / target;
+            auto linkFile = directory / name;
 
             logHeader(LogSource::target);
             fmt::print("Linking ");
@@ -324,8 +449,8 @@ namespace kara::cli {
             for (const auto &path : libraryPaths)
                 arguments.push_back(fmt::format("-L{}", path));
 
-            for (const auto &name : libraryNames)
-                arguments.push_back(fmt::format("-l{}", name));
+            for (const auto &lib : libraryNames)
+                arguments.push_back(fmt::format("-l{}", lib));
 
             auto &linkOpts = targetInfo.linkerOptions;
 
@@ -336,7 +461,7 @@ namespace kara::cli {
                 throw std::runtime_error(linkerResult);
         }
 
-        log(LogSource::targetDone, "Built target {}", target);
+        log(LogSource::targetDone, "Built target {}", name);
 
         auto &ref = *result;
         updatedTargets.insert({ target, std::move(result) });
@@ -345,12 +470,12 @@ namespace kara::cli {
     }
 
     ProjectManager::ProjectManager(const TargetConfig &main, const std::string &triple, const std::string &root)
-        : main(main) // cannot std::move because i need the data later in constructor
+        : mainTarget(main) // cannot std::move because i need the data later in constructor
         , builderTarget(triple)
-        , database(managerCallback)
-        , packages(main.packagesDirectory, root) {
-        configs = this->main.resolveConfigs(); // oya
-
-        tracePackages(this->main, packages, packageConfigs, configs);
+        , sourceDatabase(managerCallback)
+        , packageManager(main.packagesDirectory, root) {
+        targetCache.add(main, packageManager);
+//        configs = this->main.resolveConfigs(); // oya
+//        tracePackages(this->mainTarget, packageManager, packageConfigs, configs);
     }
 }

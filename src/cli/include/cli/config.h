@@ -11,7 +11,10 @@
 
 namespace fs = std::filesystem;
 
-namespace YAML { struct Node; }
+namespace YAML {
+    struct Node;
+    struct Emitter;
+}
 
 namespace kara::cli {
     struct TargetConfig;
@@ -22,7 +25,42 @@ namespace kara::cli {
         Interface,
     };
 
-    using ConfigMap = std::unordered_map<std::string, const TargetConfig *>;
+    struct TargetOptions {
+        std::vector<std::string> includes;
+        std::vector<std::string> includeArguments;
+
+        std::vector<std::string> libraries;
+        std::vector<std::string> dynamicLibraries;
+
+        std::vector<std::string> linkerOptions;
+
+        kara::options::Options defaultOptions;
+
+        bool operator==(const TargetOptions &other) const;
+        bool operator!=(const TargetOptions &other) const;
+
+        void serializeInline(YAML::Emitter &emitter) const;
+        void serialize(YAML::Emitter &emitter) const;
+
+        TargetOptions() = default;
+        explicit TargetOptions(const YAML::Node &node);
+    };
+
+    struct TargetImport {
+        std::string from;
+
+        std::vector<std::string> import; // suggested targets names
+        std::vector<std::string> buildArguments; // pass to cmake
+
+        TargetOptions options;
+
+        [[nodiscard]] bool direct() const; // used for pretty serialization
+
+        void serialize(YAML::Emitter &emitter) const;
+
+        TargetImport() = default;
+        explicit TargetImport(const YAML::Node &node);
+    };
 
     struct TargetConfig {
         fs::path root;
@@ -37,27 +75,18 @@ namespace kara::cli {
         std::string outputDirectory = "build";
         std::string packagesDirectory = "build";
 
-        std::vector<TargetConfig> configs;
-        std::set<std::string> import;
+//        std::vector<TargetConfig> configs;
 
-        std::unordered_map<std::string, std::vector<std::string>> packages;
+        std::vector<TargetImport> import;
 
-        std::vector<std::string> includes;
-        std::vector<std::string> includeArguments;
-
-        std::vector<std::string> libraries;
-        std::vector<std::string> dynamicLibraries;
-
-        std::vector<std::string> linkerOptions;
-
-        kara::options::Options defaultOptions;
+        TargetOptions options;
 
         [[nodiscard]] std::string serialize() const;
 
         [[nodiscard]] std::string resolveName() const;
 
-        void resolveConfigs(ConfigMap &configs) const;
-        [[nodiscard]] ConfigMap resolveConfigs() const;
+//        void resolveConfigs(ConfigMap &configs) const;
+//        [[nodiscard]] ConfigMap resolveConfigs() const;
 
         static std::optional<TargetConfig> loadFrom(const std::string &path);
         static TargetConfig loadFromThrows(const std::string &path);

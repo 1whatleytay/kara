@@ -10,7 +10,7 @@
 
 namespace kara::cli {
     struct TargetInfo {
-        std::vector<std::string> depends;
+        std::vector<const TargetConfig *> depends;
 
         std::vector<std::string> libraries;
         std::vector<std::string> dynamicLibraries;
@@ -28,29 +28,40 @@ namespace kara::cli {
         std::unique_ptr<llvm::Module> module;
     };
 
-    // unfortunate...
-    using ConfigHold = std::vector<std::unique_ptr<TargetConfig>>;
-    void tracePackages(const TargetConfig &config, PackageManager &packages, ConfigHold &hold, ConfigMap &out);
+    // or database?
+    struct TargetCache {
+        std::vector<std::unique_ptr<TargetConfig>> configHold;
+
+        std::unordered_map<std::string, const TargetConfig *> configsByName;
+        std::unordered_map<std::string, const TargetConfig *> configsByPath;
+        std::unordered_map<std::string, const TargetConfig *> configsByUrl;
+
+        const TargetConfig *resolveImport(const TargetConfig &parent, const TargetImport &import) const;
+
+        void add(const TargetConfig &config, PackageManager &packages);
+    };
 
     struct ProjectManager {
         builder::Target builderTarget;
-        builder::SourceDatabase database;
+        builder::SourceDatabase sourceDatabase;
 
-        TargetConfig main;
-        ConfigMap configs;
+        TargetConfig mainTarget;
 
-        ConfigHold packageConfigs;
-        PackageManager packages;
+        PackageManager packageManager;
 
-        std::unordered_map<std::string, std::unique_ptr<TargetInfo>> targetInfos;
-        std::unordered_map<std::string, std::unique_ptr<TargetResult>> updatedTargets;
+        TargetCache targetCache; // after pm in initialization
 
-        fs::path createTargetDirectory(const std::string &target);
+        std::unordered_map<const TargetConfig *, std::unique_ptr<TargetInfo>> targetInfos;
+        std::unordered_map<const TargetConfig *, std::unique_ptr<TargetResult>> updatedTargets;
 
-        const TargetInfo &readTarget(const std::string &target);
+        fs::path createTargetDirectory(const std::string &target) const;
+
+        const TargetConfig *getTarget(const std::string &name);
+
+        const TargetInfo &readTarget(const TargetConfig *target);
 
         const TargetResult &makeTarget(
-            const std::string &target, const std::string &root, const std::string &linkerType = "");
+            const TargetConfig *target, const std::string &root, const std::string &linkerType = "");
 
         ProjectManager(const TargetConfig &main, const std::string &triple, const std::string &root);
     };

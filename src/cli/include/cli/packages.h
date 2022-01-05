@@ -1,9 +1,12 @@
 #pragma once
 
-#include <cli/config.h>
-
 #include <set>
 #include <string>
+#include <vector>
+#include <filesystem>
+#include <unordered_map>
+
+namespace fs = std::filesystem;
 
 namespace YAML { struct Node; }
 
@@ -17,7 +20,7 @@ namespace kara::cli {
         explicit PackageLockFile(const YAML::Node &node);
     };
 
-    struct PackageDownloadResult {
+    struct PackageBuildResult {
         std::vector<std::string> configFiles;
         std::vector<std::string> builtTargets;
     };
@@ -32,8 +35,13 @@ namespace kara::cli {
 
         // Returns list of .yaml config files, equivalent to import: in TargetConfig
 
+        PackageBuildResult build(const fs::path &root,
+            const std::string &name,
+            const std::string &suggestTarget = "",
+            const std::vector<std::string> &arguments = {});
+
         // reinstall
-        PackageDownloadResult download(const std::string &url,
+        PackageBuildResult download(const std::string &url,
             const std::string &suggestTarget = "",
             const std::vector<std::string> &arguments = {});
         // checks lock file

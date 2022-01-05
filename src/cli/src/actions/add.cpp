@@ -13,7 +13,11 @@ namespace kara::cli {
 
         auto result = manager.download(url, "", arguments);
 
-        config.packages[url] = std::move(result.builtTargets);
+        TargetImport import;
+        import.from = url;
+        import.import = std::move(result.builtTargets); // unfortunate
+
+        config.import.push_back(import);
 
         if (!noWrite) {
             std::ofstream stream(projectFile);

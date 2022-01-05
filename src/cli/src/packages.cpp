@@ -2,6 +2,7 @@
 
 #include <cli/log.h>
 #include <cli/cbp.h>
+#include <cli/config.h>
 
 #include <yaml-cpp/yaml.h>
 
@@ -70,61 +71,19 @@ namespace kara::cli {
         }
     }
 
-    PackageDownloadResult PackageManager::download(
-        const std::string &url,
+    PackageBuildResult PackageManager::build(
+        const fs::path &config,
+        const std::string &name,
         const std::string &suggestTarget,
         const std::vector<std::string> &arguments) {
-        std::string name = url;
+        if (config.filename() == "CMakeLists.txt") {
+            log(LogSource::package, "Building CMake Project {}", config);
 
-        UriUriA uriData;
-
-        if (!uriParseSingleUriA(&uriData, url.c_str(), nullptr)) {
-            if (uriData.pathTail) {
-                name = std::string(
-                    uriData.pathTail->text.first,
-                    uriData.pathTail->text.afterLast);
-
-                // drop .git
-                std::string trail = ".git";
-
-                if (name.size() > trail.size() && name.substr(name.size() - trail.size()) == trail)
-                    name = name.substr(0, name.size() - trail.size());
-            }
-
-            uriFreeUriMembersA(&uriData);
-        }
-
-        if (name.empty())
-            throw std::runtime_error("No name found for package. Please specify a name with --name.");
-
-        auto package = packagesDirectory / name;
-
-        if (!fs::is_directory(package)) {
-            fs::create_directories(package);
-        } else {
-            logHeader(LogSource::package);
-            fmt::print("Removing existing directory ");
-            fmt::print(fmt::emphasis::italic, "{}\n", package.string());
-
-            fs::remove_all(package);
-        }
-
-        log(LogSource::package, "Cloning repository {}", url);
-
-        // no more lib git2 for now
-        if (invokeCLI("git", { root, "clone", url, package.string(), "--quiet", "--depth", "1" }))
-            throw std::runtime_error("Cannot clone git repository.");
-
-        if (fs::exists(package / "project.yaml")) {
-            log(LogSource::package, "Detected Kara Project File {}", url);
-
-            throw;
-        } else if (fs::exists(package / "CMakeLists.txt")) {
-            log(LogSource::package, "Building CMake Project {}", url);
-
-            auto packageBuild = package / "build"; // conflict :O
+            auto packageBuild = packagesDirectory / "cmake" / name / "build"; // conflict :O
             if (!fs::is_directory(packageBuild))
                 fs::create_directories(packageBuild);
+
+            auto package = config.parent_path();
 
             std::vector<std::string> cmakeArguments = {
                 root,
@@ -288,7 +247,7 @@ namespace kara::cli {
             std::vector<std::string> buildArguments = {
                 root,
                 "--build", ".",
-                "--target", targetInfo.name
+                "--target", targetInfo.name,
             };
 
             if (!arguments.empty()) {
@@ -303,12 +262,12 @@ namespace kara::cli {
 
             library.name = target;
             library.type = TargetType::Interface;
-            library.libraries.emplace_back(targetInfo.output);
-            library.includeArguments.emplace_back("--");
+            library.options.libraries.emplace_back(targetInfo.output);
+            library.options.includeArguments.emplace_back("--");
 
             for (const auto &include : targetInfo.includes) {
-                library.includes.emplace_back(include);
-                library.includeArguments.emplace_back(fmt::format("-I{}", include));
+                library.options.includes.emplace_back(include);
+                library.options.includeArguments.emplace_back(fmt::format("-I{}", include));
             }
 
             auto libraryOutput = library.serialize();
@@ -325,18 +284,91 @@ namespace kara::cli {
 
             log(LogSource::package, "Generated library source file at {}", fs::absolute(libraryOutputPath).string());
 
-            lockFile.packagesInstalled[url] = { libraryOutputFilename };
-            lockFileWriteStream() << lockFile.serialize();
+//            lockFile.packagesInstalled[url] = { libraryOutputFilename };
+//            lockFileWriteStream() << lockFile.serialize();
+//
+//            logHeader(LogSource::package);
+//            fmt::print(fmt::emphasis::bold | fmt::fg(fmt::color::forest_green), "Package {} installed.\n", name);
 
-            logHeader(LogSource::package);
-            fmt::print(fmt::emphasis::bold | fmt::fg(fmt::color::forest_green), "Package {} installed.\n", name);
+            return PackageBuildResult { { libraryOutputPath }, { target } };
+        } else if (config.extension() == ".yaml") {
+            log(LogSource::package, "Detected Kara Project File {}", config);
 
-            return PackageDownloadResult { { libraryOutputPath }, { target } };
+            throw;
         } else {
             throw std::runtime_error("Unknown project type.");
         }
 
-        throw; // :flushed:
+        throw;
+    }
+
+    PackageBuildResult PackageManager::download(
+        const std::string &url,
+        const std::string &suggestTarget,
+        const std::vector<std::string> &arguments) {
+        std::string name = url;
+
+        UriUriA uriData;
+
+        if (!uriParseSingleUriA(&uriData, url.c_str(), nullptr)) {
+            if (uriData.pathTail) {
+                name = std::string(
+                    uriData.pathTail->text.first,
+                    uriData.pathTail->text.afterLast);
+
+                // drop .git
+                std::string trail = ".git";
+
+                if (name.size() > trail.size() && name.substr(name.size() - trail.size()) == trail)
+                    name = name.substr(0, name.size() - trail.size());
+            }
+
+            uriFreeUriMembersA(&uriData);
+        }
+
+        if (name.empty())
+            throw std::runtime_error("No name found for package.");
+
+        auto package = packagesDirectory / name;
+
+        if (!fs::is_directory(package)) {
+            fs::create_directories(package);
+        } else {
+            logHeader(LogSource::package);
+            fmt::print("Removing existing directory ");
+            fmt::print(fmt::emphasis::italic, "{}\n", package.string());
+
+            fs::remove_all(package);
+        }
+
+        log(LogSource::package, "Cloning repository {}", url);
+
+        // no more lib git2 for now
+        if (invokeCLI("git", { root, "clone", url, package.string(), "--quiet", "--depth", "1" }))
+            throw std::runtime_error("Cannot clone git repository.");
+
+        PackageBuildResult result;
+
+        if (fs::exists(package / "project.yaml")) {
+            result = build(package / "project.yaml", name, suggestTarget, arguments);
+        } else if (fs::exists(package / "CMakeLists.txt")) {
+            result = build(package / "CMakeLists.txt", name, suggestTarget, arguments);
+        } else {
+            throw;
+        }
+
+        auto &files = lockFile.packagesInstalled[url];
+        files.reserve(result.configFiles.size());
+
+        for (const auto &file : result.configFiles)
+            files.push_back(fs::relative(file, packagesDirectory));
+
+        lockFileWriteStream() << lockFile.serialize();
+
+        logHeader(LogSource::package);
+        fmt::print(fmt::emphasis::bold | fmt::fg(fmt::color::forest_green), "Package {} installed.\n", name);
+
+        return result;
     }
 
     std::vector<std::string> PackageManager::install(

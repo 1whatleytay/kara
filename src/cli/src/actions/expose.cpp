@@ -23,11 +23,8 @@ namespace kara::cli {
 
             ProjectManager manager(*config, "", root);
 
-            auto resolvedTarget = target;
-            if (resolvedTarget.empty())
-                resolvedTarget = config->resolveName();
-
-            auto targetInfo = manager.readTarget(resolvedTarget);
+            // this &config should work, TargetCache will trust the pointer you pass it stays alive
+            auto targetInfo = manager.readTarget(&*config);
 
             auto localType = type;
 

@@ -30,6 +30,9 @@ namespace kara::options {
 
         bool mutableGlobals = false;
 
+        bool operator==(const Options &other) const;
+        bool operator!=(const Options &other) const;
+
         void connect(CLI::App &app);
 
         void merge(const Options &other);

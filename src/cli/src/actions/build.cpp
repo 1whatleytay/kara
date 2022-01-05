@@ -24,7 +24,7 @@ namespace kara::cli {
         if (targetToBuild.empty())
             throw std::runtime_error("Target to build must be specified over command line.");
 
-        auto &result = manager.makeTarget(targetToBuild, root, linkerType);
+        auto &result = manager.makeTarget(manager.getTarget(targetToBuild), root, linkerType);
 
         if (printIr) {
             fmt::print("Printing IR...\n");

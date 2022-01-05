@@ -26,14 +26,12 @@ namespace kara::cli {
         if (targetToBuild.empty())
             throw std::runtime_error("Target to build must be specified over command line.");
 
-        auto it = manager.configs.find(targetToBuild);
-        if (it == manager.configs.end())
-            throw std::runtime_error(fmt::format("Cannot find target {} in project file.", targetToBuild));
+        auto targetConfig = manager.getTarget(targetToBuild);
 
-        if (it->second->type != TargetType::Executable)
+        if (targetConfig->type != TargetType::Executable)
             throw std::runtime_error(fmt::format("Target {} does not have executable type.", targetToBuild));
 
-        manager.makeTarget(targetToBuild, root, linkerType);
+        manager.makeTarget(targetConfig, root, linkerType);
 
         auto directory = manager.createTargetDirectory(targetToBuild);
         auto executable = directory / targetToBuild; // ?

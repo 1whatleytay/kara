@@ -10,6 +10,18 @@ namespace kara::options {
     OptionsError::OptionsError(std::string reason)
         : reason(std::move(reason)) { }
 
+    bool Options::operator==(const Options &other) const {
+        return triple == other.triple
+            && malloc == other.malloc
+            && free == other.free
+            && realloc == other.realloc
+            && mutableGlobals == other.mutableGlobals;
+    }
+
+    bool Options::operator!=(const Options &other) const {
+        return !operator==(other);
+    }
+
     void Options::connect(CLI::App &app) {
 //        app.add_option("-i,--input", inputs, "Input source files.")->required();
 //        auto outputOption = app.add_option("-o,--output", output, "Output binary files.");
