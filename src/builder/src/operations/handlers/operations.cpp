@@ -2,6 +2,8 @@
 
 #include <parser/function.h> // im sorry
 
+#include <cassert>
+
 namespace kara::builder::ops::handlers {
     const utils::PrimitiveTypename *asPrim(const utils::Typename &type) {
         return std::get_if<utils::PrimitiveTypename>(&type);

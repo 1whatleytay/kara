@@ -13,6 +13,7 @@
 
 #include <yaml-cpp/yaml.h>
 
+#include <cassert>
 #include <fstream>
 #include <sstream>
 
@@ -57,6 +58,9 @@ namespace kara::cli {
 
             return it->second;
         }
+
+        default:
+            throw;
         }
     }
 

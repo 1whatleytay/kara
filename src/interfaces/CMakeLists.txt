@@ -9,4 +9,4 @@ target_link_libraries(interfaces PRIVATE clang-global fmt)
 target_link_libraries(interfaces PUBLIC parser)
 
 add_executable(try interfaces.cpp)
-target_link_libraries(try PRIVATE rapidjson interfaces)
+target_link_libraries(try PRIVATE interfaces)

@@ -11,6 +11,8 @@
 
 #include <llvm/Support/Host.h>
 
+#include <cassert>
+
 namespace kara::builder {
     builder::Cache *Cache::create() {
         auto ptr = std::make_unique<builder::Cache>(Cache { this });

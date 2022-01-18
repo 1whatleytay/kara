@@ -9,6 +9,8 @@
 
 #include <fmt/format.h>
 
+#include <cassert>
+
 namespace kara::builder {
     utils::Typename Builder::resolveTypename(const hermes::Node *node) {
         switch (node->is<parser::Kind>()) {

@@ -5,6 +5,8 @@
 #include <parser/type.h>
 #include <parser/variable.h>
 
+#include <cstring>
+
 namespace kara::parser {
     Root::Root(hermes::State &state, bool external)
         : Node(state, Kind::Root) {

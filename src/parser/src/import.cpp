@@ -2,6 +2,8 @@
 
 #include <parser/literals.h>
 
+#include <cassert>
+
 namespace kara::parser {
     const String *Import::body() const { return children.front()->as<String>(); }
 

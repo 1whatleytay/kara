@@ -5,6 +5,7 @@
 #include <cli/manager.h>
 
 #include <unistd.h>
+#include <sys/wait.h>
 
 namespace kara::cli {
     void CLIRunOptions::execute() {

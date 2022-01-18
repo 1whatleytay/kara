@@ -14,6 +14,8 @@
 
 #include <builder/handlers.h>
 
+#include <cassert>
+
 namespace kara::builder::ops::modifiers {
     // I actually don't like this, no parser::Call I think
     // I'm going to keep it until it becomes a problem

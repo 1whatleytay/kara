@@ -5,6 +5,8 @@
 
 #include <utils/typename.h>
 
+#include <cassert>
+
 namespace kara::builder::ops::handlers::builtins {
     bool named(const std::string &input, const std::string &required) { return input.empty() || input == required; }
 

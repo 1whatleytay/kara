@@ -4,6 +4,8 @@
 
 #include <fmt/format.h>
 
+#include <cassert>
+
 namespace kara::builder::ops {
     namespace nouns {
         builder::Result makeSpecial(const Context &context, utils::SpecialType type) {

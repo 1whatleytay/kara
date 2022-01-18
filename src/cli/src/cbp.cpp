@@ -8,6 +8,7 @@
 
 #include <array>
 #include <regex>
+#include <cassert>
 #include <fstream>
 
 namespace kara::cli {

@@ -6,6 +6,9 @@
 #include <parser/type.h>
 #include <parser/variable.h>
 
+#include <cassert>
+#include <climits>
+
 namespace kara::builder::ops::matching {
     MatchInputFlattened flatten(const MatchInput &input) {
         MatchInputFlattened result;
@@ -214,7 +217,7 @@ namespace kara::builder::ops::matching {
             return std::make_tuple(node, ops::matching::match(context.builder, translatedParameters, inputCopy));
         });
 
-        size_t bet = SIZE_T_MAX;
+        size_t bet = SIZE_MAX;
         std::vector<const TestResult *> picks;
 
         for (const TestResult &check : checks) {

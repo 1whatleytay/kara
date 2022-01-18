@@ -5,6 +5,8 @@
 #include <parser/type.h>
 #include <parser/variable.h>
 
+#include <cassert>
+
 namespace kara::builder {
     void Type::build() {
         std::vector<llvm::Type *> types;

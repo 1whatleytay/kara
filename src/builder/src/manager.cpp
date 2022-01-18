@@ -12,6 +12,7 @@
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Target/TargetOptions.h>
 
+#include <cassert>
 #include <fstream>
 #include <sstream>
 

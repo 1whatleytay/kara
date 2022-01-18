@@ -230,6 +230,7 @@ namespace kara::cli {
             case TargetType::Library: return "library";
             case TargetType::Executable: return "executable";
             case TargetType::Interface: return "interface";
+            default: throw;
             }
         };
 

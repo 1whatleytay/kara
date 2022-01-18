@@ -9,6 +9,8 @@
 
 #include <fmt/printf.h>
 
+#include <cassert>
+
 using namespace kara;
 
 std::string toTypeString(const hermes::Node *node) {

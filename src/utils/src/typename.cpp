@@ -62,6 +62,8 @@ namespace kara::utils {
                 return fmt::format(":expr");
             case ArrayKind::VariableSize:
                 return "";
+            default:
+                throw;
             }
         })();
 

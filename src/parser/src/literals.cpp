@@ -5,8 +5,9 @@
 
 #include <fmt/format.h>
 
-#include <algorithm>
+#include <cassert>
 #include <sstream>
+#include <algorithm>
 
 namespace kara::parser {
     const Expression *Parentheses::body() const { return children.front()->as<Expression>(); }

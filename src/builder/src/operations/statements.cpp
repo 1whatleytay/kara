@@ -6,6 +6,8 @@
 #include <parser/statement.h>
 #include <parser/variable.h>
 
+#include <cassert>
+
 namespace kara::builder::ops::statements {
     void exit(const Context &context, ExitPoint point) {
         assert(context.ir);

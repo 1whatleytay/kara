@@ -12,6 +12,7 @@
 
 #include <unistd.h>
 
+#include <cassert>
 #include <fstream>
 #include <iostream>
 

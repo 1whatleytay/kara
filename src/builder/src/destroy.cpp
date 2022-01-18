@@ -2,6 +2,8 @@
 
 #include <builder/operations.h>
 
+#include <cassert>
+
 namespace kara::builder {
     uint64_t Accumulator::getNextUID() { return nextUID++; }
 

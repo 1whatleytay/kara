@@ -8,6 +8,8 @@
 #include <parser/type.h>
 #include <parser/variable.h>
 
+#include <cassert>
+
 namespace kara::builder::ops::handlers {
     Maybe<builder::Wrapped> makeCallOnNew(
         const Context &context, const builder::Unresolved &unresolved, const matching::MatchInput &input) {

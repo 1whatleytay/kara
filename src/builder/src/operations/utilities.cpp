@@ -7,6 +7,8 @@
 #include <parser/literals.h>
 #include <parser/variable.h>
 
+#include <cassert>
+
 namespace kara::builder::ops {
     Context Context::noIR() const { return move(nullptr); }
 

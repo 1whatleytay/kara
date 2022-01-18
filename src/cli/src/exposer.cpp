@@ -13,6 +13,8 @@
 
 #include <fmt/format.h>
 
+#include <cassert>
+
 namespace kara::cli {
     std::string toTypeString(const hermes::Node *node) {
         switch (node->is<parser::Kind>()) {

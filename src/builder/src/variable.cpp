@@ -9,6 +9,8 @@
 
 #include <fmt/format.h>
 
+#include <cassert>
+
 namespace kara::builder {
     Variable::Variable(const parser::Variable *node, builder::Builder &builder) : node(node) {
         if (node->isMutable && !builder.options.mutableGlobals)

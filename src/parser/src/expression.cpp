@@ -4,6 +4,7 @@
 #include <parser/operator.h>
 
 #include <array>
+#include <cassert>
 #include <stdexcept>
 #include <unordered_set>
 

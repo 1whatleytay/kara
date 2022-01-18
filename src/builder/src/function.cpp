@@ -14,6 +14,7 @@
 #include <parser/variable.h>
 
 #include <map>
+#include <cassert>
 
 namespace kara::builder {
     void Function::build() {
