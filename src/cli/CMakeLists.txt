@@ -6,6 +6,9 @@ add_executable(cli
     include/cli/packages.h
     include/cli/exposer.h
     include/cli/log.h
+    include/cli/lock.h
+    include/cli/utility.h
+    include/cli/platform.h
 
     src/actions/add.cpp
     src/actions/build.cpp
@@ -23,6 +26,9 @@ add_executable(cli
     src/manager.cpp
     src/log.cpp
     src/packages.cpp
+    src/platform.cpp
+    src/lock.cpp
+    src/utility.cpp
     src/main.cpp)
 target_include_directories(cli PUBLIC include)
 target_link_libraries(cli PRIVATE

@@ -1,15 +1,14 @@
 #pragma once
 
+#include <cli/utility.h>
+
 #include <options/options.h>
 
 #include <set>
 #include <string>
 #include <vector>
-#include <filesystem>
 #include <unordered_map>
 #include <unordered_set>
-
-namespace fs = std::filesystem;
 
 namespace YAML {
     struct Node;
@@ -46,15 +45,24 @@ namespace kara::cli {
         explicit TargetOptions(const YAML::Node &node);
     };
 
-    struct TargetImport {
-        std::string from;
+    enum TargetImportKind {
+        ProjectFile, // file:
+        RepositoryUrl, // url:
+        CMakePackage, // cmake:
+    };
 
-        std::vector<std::string> import; // suggested targets names
+    struct TargetImport {
+        // if nullopt, kind was not specified
+        std::optional<TargetImportKind> kind;
+
+        std::string path; // source, so the path to the file or the url or cmake package name
+
+        std::vector<std::string> targets; // suggested targets names
         std::vector<std::string> buildArguments; // pass to cmake
 
         TargetOptions options;
 
-        [[nodiscard]] bool direct() const; // used for pretty serialization
+        TargetImportKind detectedKind() const;
 
         void serialize(YAML::Emitter &emitter) const;
 

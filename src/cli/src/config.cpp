@@ -4,9 +4,39 @@
 
 #include <fmt/printf.h>
 
+#include <uriparser/Uri.h>
+
 #include <fstream>
 
 namespace kara::cli {
+    namespace {
+        bool isHttpOrHttps(const char *text) {
+            UriUriA uri;
+
+            // not a url
+            if (uriParseSingleUriA(&uri, text, nullptr))
+                return false;
+
+            auto exit = [&uri](bool value) {
+                uriFreeUriMembersA(&uri);
+
+                return value;
+            };
+
+            // exit { uri.uriFreeUriMembersA }
+
+            auto size = uri.scheme.afterLast - uri.scheme.first;
+
+            if (size >= 5 && memcmp(uri.scheme.first, "https", 5) == 0)
+                return exit(true);
+
+            if (size >= 4 && memcmp(uri.scheme.first, "http", 4) == 0)
+                return exit(true);
+
+            return exit(false);
+        }
+    }
+
     bool TargetOptions::operator==(const TargetOptions &other) const {
         return includes == other.includes
             && includeArguments == other.includeArguments
@@ -97,39 +127,66 @@ namespace kara::cli {
         }
     }
 
-    bool TargetImport::direct() const {
-        return import.empty() && buildArguments.empty() && options == TargetOptions { };
+    TargetImportKind TargetImport::detectedKind() const {
+        if (kind)
+            return *kind;
+
+        if (isHttpOrHttps(path.c_str()))
+            return TargetImportKind::RepositoryUrl;
+        else
+            return TargetImportKind::ProjectFile;
     }
 
     void TargetImport::serialize(YAML::Emitter &emitter) const {
-        if (direct()) {
-            emitter << from;
-        } else {
+        if (kind) {
             emitter << YAML::BeginMap;
 
-            emitter << YAML::Key << "from" << YAML::Value << from;
-            emitter << YAML::Key << "import" << YAML::Value << import;
+            auto nameFromKind = [](TargetImportKind k) {
+                switch (k) {
+                case ProjectFile: return "file";
+                case RepositoryUrl: return "url";
+                case CMakePackage: return "cmake";
+                default: throw std::runtime_error("Unimplemented target import kind.");
+                }
+            };
+
+            emitter << YAML::Key << nameFromKind(*kind) << YAML::Value << path;
+            emitter << YAML::Key << "targets" << YAML::Value << targets;
             emitter << YAML::Key << "build-arguments" << YAML::Value << buildArguments;
             options.serializeInline(emitter);
 
             emitter << YAML::EndMap;
+        } else {
+            emitter << path;
         }
     }
 
     TargetImport::TargetImport(const YAML::Node &node) {
         if (node.IsMap()) {
-            if (auto value = node["from"])
-                from = value.as<std::string>();
+            auto setPath = [this](YAML::Node &node, TargetImportKind specifiedKind) {
+                path = node.as<std::string>();
+                kind = specifiedKind;
+            };
 
-            if (auto value = node["import"])
-                import = value.as<std::vector<std::string>>();
+            if (auto fileValue = node["file"])
+                setPath(fileValue, TargetImportKind::ProjectFile);
+            else if (auto urlValue = node["url"])
+                setPath(urlValue, TargetImportKind::RepositoryUrl);
+            else if (auto cmakeValue = node["cmake"])
+                setPath(cmakeValue, TargetImportKind::CMakePackage);
+            else
+                throw std::runtime_error("Need one of `file` or `url` to be specified for config imports.");
+
+            if (auto value = node["targets"])
+                targets = value.as<std::vector<std::string>>();
 
             if (auto value = node["build-arguments"])
                 buildArguments = value.as<std::vector<std::string>>();
 
             options = TargetOptions(node);
         } else {
-            from = node.as<std::string>();
+            // auto detect target type
+            path = node.as<std::string>();
         }
     }
 

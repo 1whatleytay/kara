@@ -1,24 +1,17 @@
 #pragma once
 
+#include <cli/lock.h>
+#include <cli/utility.h>
+
 #include <set>
 #include <string>
 #include <vector>
-#include <filesystem>
 #include <unordered_map>
-
-namespace fs = std::filesystem;
 
 namespace YAML { struct Node; }
 
 namespace kara::cli {
-    struct PackageLockFile {
-        std::unordered_map<std::string, std::vector<std::string>> packagesInstalled;
-
-        [[nodiscard]] std::string serialize() const;
-
-        PackageLockFile() = default;
-        explicit PackageLockFile(const YAML::Node &node);
-    };
+    struct Platform;
 
     struct PackageBuildResult {
         std::vector<std::string> configFiles;
@@ -27,6 +20,8 @@ namespace kara::cli {
 
     struct PackageManager {
         std::string root;
+        Platform &platform;
+
         fs::path packagesDirectory;
 
         PackageLockFile lockFile;
@@ -49,6 +44,8 @@ namespace kara::cli {
             const std::string &suggestTarget = "",
             const std::vector<std::string> &arguments = {});
 
-        explicit PackageManager(fs::path packagesDirectory, std::string root);
+        PackageBuildResult buildCMakePackage(const std::string &name);
+
+        explicit PackageManager(Platform &platform, fs::path packagesDirectory, std::string root);
     };
 }

@@ -18,6 +18,7 @@ namespace kara::cli {
         static LogSource compileC;
         static LogSource compileKara;
         static LogSource error;
+        static LogSource platform;
     };
 
     void logHeader(const LogSource &source);

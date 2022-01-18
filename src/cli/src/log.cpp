@@ -22,6 +22,9 @@ namespace kara::cli {
     LogSource LogSource::error = {
         "ERROR", fmt::fg(fmt::color::orange_red), fmt::fg(fmt::color::orange_red)
     };
+    LogSource LogSource::platform = {
+        "PLAT", fmt::fg(fmt::color::pale_green)
+    };
 
     void logHeader(const LogSource &source) {
         fmt::print("[");

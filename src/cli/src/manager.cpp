@@ -11,65 +11,52 @@
 
 #include <lld/Common/Driver.h>
 
-#include <uriparser/Uri.h>
+#include <yaml-cpp/yaml.h>
 
 #include <fstream>
 #include <sstream>
 
 namespace kara::cli {
-    namespace {
-        bool isHttpOrHttps(const char *text) {
-            UriUriA uri;
-
-            // not a url
-            if (uriParseSingleUriA(&uri, text, nullptr))
-                return false;
-
-            auto exit = [&uri](bool value) {
-                uriFreeUriMembersA(&uri);
-
-                return value;
-            };
-
-            // exit { uri.uriFreeUriMembersA }
-
-            auto size = uri.scheme.afterLast - uri.scheme.first;
-
-            if (size >= 5 && memcmp(uri.scheme.first, "https", 5) == 0)
-                return exit(true);
-
-            if (size >= 4 && memcmp(uri.scheme.first, "http", 4) == 0)
-                return exit(true);
-
-            return exit(false);
-        }
-    }
-
     // could just be root as first param
     // duplicate code in TargetCache::add
     const TargetConfig *TargetCache::resolveImport(const TargetConfig &parent, const TargetImport &package) const {
-        if (isHttpOrHttps(package.from.c_str())) {
-            assert(package.import.size() == 1); // for name...
-            auto suggestedTarget = package.import.front();
-
-            auto it = configsByUrl.find(package.from);
-
-            if (it == configsByUrl.end()) {
-                throw std::runtime_error(fmt::format(
-                    "Failed to resolve import in {} for {}.", parent.root.string(), package.from));
-            }
-
-            return it->second;
-        } else {
-            auto pathToConfig = parent.root.parent_path() / package.from; // absolute
+        switch (package.detectedKind()) {
+        case TargetImportKind::ProjectFile: {
+            auto pathToConfig = parent.root.parent_path() / package.path; // absolute
 
             auto it = configsByPath.find(pathToConfig.string());
             if (it == configsByPath.end()) {
-                throw std::runtime_error(fmt::format(
-                    "Failed to resolve import in {} for {}.", parent.root.string(), package.from));
+                throw std::runtime_error(
+                    fmt::format("Failed to resolve import in {} for {}.", parent.root.string(), package.path));
             }
 
             return it->second;
+        }
+
+        case TargetImportKind::RepositoryUrl: {
+//            assert(package.targets.size() == 1); // for name...
+//            auto suggestedTarget = package.targets.front();
+//
+            auto it = configsByUrl.find(package.path);
+
+            if (it == configsByUrl.end()) {
+                throw std::runtime_error(
+                    fmt::format("Failed to resolve import in {} for {}.", parent.root.string(), package.path));
+            }
+
+            return it->second;
+        }
+
+        case TargetImportKind::CMakePackage: {
+            auto it = configsByCMake.find(package.path);
+
+            if (it == configsByCMake.end()) {
+                throw std::runtime_error(
+                    fmt::format("Failed to resolve import in {} for {}.", parent.root.string(), package.path));
+            }
+
+            return it->second;
+        }
         }
     }
 
@@ -96,24 +83,17 @@ namespace kara::cli {
             // set to a value if the following statements determine package.from is any of these types
             std::optional<std::string> urlValue;
             std::optional<std::string> pathValue;
+            std::optional<std::string> cmakeValue;
 
             // I'm not concerned about checking if configsByName is filled to prevent infinity recursion
             // It's more of an information kind of deal that can be used by other functions
 
             // This can probably be taken out into another function
-            if (isHttpOrHttps(package.from.c_str())) {
-                assert(package.import.size() == 1); // for name...
-                auto suggestedTarget = package.import.front();
-
-                if (configsByUrl.find(package.from) != configsByUrl.end())
-                    continue;
-
-                urlValue = package.from;
-                paths = packages.install(package.from, suggestedTarget, package.buildArguments);
-            } else {
+            switch (package.detectedKind()) {
+            case TargetImportKind::ProjectFile: {
                 // path
 
-                auto pathToConfig = config.root.parent_path() / package.from; // absolute
+                auto pathToConfig = config.root.parent_path() / package.path; // absolute
 
                 if (configsByPath.find(pathToConfig.string()) != configsByPath.end())
                     continue;
@@ -126,8 +106,8 @@ namespace kara::cli {
                 }
 
                 if (pathToConfig.filename() == "CMakeLists.txt") {
-                    assert(package.import.size() == 1); // for name...
-                    auto suggestedTarget = package.import.front();
+                    assert(package.targets.size() == 1); // for name...
+                    auto suggestedTarget = package.targets.front();
 
                     auto result = packages.build(pathToConfig,
                         suggestedTarget, suggestedTarget, package.buildArguments);
@@ -136,6 +116,35 @@ namespace kara::cli {
                 } else {
                     paths = { pathToConfig };
                 }
+
+                break;
+            }
+
+            case TargetImportKind::RepositoryUrl: {
+                // needs cmake eh?
+                std::string suggestedTarget;
+
+                if (!package.targets.empty()) {
+                    assert(package.targets.size() == 1); // for name...
+                    suggestedTarget = package.targets.front();
+                }
+
+                if (configsByUrl.find(package.path) != configsByUrl.end())
+                    continue;
+
+                urlValue = package.path;
+                paths = packages.install(package.path, suggestedTarget, package.buildArguments);
+
+                break;
+            }
+
+            case TargetImportKind::CMakePackage: {
+                paths = packages.buildCMakePackage(package.path).configFiles;
+
+                cmakeValue = package.path;
+
+                break;
+            }
             }
 
             assert(paths.size() == 1);
@@ -154,6 +163,8 @@ namespace kara::cli {
                 configsByUrl[*urlValue] = ref;
             if (pathValue)
                 configsByPath[*pathValue] = ref;
+            if (cmakeValue)
+                configsByCMake[*cmakeValue] = ref;
 
             add(*ref, packages);
         }
@@ -189,7 +200,7 @@ namespace kara::cli {
         return "";
     }
 
-    fs::path ProjectManager::createTargetDirectory(const std::string &target) const {
+    fs::path ProjectManager::createTargetDirectory(const std::string &target) {
         fs::path directory = fs::path(mainTarget.outputDirectory) / target;
 
         if (!fs::is_directory(directory))
@@ -433,18 +444,11 @@ namespace kara::cli {
                 root,
                 outputFile.string(),
                 "-o",
-                linkFile.string(),
-                "-arch",
-                "x86_64", // yikes
-                "-lSystem", // macos only...
-                "-L/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib",
-                "-syslibroot",
-                "/Library/Developer/CommandLineTools/SDKs/MacOSX11.sdk",
-                "-platform_version",
-                "macos",
-                "12.0.0",
-                "12.0.0",
+                linkFile.string()
             };
+
+            auto additionalArguments = platform->defaultLinkerArguments();
+            arguments.insert(arguments.end(), additionalArguments.begin(), additionalArguments.end());
 
             for (const auto &path : libraryPaths)
                 arguments.push_back(fmt::format("-L{}", path));
@@ -472,10 +476,27 @@ namespace kara::cli {
     ProjectManager::ProjectManager(const TargetConfig &main, const std::string &triple, const std::string &root)
         : mainTarget(main) // cannot std::move because i need the data later in constructor
         , builderTarget(triple)
-        , sourceDatabase(managerCallback)
-        , packageManager(main.packagesDirectory, root) {
-        targetCache.add(main, packageManager);
-//        configs = this->main.resolveConfigs(); // oya
-//        tracePackages(this->mainTarget, packageManager, packageConfigs, configs);
+        , sourceDatabase(managerCallback) {
+        auto lockPath = fs::path(main.outputDirectory) / "build-lock.yaml";
+        if (fs::exists(lockPath))
+            lock = BuildLockFile(YAML::LoadFile(lockPath.string()));
+
+        platform = Platform::byTriple(root, builderTarget.triple, lock);
+
+        packageManager.emplace(*platform, main.packagesDirectory, root);
+
+        targetCache.add(main, *packageManager);
+    }
+
+    ProjectManager::~ProjectManager() {
+        // strange but i want to write lock before I leave
+
+        auto text = lock.serialize();
+
+        auto lockPath = fs::path(mainTarget.outputDirectory) / "build-lock.yaml";
+        std::ofstream stream(lockPath);
+
+        if (stream.is_open())
+            stream << text;
     }
 }

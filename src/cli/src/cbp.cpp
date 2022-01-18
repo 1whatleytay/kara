@@ -1,5 +1,7 @@
 #include <cli/cbp.h>
 
+#include <cli/utility.h>
+
 #include <pugixml.hpp>
 
 #include <fmt/format.h>
@@ -7,9 +9,6 @@
 #include <array>
 #include <regex>
 #include <fstream>
-#include <filesystem>
-
-namespace fs = std::filesystem;
 
 namespace kara::cli {
     bool cbpTargetNameIsSimilar(std::string targetName, std::string projectName) {
