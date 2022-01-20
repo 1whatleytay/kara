@@ -253,6 +253,29 @@ namespace kara::builder::ops::handlers {
 
     Maybe<builder::Result> makeConvertBridgeImplicitReference(
         const Context &context, const builder::Result &result, const utils::Typename &type, bool) {
+        auto countReferences = [](const utils::Typename &inType) -> size_t {
+            const utils::Typename *type = &inType;
+
+            size_t sum = 0;
+
+            while (true) {
+                if (auto subtype = std::get_if<utils::ReferenceTypename>(type)) {
+                    sum++;
+                    type = subtype->value.get();
+                } else if (auto arraySubtype = std::get_if<utils::ArrayTypename>(type)) {
+                    if (arraySubtype->kind == utils::ArrayKind::Unbounded) { // for cptrs
+                        type = arraySubtype->value.get();
+                    } else {
+                        break;
+                    }
+                } else {
+                    break;
+                }
+            }
+
+            return sum;
+        };
+
         if (asPrimTo(result.type, utils::PrimitiveType::Null))
             return std::nullopt;
 
@@ -267,7 +290,7 @@ namespace kara::builder::ops::handlers {
         };
 
         auto typePointsTo = typeRef && *typeRef->value == result.type;
-        auto typeIsRefAndNotResult = typeRef && !resultRef;
+        auto typeIsRefAndNotResult = countReferences(type) > countReferences(result.type);
 
         if (!((typePointsTo || typeIsRefAndNotResult) && workable()))
             return std::nullopt;
