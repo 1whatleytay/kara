@@ -43,7 +43,7 @@ namespace kara::cli {
         std::unordered_map<std::string, const TargetConfig *> configsByUrl;
         std::unordered_map<std::string, const TargetConfig *> configsByCMake;
 
-        const TargetConfig *resolveImport(const TargetConfig &parent, const TargetImport &import) const;
+        [[nodiscard]] const TargetConfig *resolveImport(const TargetConfig &parent, const TargetImport &import) const;
 
         void add(const TargetConfig &config, PackageManager &packages);
     };

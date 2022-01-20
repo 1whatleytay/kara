@@ -162,6 +162,8 @@ namespace kara::cli {
 
             configHold.push_back(std::move(ptr));
 
+            ref->options.merge(package.options);
+
             // I think there's a lot of simplifications that can be done here
             if (urlValue)
                 configsByUrl[*urlValue] = ref;

@@ -50,6 +50,36 @@ namespace kara::cli {
         return !operator==(other);
     }
 
+
+    void TargetOptions::merge(const TargetOptions &other) {
+        if (!other.includes.empty()) {
+            includes.insert(includes.end(),
+                other.includes.begin(), other.includes.end());
+        }
+
+        if (!other.includeArguments.empty()) {
+            includeArguments.insert(includeArguments.end(),
+                other.includeArguments.begin(), other.includeArguments.end());
+        }
+
+        if (!other.libraries.empty()) {
+            libraries.insert(libraries.end(),
+                other.libraries.begin(), other.libraries.end());
+        }
+
+        if (!other.dynamicLibraries.empty()) {
+            dynamicLibraries.insert(dynamicLibraries.end(),
+                other.dynamicLibraries.begin(), other.dynamicLibraries.end());
+        }
+
+        if (!other.linkerOptions.empty()) {
+            linkerOptions.insert(linkerOptions.end(),
+                other.linkerOptions.begin(), other.linkerOptions.end());
+        }
+
+        defaultOptions.merge(other.defaultOptions);
+    }
+
     void TargetOptions::serializeInline(YAML::Emitter &emitter) const {
         if (!includes.empty())
             emitter << YAML::Key << "includes" << YAML::Value << includes;

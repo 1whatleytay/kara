@@ -35,6 +35,8 @@ namespace kara::cli {
 
         kara::options::Options defaultOptions;
 
+        void merge(const TargetOptions &other);
+
         bool operator==(const TargetOptions &other) const;
         bool operator!=(const TargetOptions &other) const;
 
@@ -62,7 +64,7 @@ namespace kara::cli {
 
         TargetOptions options;
 
-        TargetImportKind detectedKind() const;
+        [[nodiscard]] TargetImportKind detectedKind() const;
 
         void serialize(YAML::Emitter &emitter) const;
 
