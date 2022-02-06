@@ -3,6 +3,7 @@
 #include <builder/error.h>
 #include <builder/target.h>
 #include <builder/manager.h>
+#include <builder/platform.h>
 
 #include <parser/expression.h>
 #include <parser/function.h>
@@ -199,7 +200,8 @@ namespace kara::builder {
         , target(target)
         , dependencies(manager.resolve(file))
         , context(*target.context)
-        , options(opts) {
+        , options(opts)
+        , platform(Platform::byTriple(target.triple)) {
 
         module = std::make_unique<llvm::Module>(file.path.filename().string(), context);
 

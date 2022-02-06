@@ -1048,13 +1048,13 @@ namespace kara::builder::ops::handlers {
 
     Maybe<builder::Result> makeFallbackOptional(
         const Context &context, const builder::Result &left, const builder::Result &right) {
-        auto realType = findReal(left.type);
+        auto realType = findRealType(left.type);
         auto optional = std::get_if<utils::OptionalTypename>(realType);
 
         if (!optional)
             return std::nullopt;
 
-        auto optionalValue = makeReal(context, left);
+        auto optionalValue = makeRealType(context, left);
 
         llvm::Value *value = nullptr;
 

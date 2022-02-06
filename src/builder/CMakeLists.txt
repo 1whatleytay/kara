@@ -6,12 +6,14 @@ add_library(builder STATIC
     include/builder/handlers.h
 	include/builder/builtins.h
 	include/builder/library.h
+	include/builder/platform.h
 	include/builder/target.h
 
     src/manager.cpp
 	src/target.cpp
     src/builder.cpp
     src/error.cpp
+	src/platform.cpp
     src/function.cpp
     src/typename.cpp
     src/variable.cpp

@@ -59,8 +59,9 @@ namespace kara::builder {
 
             returnType = builder.makeTypename(returnTypename);
 
+            // sad
             utils::FunctionParameters parameters(e->parameterCount);
-            std::vector<llvm::Type *> parameterTypes(e->parameterCount);
+            std::vector<std::pair<std::string, llvm::Type *>> parameterTypes(e->parameterCount);
 
             auto parameterVariables = e->parameters();
 
@@ -73,8 +74,11 @@ namespace kara::builder {
                         "parameters are not implemented.");
                 }
 
-                parameters[a] = { var->name, builder.resolveTypename(var->fixedType()) };
-                parameterTypes[a] = builder.makeTypename(parameters[a].second);
+                auto varTypename = builder.resolveTypename(var->fixedType());
+                auto varLLVMType = builder.makeTypename(parameters[a].second);
+
+                parameters[a] = { var->name, varTypename };
+                parameterTypes[a] = { var->name, varLLVMType };
             }
 
             type = {
@@ -83,9 +87,17 @@ namespace kara::builder {
                 std::make_shared<utils::Typename>(returnTypename),
             };
 
-            llvm::FunctionType *valueType = llvm::FunctionType::get(returnType, parameterTypes, e->isCVarArgs);
+            rawArguments = { returnType, parameterTypes };
+            auto formattedArguments = builder.platform->formatArguments(builder.target, rawArguments);
+
+            llvm::FunctionType *valueType = llvm::FunctionType::get(
+                formattedArguments.returnType, formattedArguments.parameterTypes(), e->isCVarArgs);
             function = llvm::Function::Create(
                 valueType, llvm::GlobalVariable::ExternalLinkage, 0, e->name, builder.module.get());
+
+            // name function parameters
+            for (size_t a = 0; a < formattedArguments.parameters.size(); a++)
+                function->getArg(a)->setName(formattedArguments.parameters[a].first);
 
             break;
         }
@@ -137,15 +149,20 @@ namespace kara::builder {
                 auto astFunction = node->as<parser::Function>();
                 auto parameters = astFunction->parameters();
 
+                std::vector<llvm::Value *> arguments(function->arg_size());
+
+                for (size_t a = 0; a < arguments.size(); a++)
+                    arguments[a] = function->getArg(a);
+
+                auto realArguments = builder.platform->tieArguments(
+                    entryContext, rawArguments.parameterTypes(), arguments);
+
                 // Create parameters within scope.
                 for (size_t a = 0; a < parameters.size(); a++) {
-                    const auto *parameterNode = parameters[a];
+                    auto parameterNode = parameters[a];
 
-                    llvm::Argument *argument = function->getArg(a);
-                    argument->setName(parameterNode->name);
-
-                    cache.variables[parameterNode]
-                        = std::make_unique<builder::Variable>(parameterNode, entryContext, argument);
+                    cache.variables[parameterNode] = std::make_unique<builder::Variable>(
+                        parameterNode, entryContext, realArguments[a]);
                 }
             }
 
@@ -277,10 +294,17 @@ namespace kara::builder {
                 throw;
             }
 
+            ops::Context exitContext {
+                builder,
+                nullptr,
+
+                &exit,
+            };
+
             if (returnTypename == from(utils::PrimitiveType::Nothing))
-                exit.CreateRetVoid();
+                builder.platform->tieReturn(exitContext, returnType, nullptr);
             else
-                exit.CreateRet(exit.CreateLoad(returnValue, "final"));
+                builder.platform->tieReturn(exitContext, returnType, exit.CreateLoad(returnValue, "final"));
         }
     }
 

@@ -10,8 +10,6 @@
 
 #include <uriparser/Uri.h>
 
-#include <unistd.h>
-
 #include <cassert>
 #include <fstream>
 #include <iostream>
@@ -281,9 +279,10 @@ namespace kara::cli {
         if (!fs::is_directory(package)) {
             fs::create_directories(package);
         } else {
-            logHeader(LogSource::package);
-            fmt::print("Removing existing directory ");
-            fmt::print(fmt::emphasis::italic, "{}\n", package.string());
+            if (logHeader(LogSource::package)) {
+                fmt::print("Removing existing directory ");
+                fmt::print(fmt::emphasis::italic, "{}\n", package.string());
+            }
 
             fs::remove_all(package);
         }
@@ -312,8 +311,9 @@ namespace kara::cli {
 
         lockFileWriteStream() << lockFile.serialize();
 
-        logHeader(LogSource::package);
-        fmt::print(fmt::emphasis::bold | fmt::fg(fmt::color::forest_green), "Package {} installed.\n", name);
+        if (logHeader(LogSource::package)) {
+            fmt::print(fmt::emphasis::bold | fmt::fg(fmt::color::forest_green), "Package {} installed.\n", name);
+        }
 
         return result;
     }

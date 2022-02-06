@@ -21,13 +21,17 @@ namespace kara::cli {
         static LogSource platform;
     };
 
-    void logHeader(const LogSource &source);
+    extern bool enableLogging; // sorry for the global
+
+    void setLogging(bool value, const std::function<void()> &scope);
+
+    bool logHeader(const LogSource &source);
 
     template <typename ...Args>
     void log(const LogSource &source, const char *format, Args && ... args) {
-        logHeader(source);
-
-        fmt::print(source.body, format, args...);
-        fmt::print("\n");
+        if (logHeader(source)) {
+            fmt::print(source.body, format, args...);
+            fmt::print("\n");
+        }
     }
 }

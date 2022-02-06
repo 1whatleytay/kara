@@ -224,10 +224,10 @@ namespace kara::cli {
             source = LogSource::compileC;
         }
 
-        logHeader(source);
-
-        fmt::print("Preparing file ");
-        fmt::print(fmt::emphasis::italic, "{}\n", path.string());
+        if (logHeader(source)) {
+            fmt::print("Preparing file ");
+            fmt::print(fmt::emphasis::italic, "{}\n", path.string());
+        }
     }
 
     const TargetConfig *ProjectManager::getTarget(const std::string &name) {
@@ -368,10 +368,10 @@ namespace kara::cli {
                     source = LogSource::compileC;
                 }
 
-                logHeader(source);
-
-                fmt::print("Building file ");
-                fmt::print(fmt::emphasis::italic, "{}\n", managerFile.path.string());
+                if (logHeader(source)) {
+                    fmt::print("Building file ");
+                    fmt::print(fmt::emphasis::italic, "{}\n", managerFile.path.string());
+                }
 
                 modules.push_back(std::move(builder.module));
             } catch (const kara::builder::VerifyError &error) {
@@ -396,9 +396,10 @@ namespace kara::cli {
         if (llvm::verifyModule(*result->module, &llvm::errs()))
             throw std::runtime_error(fmt::format("Module for target {} failed to verify.", name));
 
-        logHeader(LogSource::target);
-        fmt::print("Writing ");
-        fmt::print(fmt::emphasis::italic, "{}\n", outputFile.string());
+        if (logHeader(LogSource::target)) {
+            fmt::print("Writing ");
+            fmt::print(fmt::emphasis::italic, "{}\n", outputFile.string());
+        }
 
         {
             llvm::legacy::PassManager passManager;
@@ -421,9 +422,10 @@ namespace kara::cli {
         if (targetConfig->type == TargetType::Executable) {
             auto linkFile = directory / name;
 
-            logHeader(LogSource::target);
-            fmt::print("Linking ");
-            fmt::print(fmt::emphasis::italic, "{}\n", linkFile.string());
+            if (logHeader(LogSource::target)) {
+                fmt::print("Linking ");
+                fmt::print(fmt::emphasis::italic, "{}\n", linkFile.string());
+            }
 
             std::unordered_set<std::string> libraryPaths;
             std::unordered_set<std::string> libraryNames;

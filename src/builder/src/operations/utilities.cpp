@@ -239,7 +239,7 @@ namespace kara::builder::ops {
         return std::visit(visitor, result);
     }
 
-    const utils::Typename *findReal(const utils::Typename &type) {
+    const utils::Typename *findRealType(const utils::Typename &type) {
         const utils::Typename *subtype = &type;
 
         while (auto *sub = std::get_if<utils::ReferenceTypename>(subtype))
@@ -248,7 +248,7 @@ namespace kara::builder::ops {
         return subtype;
     }
 
-    builder::Result makeReal(const Context &context, const builder::Result &result) {
+    builder::Result makeRealType(const Context &context, const builder::Result &result) {
         builder::Result value = result;
 
         while (auto *r = std::get_if<utils::ReferenceTypename>(&value.type)) {

@@ -86,7 +86,7 @@ namespace kara::builder::ops::modifiers {
     }
 
     builder::Wrapped makeIndex(const Context &context, const builder::Wrapped &value, const parser::Index *node) {
-        builder::Result sub = ops::makeReal(context, ops::makeInfer(context, value));
+        builder::Result sub = ops::makeRealType(context, ops::makeInfer(context, value));
 
         const utils::ArrayTypename *arrayType = std::get_if<utils::ArrayTypename>(&sub.type);
 

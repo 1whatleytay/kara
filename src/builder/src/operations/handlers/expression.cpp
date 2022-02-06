@@ -60,7 +60,7 @@ namespace kara::builder::ops::handlers {
         // will just directly return the variable name without any extra calling
         // ^^ this is just bad code
 
-        auto realType = findReal(infer.type);
+        auto realType = findRealType(infer.type);
         assert(realType);
 
         auto functionType = std::get_if<utils::FunctionTypename>(realType);
@@ -68,7 +68,7 @@ namespace kara::builder::ops::handlers {
         if (!functionType)
             die("Reference did not resolve to any functions to call.");
 
-        auto real = ops::makeReal(context, infer);
+        auto real = ops::makeRealType(context, infer);
         auto llvmReal = ops::get(context, real); // ?
 
         return ops::matching::unwrap(ops::matching::call(context, *functionType, llvmReal, input), unresolved.from);
@@ -79,7 +79,7 @@ namespace kara::builder::ops::handlers {
         // :| might generate duplicate code here, but pretty sure it generated duplicate code in last system too
 
         // Set up to check if property exists, dereference if needed
-        auto subtype = ops::findReal(value.type);
+        auto subtype = ops::findRealType(value.type);
 
         auto type = std::get_if<utils::NamedTypename>(subtype);
         if (!type)
@@ -102,7 +102,7 @@ namespace kara::builder::ops::handlers {
 
         size_t index = builderType->indices.at(varNode);
 
-        auto structRef = ops::makeReal(context, value);
+        auto structRef = ops::makeRealType(context, value);
 
         return builder::Result {
             (value.flags & (builder::Result::FlagMutable | builder::Result::FlagTemporary))
@@ -236,7 +236,7 @@ namespace kara::builder::ops::handlers {
     }
 
     bool makeDestroyVariableArray(const Context &context, llvm::Value *ptr, const utils::Typename &type) {
-        auto baseType = ops::findReal(type);
+        auto baseType = ops::findRealType(type);
 
         auto array = std::get_if<utils::ArrayTypename>(baseType);
 
@@ -251,7 +251,7 @@ namespace kara::builder::ops::handlers {
             nullptr,
         };
 
-        auto arrayResult = ops::makeReal(context, decoy);
+        auto arrayResult = ops::makeRealType(context, decoy);
 
         auto free = context.builder.getFree();
         auto dataType = llvm::Type::getInt8PtrTy(context.builder.context);

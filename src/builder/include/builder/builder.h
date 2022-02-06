@@ -1,5 +1,7 @@
 #pragma once
 
+#include <builder/platform.h>
+
 #include <options/options.h>
 
 #include <utils/expression.h>
@@ -49,6 +51,8 @@ namespace kara::builder {
     struct Result;
     struct Function;
     struct Accumulator;
+
+    struct Platform; // builder/platform.h
 
     // Getting rid of this would give bonus points, used for Unresolved
     namespace ops {
@@ -123,7 +127,7 @@ namespace kara::builder {
         // regular variable
         Variable(const parser::Variable *node, const ops::Context &context);
         // function parameter
-        Variable(const parser::Variable *node, const ops::Context &context, llvm::Argument *argument);
+        Variable(const parser::Variable *node, const ops::Context &context, llvm::Value *argument);
     };
 
     struct Cache {
@@ -189,6 +193,8 @@ namespace kara::builder {
         builder::Builder &builder;
         builder::Cache cache;
 
+        FormatArgumentsPackage rawArguments;
+
         const hermes::Node *node = nullptr;
 
         llvm::BasicBlock *entryBlock = nullptr;
@@ -223,6 +229,8 @@ namespace kara::builder {
         llvm::Function *reallocCache = nullptr;
 
         std::unordered_set<const SourceFile *> dependencies;
+
+        std::unique_ptr<Platform> platform;
 
         llvm::LLVMContext &context;
         std::unique_ptr<llvm::Module> module;

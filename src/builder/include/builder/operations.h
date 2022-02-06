@@ -69,8 +69,8 @@ namespace kara::builder::ops {
     builder::Result makePass(const Context &context, const Result &result);
     builder::Result makeInfer(const Context &context, const Wrapped &result);
 
-    const utils::Typename *findReal(const utils::Typename &result);
-    builder::Result makeReal(const Context &context, const Result &result);
+    const utils::Typename *findRealType(const utils::Typename &result);
+    builder::Result makeRealType(const Context &context, const Result &result);
 
     llvm::Value *makeAlloca(const Context &context, const utils::Typename &type, const std::string &name = "");
     llvm::Value *makeMalloc(const Context &context, const utils::Typename &type, const std::string &name = "");

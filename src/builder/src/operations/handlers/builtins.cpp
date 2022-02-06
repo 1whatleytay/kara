@@ -20,7 +20,7 @@ namespace kara::builder::ops::handlers::builtins {
 
             auto &value = input[0].second;
 
-            auto subtype = ops::findReal(value.type);
+            auto subtype = ops::findRealType(value.type);
 
             auto array = std::get_if<utils::ArrayTypename>(subtype);
             if (!array)
@@ -51,7 +51,7 @@ namespace kara::builder::ops::handlers::builtins {
                 throw;
 
             case utils::ArrayKind::VariableSize: {
-                auto real = makeReal(context, value);
+                auto real = makeRealType(context, value);
                 assert(std::holds_alternative<utils::ArrayTypename>(real.type));
 
                 // mutable should probably be turned off after
@@ -77,13 +77,13 @@ namespace kara::builder::ops::handlers::builtins {
 
             auto &value = input[0].second;
 
-            auto subtype = ops::findReal(value.type);
+            auto subtype = ops::findRealType(value.type);
 
             auto array = std::get_if<utils::ArrayTypename>(subtype);
             if (!(array && array->kind == utils::ArrayKind::VariableSize))
                 return std::nullopt;
 
-            auto real = makeReal(context, value);
+            auto real = makeRealType(context, value);
             assert(std::holds_alternative<utils::ArrayTypename>(real.type));
 
             return builder::Result {
@@ -103,13 +103,13 @@ namespace kara::builder::ops::handlers::builtins {
 
             auto &value = input[0].second;
 
-            auto subtype = ops::findReal(value.type);
+            auto subtype = ops::findRealType(value.type);
 
             auto array = std::get_if<utils::ArrayTypename>(subtype);
             if (!(array && array->kind == utils::ArrayKind::VariableSize))
                 return std::nullopt;
 
-            auto real = makeReal(context, value);
+            auto real = makeRealType(context, value);
             assert(std::holds_alternative<utils::ArrayTypename>(real.type));
 
             return builder::Result {
@@ -134,13 +134,13 @@ namespace kara::builder::ops::handlers::builtins {
             auto &value = input[0].second;
             auto &second = input[1].second;
 
-            auto subtype = ops::findReal(value.type);
+            auto subtype = ops::findRealType(value.type);
 
             auto array = std::get_if<utils::ArrayTypename>(subtype);
             if (!(array && array->kind == utils::ArrayKind::VariableSize))
                 return std::nullopt;
 
-            auto arrayResult = ops::makeReal(context, value);
+            auto arrayResult = ops::makeRealType(context, value);
 
             auto ulongTypename = utils::PrimitiveTypename { utils::PrimitiveType::ULong };
 
@@ -203,13 +203,13 @@ namespace kara::builder::ops::handlers::builtins {
             auto &value = input[0].second;
             auto &second = input[1].second;
 
-            auto subtype = ops::findReal(value.type);
+            auto subtype = ops::findRealType(value.type);
 
             auto array = std::get_if<utils::ArrayTypename>(subtype);
             if (!(array && array->kind == utils::ArrayKind::VariableSize))
                 return std::nullopt;
 
-            auto arrayResult = ops::makeReal(context, value);
+            auto arrayResult = ops::makeRealType(context, value);
 
             auto ulongTypename = utils::PrimitiveTypename { utils::PrimitiveType::ULong };
 
@@ -276,13 +276,13 @@ namespace kara::builder::ops::handlers::builtins {
             auto &value = input[0].second;
             auto &second = input[1].second;
 
-            auto subtype = ops::findReal(value.type);
+            auto subtype = ops::findRealType(value.type);
 
             auto array = std::get_if<utils::ArrayTypename>(subtype);
             if (!(array && array->kind == utils::ArrayKind::VariableSize))
                 return std::nullopt;
 
-            auto arrayResult = ops::makeReal(context, value);
+            auto arrayResult = ops::makeRealType(context, value);
 
             auto converted = ops::makeConvert(context, second, *array->value);
             if (!converted)
@@ -348,13 +348,13 @@ namespace kara::builder::ops::handlers::builtins {
 
             auto &value = input[0].second;
 
-            auto subtype = ops::findReal(value.type);
+            auto subtype = ops::findRealType(value.type);
 
             auto array = std::get_if<utils::ArrayTypename>(subtype);
             if (!(array && array->kind == utils::ArrayKind::VariableSize))
                 return std::nullopt;
 
-            auto real = makeReal(context, value);
+            auto real = makeRealType(context, value);
             assert(std::holds_alternative<utils::ArrayTypename>(real.type));
 
             if (context.ir) {

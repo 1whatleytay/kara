@@ -157,7 +157,7 @@ namespace kara::builder::ops::matching {
 
         return builder::Result {
             builder::Result::FlagTemporary,
-            context.ir ? context.ir->CreateCall(callee, passParameters) : nullptr,
+            context.builder.platform->invokeFunction(context, callee, passParameters),
             *type.returnType,
             context.accumulator,
         };
@@ -345,7 +345,7 @@ namespace kara::builder::ops::matching {
 
             return builder::Result {
                 builder::Result::FlagTemporary,
-                context.ir ? context.ir->CreateCall(builderFunction->function, passParameters) : nullptr,
+                context.builder.platform->invokeFunction(context, builderFunction->function, passParameters),
                 *builderFunction->type.returnType,
                 context.accumulator,
             };

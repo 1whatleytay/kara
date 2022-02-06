@@ -1,6 +1,8 @@
 #include <cli/log.h>
 
 namespace kara::cli {
+    bool loggingEnabled = true;
+
     LogSource LogSource::package = {
         "PAC", fmt::fg(fmt::color::coral)
     };
@@ -26,9 +28,21 @@ namespace kara::cli {
         "PLAT", fmt::fg(fmt::color::pale_green)
     };
 
-    void logHeader(const LogSource &source) {
+    void setLogging(bool value, const std::function<void()> &scope) {
+        bool save = loggingEnabled;
+
+        loggingEnabled = value;
+
+        scope();
+
+        loggingEnabled = save;
+    }
+
+    bool logHeader(const LogSource &source) {
         fmt::print("[");
         fmt::print(source.header, "{:<4}", source.name);
         fmt::print("] ");
+
+        return loggingEnabled;
     }
 }

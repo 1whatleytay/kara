@@ -111,7 +111,7 @@ namespace kara::builder {
         }
     }
 
-    Variable::Variable(const parser::Variable *node, const ops::Context &context, llvm::Argument *argument)
+    Variable::Variable(const parser::Variable *node, const ops::Context &context, llvm::Value *argument)
         : node(node) {
         assert(context.function);
 
