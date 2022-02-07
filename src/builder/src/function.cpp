@@ -75,7 +75,7 @@ namespace kara::builder {
                 }
 
                 auto varTypename = builder.resolveTypename(var->fixedType());
-                auto varLLVMType = builder.makeTypename(parameters[a].second);
+                auto varLLVMType = builder.makeTypename(varTypename);
 
                 parameters[a] = { var->name, varTypename };
                 parameterTypes[a] = { var->name, varLLVMType };
@@ -133,6 +133,11 @@ namespace kara::builder {
             entry.SetInsertPoint(entryBlock);
             exit.SetInsertPoint(exitBlock);
 
+            std::vector<llvm::Value *> arguments(function->arg_size());
+
+            for (size_t a = 0; a < arguments.size(); a++)
+                arguments[a] = function->getArg(a);
+
             if (node->is(parser::Kind::Function)) {
                 ops::Context entryContext {
                     builder,
@@ -149,13 +154,8 @@ namespace kara::builder {
                 auto astFunction = node->as<parser::Function>();
                 auto parameters = astFunction->parameters();
 
-                std::vector<llvm::Value *> arguments(function->arg_size());
-
-                for (size_t a = 0; a < arguments.size(); a++)
-                    arguments[a] = function->getArg(a);
-
                 auto realArguments = builder.platform->tieArguments(
-                    entryContext, rawArguments.parameterTypes(), arguments);
+                    entryContext, rawArguments.returnType, rawArguments.parameterTypes(), arguments);
 
                 // Create parameters within scope.
                 for (size_t a = 0; a < parameters.size(); a++) {
@@ -299,12 +299,18 @@ namespace kara::builder {
                 nullptr,
 
                 &exit,
+
+                nullptr,
+                this,
             };
 
-            if (returnTypename == from(utils::PrimitiveType::Nothing))
-                builder.platform->tieReturn(exitContext, returnType, nullptr);
-            else
-                builder.platform->tieReturn(exitContext, returnType, exit.CreateLoad(returnValue, "final"));
+            if (returnTypename == from(utils::PrimitiveType::Nothing)) {
+                builder.platform->tieReturn(
+                    exitContext, returnType, nullptr, arguments);
+            } else {
+                builder.platform->tieReturn(
+                    exitContext, returnType, exit.CreateLoad(returnType, returnValue, "final"), arguments);
+            }
         }
     }
 

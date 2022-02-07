@@ -153,11 +153,14 @@ namespace kara::builder::ops::matching {
         auto llvmFunction = llvmType->getPointerElementType();
         assert(llvmFunction->isFunctionTy());
 
-        llvm::FunctionCallee callee(reinterpret_cast<llvm::FunctionType *>(llvmFunction), function);
+        auto llvmFunctionType = reinterpret_cast<llvm::FunctionType *>(llvmFunction);
+        llvm::FunctionCallee callee(llvmFunctionType, function);
+
+        auto expectedReturn = context.builder.makeTypename(*type.returnType);
 
         return builder::Result {
             builder::Result::FlagTemporary,
-            context.builder.platform->invokeFunction(context, callee, passParameters),
+            context.builder.platform->invokeFunction(context, callee, expectedReturn, passParameters),
             *type.returnType,
             context.accumulator,
         };
@@ -343,9 +346,12 @@ namespace kara::builder::ops::matching {
                 }
             }
 
+            auto expectedReturn = context.builder.makeTypename(*builderFunction->type.returnType);
+
             return builder::Result {
                 builder::Result::FlagTemporary,
-                context.builder.platform->invokeFunction(context, builderFunction->function, passParameters),
+                context.builder.platform->invokeFunction(
+                    context, builderFunction->function, expectedReturn, passParameters),
                 *builderFunction->type.returnType,
                 context.accumulator,
             };

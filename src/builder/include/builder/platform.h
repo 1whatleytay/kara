@@ -30,17 +30,20 @@ namespace kara::builder {
         virtual llvm::Value *invokeFunction(
             const ops::Context &context,
             llvm::FunctionCallee function,
+            llvm::Type *returnType,
             const std::vector<llvm::Value *> &values);
 
         virtual std::vector<llvm::Value *> tieArguments(
             const ops::Context &context,
+            llvm::Type *returnType,
             const std::vector<llvm::Type *> &argumentTypes,
             const std::vector<llvm::Value *> &arguments);
 
         virtual void tieReturn(
             const ops::Context &context,
             llvm::Type *returnType,
-            llvm::Value *value);
+            llvm::Value *value,
+            const std::vector<llvm::Value *> &arguments);
 
         static std::unique_ptr<Platform> byNative();
         static std::unique_ptr<Platform> byTriple(const std::string &name);
@@ -56,16 +59,19 @@ namespace kara::builder {
         llvm::Value *invokeFunction(
             const ops::Context &context,
             llvm::FunctionCallee function,
+            llvm::Type *returnType,
             const std::vector<llvm::Value *> &values) override;
 
         std::vector<llvm::Value *> tieArguments(
             const ops::Context &context,
+            llvm::Type *returnType,
             const std::vector<llvm::Type *> &argumentTypes,
             const std::vector<llvm::Value *> &arguments) override;
 
         void tieReturn(
             const ops::Context &context,
             llvm::Type *returnType,
-            llvm::Value *value) override;
+            llvm::Value *value,
+            const std::vector<llvm::Value *> &arguments) override;
     };
 }

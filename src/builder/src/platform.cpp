@@ -7,6 +7,8 @@
 #include <llvm/Support/Host.h>
 #include <llvm/Support/TargetSelect.h>
 
+#include <cassert>
+
 namespace kara::builder {
     std::vector<llvm::Type *> FormatArgumentsPackage::parameterTypes() const {
         std::vector<llvm::Type *> result;
@@ -53,6 +55,7 @@ namespace kara::builder {
     llvm::Value *Platform::invokeFunction(
         const ops::Context &context,
         llvm::FunctionCallee function,
+        llvm::Type *returnType,
         const std::vector<llvm::Value *> &values) {
         if (context.ir) {
             return context.ir->CreateCall(function, values);
@@ -63,6 +66,7 @@ namespace kara::builder {
 
     std::vector<llvm::Value *> Platform::tieArguments(
         const ops::Context &context,
+        llvm::Type *returnType,
         const std::vector<llvm::Type *> &argumentTypes,
         const std::vector<llvm::Value *> &arguments) {
         return arguments;
@@ -71,7 +75,8 @@ namespace kara::builder {
     void Platform::tieReturn(
         const ops::Context &context,
         llvm::Type *returnType,
-        llvm::Value *value) {
+        llvm::Value *value,
+        const std::vector<llvm::Value *> &arguments) {
         assert(context.ir);
 
         if (returnType->isVoidTy()) {
@@ -272,22 +277,239 @@ namespace kara::builder {
     llvm::Value *SysVPlatform::invokeFunction(
         const ops::Context &context,
         llvm::FunctionCallee function,
+        llvm::Type *returnType,
         const std::vector<llvm::Value *> &values) {
-        // pita
-        throw;
+        if (!context.ir)
+            return nullptr;
+
+        assert(context.function);
+
+        std::vector<llvm::Value *> formattedValues;
+        formattedValues.reserve(values.size()); // at least
+
+        // first process return type
+        // alloca
+        llvm::Value *sretPointer = nullptr;
+        auto sysVReturnTypes = getSysVLLVMTypes(context.builder.target, returnType);
+
+        if (!sysVReturnTypes) {
+            // we have to worry about sret
+
+            sretPointer = context.function->entry.CreateAlloca(returnType);
+            formattedValues.push_back(sretPointer); // lol
+        }
+
+        for (auto value : values) {
+            auto baseType = value->getType();
+            auto sysVTypes = getSysVLLVMTypes(context.builder.target, baseType);
+
+            if (sysVTypes) {
+                if (sysVTypes->size() == 1 && sysVTypes->front()->getTypeID() == baseType->getTypeID()) {
+                    // no struct shenanigans
+                    formattedValues.push_back(value);
+                } else {
+                    // struct shenanigans
+
+                    // i have my own custom struct
+                    // make llvm base struct from sysVTypes
+                    // alloca a llvm base struct
+                    // memcpy intrinsic over base struct
+                    // load each parameter from struct,
+                    // pass each parameter
+
+                    auto sysVStruct = llvm::StructType::get(context.builder.context, *sysVTypes);
+                    auto data = context.function->entry.CreateAlloca(sysVStruct);
+                    auto valueData = context.function->entry.CreateAlloca(baseType);
+                    context.ir->CreateStore(value, valueData);
+
+                    auto i8PtrType = llvm::Type::getInt8PtrTy(context.builder.context);
+                    auto i8Data = context.ir->CreatePointerCast(data, i8PtrType);
+                    auto i8ValueData = context.ir->CreatePointerCast(valueData, i8PtrType);
+
+                    auto valueSize = context.builder.target.layout->getTypeStoreSize(baseType);
+                    auto sysVSize = context.builder.target.layout->getTypeStoreSize(sysVStruct);
+
+                    assert(sysVSize >= valueSize);
+
+                    context.ir->CreateMemCpy(
+                        i8Data, llvm::MaybeAlign(),
+                        i8ValueData, llvm::MaybeAlign(),
+                        valueSize);
+
+                    // data holds something good now
+
+                    for (size_t a = 0; a < sysVTypes->size(); a++) {
+                        auto sysVSubType = (*sysVTypes)[a];
+
+                        auto pointer = context.ir->CreateStructGEP(sysVStruct, data, a);
+                        auto pointerValue = context.ir->CreateLoad(sysVSubType, pointer);
+
+                        formattedValues.push_back(pointerValue);
+                    }
+                }
+            } else {
+                // classic byval
+
+                // i have my own custom struct, too big
+                // i need to pass by pointer
+                // so i alloca unfortunately?
+                // copy it in with a store possibly
+                // pass pointer as arg
+
+                auto data = context.function->entry.CreateAlloca(baseType);
+                context.ir->CreateStore(value, data);
+
+                formattedValues.push_back(data); // ?
+            }
+        }
+
+        auto result = context.ir->CreateCall(function, formattedValues);
+
+        if (sretPointer) {
+            return context.ir->CreateLoad(returnType, sretPointer);
+        } else {
+            return result;
+        }
     }
 
     std::vector<llvm::Value *> SysVPlatform::tieArguments(
         const ops::Context &context,
+        llvm::Type *returnType,
         const std::vector<llvm::Type *> &argumentTypes,
         const std::vector<llvm::Value *> &arguments) {
-        throw;
+        // i have spread out arguments
+        // should probably go through expected argument types, split them out
+        // check if they're what i get in values
+        // if they are, alloca a struct
+        // load the values in that struct
+        // alloca a base struct
+        // memcpy old struct over new struct
+        // return that instead
+
+        assert(context.ir && context.function);
+
+        std::vector<llvm::Value *> formattedValues;
+        formattedValues.reserve(argumentTypes.size());
+
+        auto returnSysVTypes = getSysVLLVMTypes(context.builder.target, returnType);
+
+        size_t argumentIndex = 0;
+
+        if (!returnSysVTypes) // sret
+            argumentIndex++;
+
+        auto pop = [&arguments, &argumentIndex]() {
+            return arguments[argumentIndex++];
+        };
+
+        for (auto argumentType : argumentTypes) {
+            auto sysVTypes = getSysVLLVMTypes(context.builder.target, argumentType);
+
+            if (sysVTypes) {
+                if (sysVTypes->size() == 1 && sysVTypes->front()->getTypeID() == argumentType->getTypeID()) {
+                    // no struct shenanigans
+                    formattedValues.push_back(pop());
+                } else {
+                    // struct shenanigans
+
+                    auto sysVStruct = llvm::StructType::get(context.builder.context, *sysVTypes);
+                    auto data = context.function->entry.CreateAlloca(sysVStruct);
+
+                    for (size_t a = 0; a < sysVTypes->size(); a++) {
+                        auto sysVSubType = (*sysVTypes)[a];
+                        auto value = pop();
+
+                        assert(sysVSubType->getTypeID() == value->getType()->getTypeID());
+
+                        auto pointer = context.ir->CreateStructGEP(sysVStruct, data, a);
+                        context.ir->CreateStore(value, pointer);
+                    }
+
+                    // struct is loaded now
+                    auto valueData = context.function->entry.CreateAlloca(argumentType);
+
+                    auto i8PtrType = llvm::Type::getInt8PtrTy(context.builder.context);
+                    auto i8Data = context.ir->CreatePointerCast(data, i8PtrType);
+                    auto i8ValueData = context.ir->CreatePointerCast(valueData, i8PtrType);
+
+                    auto valueSize = context.builder.target.layout->getTypeStoreSize(argumentType);
+                    auto sysVSize = context.builder.target.layout->getTypeStoreSize(sysVStruct);
+
+                    assert(sysVSize >= valueSize);
+
+                    context.ir->CreateMemCpy(
+                        i8ValueData, llvm::MaybeAlign(),
+                        i8Data, llvm::MaybeAlign(),
+                        valueSize);
+
+                    formattedValues.push_back(context.ir->CreateLoad(argumentType, valueData));
+                }
+            } else {
+                // handle byval
+                formattedValues.push_back(context.ir->CreateLoad(argumentType, pop())); // assume pointer
+            }
+        }
+
+        assert(argumentIndex == arguments.size());
+        assert(formattedValues.size() == argumentTypes.size());
+
+        return formattedValues;
     }
 
     void SysVPlatform::tieReturn(
         const ops::Context &context,
         llvm::Type *returnType,
-        llvm::Value *value) {
-        throw;
+        llvm::Value *value,
+        const std::vector<llvm::Value *> &arguments) {
+        assert(context.ir && context.function);
+
+        if (!value) {
+            context.ir->CreateRetVoid();
+            return;
+        }
+
+        auto sysVTypes = getSysVLLVMTypes(context.builder.target, returnType);
+
+        if (sysVTypes) {
+            if (sysVTypes->size() == 1 && sysVTypes->front()->getTypeID() == returnType->getTypeID()) {
+                // no struct shenanigans
+                context.ir->CreateRet(value);
+            } else {
+                // struct shenanigans
+
+                auto sysVStruct = llvm::StructType::get(context.builder.context, *sysVTypes);
+                auto data = context.function->entry.CreateAlloca(sysVStruct);
+                auto valueData = context.function->entry.CreateAlloca(returnType);
+                context.ir->CreateStore(value, valueData);
+
+                auto i8PtrType = llvm::Type::getInt8PtrTy(context.builder.context);
+                auto i8Data = context.ir->CreatePointerCast(data, i8PtrType);
+                auto i8ValueData = context.ir->CreatePointerCast(valueData, i8PtrType);
+
+                auto valueSize = context.builder.target.layout->getTypeStoreSize(returnType);
+                auto sysVSize = context.builder.target.layout->getTypeStoreSize(sysVStruct);
+
+                assert(sysVSize >= valueSize);
+
+                context.ir->CreateMemCpy(
+                    i8Data, llvm::MaybeAlign(),
+                    i8ValueData, llvm::MaybeAlign(),
+                    valueSize);
+
+                // data holds something good now
+
+                context.ir->CreateRet(context.ir->CreateLoad(sysVStruct, data));
+            }
+        } else {
+            // sret
+
+            // uhh, a bit indirect but
+            assert(!arguments.empty());
+            auto sretArgument = arguments.front();
+            assert(sretArgument->getType()->isPointerTy());
+
+            context.ir->CreateStore(value, sretArgument);
+            context.ir->CreateRetVoid();
+        }
     }
 }
