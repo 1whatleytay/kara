@@ -200,8 +200,12 @@ namespace kara::builder {
         , target(target)
         , dependencies(manager.resolve(file))
         , context(*target.context)
-        , options(opts)
-        , platform(Platform::byTriple(target.triple)) {
+        , options(opts) {
+
+        if (opts.rawPlatform)
+            platform = std::make_unique<Platform>();
+        else
+            platform = Platform::byTriple(target.triple);
 
         module = std::make_unique<llvm::Module>(file.path.filename().string(), context);
 

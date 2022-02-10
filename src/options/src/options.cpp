@@ -15,6 +15,7 @@ namespace kara::options {
             && malloc == other.malloc
             && free == other.free
             && realloc == other.realloc
+            && rawPlatform == other.rawPlatform
             && mutableGlobals == other.mutableGlobals;
     }
 
@@ -38,6 +39,7 @@ namespace kara::options {
         app.add_option("--free", free, "Name of free stub function to link against (void (i8 *)).");
         app.add_option("--realloc", realloc, "Name of realloc stub function to link against (i8 * (i8 *, size_t)).");
 
+        app.add_flag("--raw-platform", rawPlatform, "Disable any special handling for target platforms in build.");
         app.add_flag("--mutable-globals", mutableGlobals, "Whether or not to enable mutable globals.");
     }
 
@@ -56,6 +58,8 @@ namespace kara::options {
         if (other.realloc != defaultOptions.realloc)
             realloc = other.realloc;
 
+        if (other.rawPlatform != defaultOptions.rawPlatform)
+            rawPlatform = other.rawPlatform;
         if (other.mutableGlobals != defaultOptions.mutableGlobals)
             mutableGlobals = other.mutableGlobals;
     }

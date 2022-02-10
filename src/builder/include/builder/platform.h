@@ -4,6 +4,8 @@
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
 
+#include <tuple>
+#include <string>
 #include <vector>
 #include <memory>
 
@@ -21,9 +23,16 @@ namespace kara::builder {
         [[nodiscard]] std::vector<llvm::Type *> parameterTypes() const;
     };
 
+    struct FormatArgumentsResult {
+        llvm::Type *returnType;
+        std::vector<std::tuple<std::string, llvm::Type *, llvm::AttrBuilder>> parameters;
+
+        [[nodiscard]] std::vector<llvm::Type *> parameterTypes() const;
+    };
+
     struct Platform {
         // not very safe but works I hope
-        virtual FormatArgumentsPackage formatArguments(
+        virtual FormatArgumentsResult formatArguments(
             const Target &target,
             const FormatArgumentsPackage &package);
 
@@ -37,13 +46,13 @@ namespace kara::builder {
             const ops::Context &context,
             llvm::Type *returnType,
             const std::vector<llvm::Type *> &argumentTypes,
-            const std::vector<llvm::Value *> &arguments);
+            const std::vector<llvm::Argument *> &arguments);
 
         virtual void tieReturn(
             const ops::Context &context,
             llvm::Type *returnType,
             llvm::Value *value,
-            const std::vector<llvm::Value *> &arguments);
+            const std::vector<llvm::Argument *> &arguments);
 
         static std::unique_ptr<Platform> byNative();
         static std::unique_ptr<Platform> byTriple(const std::string &name);
@@ -52,7 +61,7 @@ namespace kara::builder {
     };
 
     struct SysVPlatform : public Platform {
-        FormatArgumentsPackage formatArguments(
+        FormatArgumentsResult formatArguments(
             const Target &target,
             const FormatArgumentsPackage &package) override;
 
@@ -66,12 +75,12 @@ namespace kara::builder {
             const ops::Context &context,
             llvm::Type *returnType,
             const std::vector<llvm::Type *> &argumentTypes,
-            const std::vector<llvm::Value *> &arguments) override;
+            const std::vector<llvm::Argument *> &arguments) override;
 
         void tieReturn(
             const ops::Context &context,
             llvm::Type *returnType,
             llvm::Value *value,
-            const std::vector<llvm::Value *> &arguments) override;
+            const std::vector<llvm::Argument *> &arguments) override;
     };
 }

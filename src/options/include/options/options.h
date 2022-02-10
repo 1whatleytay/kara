@@ -28,6 +28,7 @@ namespace kara::options {
         std::string free = "free";
         std::string realloc = "realloc";
 
+        bool rawPlatform = false;
         bool mutableGlobals = false;
 
         bool operator==(const Options &other) const;

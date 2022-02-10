@@ -114,6 +114,8 @@ namespace kara::cli {
         if (defaultOptions.realloc != "realloc")
             pushOptions("realloc", defaultOptions.realloc);
 
+        if (defaultOptions.rawPlatform)
+            pushOptions("raw-platform", defaultOptions.rawPlatform);
         if (defaultOptions.mutableGlobals)
             pushOptions("mutable-globals", defaultOptions.mutableGlobals);
 
@@ -152,6 +154,8 @@ namespace kara::cli {
             if (auto v = value["realloc"])
                 defaultOptions.realloc = v.as<std::string>();
 
+            if (auto v = value["raw-platform"])
+                defaultOptions.rawPlatform = v.as<bool>();
             if (auto v = value["mutable-globals"])
                 defaultOptions.mutableGlobals = v.as<bool>();
         }

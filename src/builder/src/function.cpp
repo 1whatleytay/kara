@@ -96,8 +96,13 @@ namespace kara::builder {
                 valueType, llvm::GlobalVariable::ExternalLinkage, 0, e->name, builder.module.get());
 
             // name function parameters
-            for (size_t a = 0; a < formattedArguments.parameters.size(); a++)
-                function->getArg(a)->setName(formattedArguments.parameters[a].first);
+            for (size_t a = 0; a < formattedArguments.parameters.size(); a++) {
+                auto arg = function->getArg(a);
+                auto &[name, _, attrs] = formattedArguments.parameters[a];
+
+                arg->setName(name);
+                arg->addAttrs(attrs);
+            }
 
             break;
         }
@@ -133,7 +138,7 @@ namespace kara::builder {
             entry.SetInsertPoint(entryBlock);
             exit.SetInsertPoint(exitBlock);
 
-            std::vector<llvm::Value *> arguments(function->arg_size());
+            std::vector<llvm::Argument *> arguments(function->arg_size());
 
             for (size_t a = 0; a < arguments.size(); a++)
                 arguments[a] = function->getArg(a);
@@ -280,7 +285,7 @@ namespace kara::builder {
                     //     &accumulator, // might as well
                     // };
 
-                    ops::makeDestroy(bodyContext, bodyBuilder.CreateStructGEP(arg, index),
+                    ops::makeDestroy(bodyContext, bodyBuilder.CreateStructGEP(targetType->type, arg, index),
                         builder.resolveTypename(var->fixedType()));
                 }
 
