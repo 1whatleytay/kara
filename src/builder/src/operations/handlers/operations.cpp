@@ -382,28 +382,22 @@ namespace kara::builder::ops::handlers {
         };
     }
 
-
     Maybe<builder::Result> makeConvertForcedIntToBool(
         const Context &context, const builder::Result &result, const utils::Typename &type, bool force) {
         auto checkConvert = [&]() {
-            return ops::makeConvert(
-                context.move(nullptr), result, from(utils::PrimitiveType::Int))
-                .has_value();
+            return ops::makeConvert(context.move(nullptr), result, from(utils::PrimitiveType::Int)).has_value();
         };
 
         if (!(force && asPrimTo(type, utils::PrimitiveType::Bool) && checkConvert()))
             return std::nullopt;
 
-        auto intRep = ops::makeConvert(
-                context, result, from(utils::PrimitiveType::Int));
+        auto intRep = ops::makeConvert(context, result, from(utils::PrimitiveType::Int));
 
         assert(intRep);
 
         return builder::Result {
             builder::Result::FlagTemporary,
-            context.ir
-                ? context.ir->CreateSExtOrTrunc(ops::get(context, *intRep), context.ir->getInt1Ty())
-                : nullptr,
+            context.ir ? context.ir->CreateSExtOrTrunc(ops::get(context, *intRep), context.ir->getInt1Ty()) : nullptr,
             type,
             context.accumulator,
         };
@@ -414,18 +408,15 @@ namespace kara::builder::ops::handlers {
         auto resultFunc = std::get_if<utils::FunctionTypename>(&result.type);
         auto typeFunc = std::get_if<utils::FunctionTypename>(&type);
 
-        if (!(force && resultFunc && typeFunc
-                    && resultFunc->kind == utils::FunctionKind::Pointer
-                    && typeFunc->kind == utils::FunctionKind::Pointer))
+        if (!(force && resultFunc && typeFunc && resultFunc->kind == utils::FunctionKind::Pointer
+                && typeFunc->kind == utils::FunctionKind::Pointer))
             return std::nullopt;
 
         auto destType = context.builder.makeTypename(type);
 
         return builder::Result {
             builder::Result::FlagTemporary | builder::Result::FlagExplicit,
-            context.ir
-                ? context.ir->CreatePointerCast(ops::get(context, result), destType)
-                : nullptr,
+            context.ir ? context.ir->CreatePointerCast(ops::get(context, result), destType) : nullptr,
             type,
             context.accumulator,
         };
@@ -614,14 +605,11 @@ namespace kara::builder::ops::handlers {
 
         return builder::Result {
             builder::Result::FlagTemporary,
-            context.ir
-                ? context.ir->CreatePointerCast(ops::get(context, result), llvmType)
-                : nullptr,
+            context.ir ? context.ir->CreatePointerCast(ops::get(context, result), llvmType) : nullptr,
             type,
             context.accumulator,
         };
     }
-
 
     Maybe<builder::Result> makeConvertNullToOptional(
         const Context &context, const builder::Result &result, const utils::Typename &type, bool) {
@@ -654,9 +642,7 @@ namespace kara::builder::ops::handlers {
 
         return builder::Result {
             builder::Result::FlagTemporary,
-            context.ir
-                ? context.ir->CreateIsNotNull(ops::get(context, result))
-                : nullptr,
+            context.ir ? context.ir->CreateIsNotNull(ops::get(context, result)) : nullptr,
             type,
             context.accumulator,
         };
@@ -861,9 +847,8 @@ namespace kara::builder::ops::handlers {
 
         // should be able to capture variables too?
 
-        auto iterator = std::find_if(unresolved->references.begin(), unresolved->references.end(), [](auto e) {
-            return e->is(parser::Kind::Function);
-        });
+        auto iterator = std::find_if(unresolved->references.begin(), unresolved->references.end(),
+            [](auto e) { return e->is(parser::Kind::Function); });
 
         // multiple functions? what does it capture? random?
         if (iterator == unresolved->references.end())
@@ -905,9 +890,7 @@ namespace kara::builder::ops::handlers {
 
         return builder::Result {
             builder::Result::FlagReference | (value.flags & builder::Result::FlagMutable),
-            context.ir
-                ? context.ir->CreateStructGEP(llvmType, ops::ref(context, value), 1)
-                : nullptr,
+            context.ir ? context.ir->CreateStructGEP(llvmType, ops::ref(context, value), 1) : nullptr,
             *optional->value,
             context.accumulator,
         };
@@ -1078,8 +1061,7 @@ namespace kara::builder::ops::handlers {
             auto holdsFalse = llvm::BasicBlock::Create(
                 context.builder.context, "fallback_empty", context.function->function, after);
 
-            auto next = llvm::BasicBlock::Create(
-                context.builder.context, "", context.function->function, after);
+            auto next = llvm::BasicBlock::Create(context.builder.context, "", context.function->function, after);
 
             llvm::IRBuilder<> trueBuilder(holdsTrue);
             llvm::IRBuilder<> falseBuilder(holdsFalse);

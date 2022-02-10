@@ -4,7 +4,9 @@
 #include <vector>
 #include <unordered_map>
 
-namespace YAML { struct Node; }
+namespace YAML {
+    struct Node;
+}
 
 namespace kara::cli {
     struct PackageLockFile {

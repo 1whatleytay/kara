@@ -132,18 +132,15 @@ namespace kara::parser {
     std::vector<const hermes::Node *> FunctionTypename::parameters() const {
         std::vector<const Node *> result(children.size() - 1);
 
-        std::transform(children.begin(), children.end() - 1, result.begin(), [](const auto &r) {
-            return r.get();
-        });
+        std::transform(children.begin(), children.end() - 1, result.begin(), [](const auto &r) { return r.get(); });
 
         return result;
     }
 
-    const hermes::Node *FunctionTypename::returnType() const {
-        return children.back().get();
-    }
+    const hermes::Node *FunctionTypename::returnType() const { return children.back().get(); }
 
-    FunctionTypename::FunctionTypename(Node *parent, bool external) : Node(parent, Kind::FunctionTypename) {
+    FunctionTypename::FunctionTypename(Node *parent, bool external)
+        : Node(parent, Kind::FunctionTypename) {
         if (external)
             return;
 
@@ -170,13 +167,7 @@ namespace kara::parser {
     }
 
     void pushTypename(hermes::Node *parent) {
-        parent->push<
-            ReferenceTypename,
-            OptionalTypename,
-            ArrayTypename,
-            PrimitiveTypename,
-            FunctionTypename,
-            NamedTypename
-        >();
+        parent->push<ReferenceTypename, OptionalTypename, ArrayTypename, PrimitiveTypename, FunctionTypename,
+            NamedTypename>();
     }
 }

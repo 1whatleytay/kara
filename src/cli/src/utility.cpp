@@ -10,9 +10,7 @@
 namespace kara::cli {
     // unix/posix, first is status code, second is stdout socket
     std::pair<int, int> invokeCLIWithSocket(
-        const std::string &program,
-        std::vector<std::string> arguments,
-        const std::string &currentDirectory) {
+        const std::string &program, std::vector<std::string> arguments, const std::string &currentDirectory) {
         std::vector<char *> cstrings;
         cstrings.reserve(arguments.size());
 
@@ -21,7 +19,7 @@ namespace kara::cli {
 
         cstrings.push_back(nullptr);
 
-        std::array<int, 2> fd = { };
+        std::array<int, 2> fd = {};
 
         if (pipe(fd.data()))
             throw std::runtime_error(fmt::format("Cannot create pipe for invokeCLI (invoking {}).", program));
@@ -54,13 +52,11 @@ namespace kara::cli {
     }
 
     std::pair<int, std::vector<uint8_t>> invokeCLIWithStdOut(
-        const std::string &program,
-        std::vector<std::string> arguments,
-        const std::string &currentDirectory) {
+        const std::string &program, std::vector<std::string> arguments, const std::string &currentDirectory) {
         auto [status, socket] = invokeCLIWithSocket(program, std::move(arguments), currentDirectory);
 
         std::vector<uint8_t> result;
-        std::array<uint8_t, 8096> buffer = { };
+        std::array<uint8_t, 8096> buffer = {};
 
         ssize_t bytes = read(socket, buffer.data(), buffer.size());
         while (bytes > 0 && bytes <= buffer.size()) {
@@ -74,10 +70,7 @@ namespace kara::cli {
         return { status, std::move(result) };
     }
 
-    int invokeCLI(
-        const std::string &program,
-        std::vector<std::string> arguments,
-        const std::string &currentDirectory) {
+    int invokeCLI(const std::string &program, std::vector<std::string> arguments, const std::string &currentDirectory) {
         auto [status, socket] = invokeCLIWithSocket(program, std::move(arguments), currentDirectory);
 
         close(socket);

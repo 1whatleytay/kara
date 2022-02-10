@@ -37,8 +37,7 @@ namespace kara::builder::ops::matching {
         return result;
     }
 
-    MatchResult match(
-        Builder &builder, const utils::FunctionParameters &parameters, const MatchInput &input) {
+    MatchResult match(Builder &builder, const utils::FunctionParameters &parameters, const MatchInput &input) {
         if (parameters.size() != input.parameters.size()) {
             auto error = fmt::format("Expected {} parameters but got {}.", parameters.size(), input.parameters.size());
 
@@ -130,12 +129,12 @@ namespace kara::builder::ops::matching {
         return result;
     }
 
-    CallWrapped call(const Context &context, const utils::FunctionTypename &type,
-        llvm::Value *function, const MatchInput &input) {
+    CallWrapped call(
+        const Context &context, const utils::FunctionTypename &type, llvm::Value *function, const MatchInput &input) {
         auto match = ops::matching::match(context.builder, type.parameters, input);
 
         if (match.failed)
-            return CallError { *match.failed, { } };
+            return CallError { *match.failed, {} };
 
         std::vector<llvm::Value *> passParameters(match.map.size());
 

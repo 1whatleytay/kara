@@ -86,7 +86,7 @@ namespace kara::cli {
         std::string outputDirectory = "build";
         std::string packagesDirectory = "build";
 
-//        std::vector<TargetConfig> configs;
+        //        std::vector<TargetConfig> configs;
 
         std::vector<TargetImport> import;
 
@@ -96,8 +96,8 @@ namespace kara::cli {
 
         [[nodiscard]] std::string resolveName() const;
 
-//        void resolveConfigs(ConfigMap &configs) const;
-//        [[nodiscard]] ConfigMap resolveConfigs() const;
+        //        void resolveConfigs(ConfigMap &configs) const;
+        //        [[nodiscard]] ConfigMap resolveConfigs() const;
 
         static std::optional<TargetConfig> loadFrom(const std::string &path);
         static TargetConfig loadFromThrows(const std::string &path);

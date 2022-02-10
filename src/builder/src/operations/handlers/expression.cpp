@@ -107,9 +107,8 @@ namespace kara::builder::ops::handlers {
         return builder::Result {
             (value.flags & (builder::Result::FlagMutable | builder::Result::FlagTemporary))
                 | builder::Result::FlagReference,
-            context.ir
-                ? context.ir->CreateStructGEP(builderType->type, ops::ref(context, structRef), index, node->name)
-                : nullptr,
+            context.ir ? context.ir->CreateStructGEP(builderType->type, ops::ref(context, structRef), index, node->name)
+                       : nullptr,
             context.builder.resolveTypename(varNode->fixedType()),
             context.accumulator,
         };

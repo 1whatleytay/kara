@@ -84,7 +84,7 @@ namespace kara::interfaces::header {
         std::string z = wrapper.getAsString();
 
         auto die = [&wrapper]() {
-//            fmt::print("Cannot translate type {}.\n", wrapper.getAsString());
+            //            fmt::print("Cannot translate type {}.\n", wrapper.getAsString());
 
             return nullptr;
         };
@@ -390,7 +390,7 @@ namespace kara::interfaces::header {
             return true;
 
         if (!decl->hasExternalStorage()) {
-//            fmt::print("Skipping constructing variable {}, must be external.\n", decl->getNameAsString());
+            //            fmt::print("Skipping constructing variable {}, must be external.\n", decl->getNameAsString());
             return true;
         }
 
@@ -406,7 +406,7 @@ namespace kara::interfaces::header {
         auto type = make(var.get(), decl->getType(), true);
 
         if (!type) {
-//            fmt::print("Skipping constructing variable {}.\n", decl->getNameAsString());
+            //            fmt::print("Skipping constructing variable {}.\n", decl->getNameAsString());
             return true;
         }
 
@@ -441,7 +441,7 @@ namespace kara::interfaces::header {
         auto underlyingType = make(type.get(), underlying, true);
 
         if (!underlyingType) {
-//            fmt::print("Cannot construct typedef {}.\n", decl->getNameAsString());
+            //            fmt::print("Cannot construct typedef {}.\n", decl->getNameAsString());
             return true;
         }
 
@@ -460,7 +460,7 @@ namespace kara::interfaces::header {
         auto returnType = make(function.get(), decl->getReturnType());
 
         if (!returnType) {
-//            fmt::print("Skipping translating function {}.\n", name);
+            //            fmt::print("Skipping translating function {}.\n", name);
             return true;
         }
 
@@ -481,7 +481,7 @@ namespace kara::interfaces::header {
             auto optional = make(var, param->getType());
 
             if (!optional) {
-//                fmt::print("Skipping translating function {}.\n", name);
+                //                fmt::print("Skipping translating function {}.\n", name);
                 return true;
             }
 

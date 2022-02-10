@@ -271,10 +271,6 @@ namespace kara::builder {
         // take llvm::Type * ? can use hashmap
         llvm::StructType *makeVariableArrayType(const utils::Typename &of);
 
-        Builder(
-            const SourceFile &file,
-            SourceManager &manager,
-            const Target &target,
-            const options::Options &opts);
+        Builder(const SourceFile &file, SourceManager &manager, const Target &target, const options::Options &opts);
     };
 }

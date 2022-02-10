@@ -52,8 +52,7 @@ namespace kara::builder {
             arguments.reserve(arguments.size() + library.arguments.size());
 
             auto cString = [](const auto &s) { return s.c_str(); };
-            std::transform(
-                library.arguments.begin(), library.arguments.end(), std::back_inserter(arguments), cString);
+            std::transform(library.arguments.begin(), library.arguments.end(), std::back_inserter(arguments), cString);
 
             auto [tupleState, tupleRoot]
                 = interfaces::header::create(static_cast<int>(arguments.size()), arguments.data());
@@ -112,7 +111,8 @@ namespace kara::builder {
         return *ref;
     }
 
-    SourceDatabase::SourceDatabase(SourceDatabaseCallback callback) : callback(std::move(callback)) { }
+    SourceDatabase::SourceDatabase(SourceDatabaseCallback callback)
+        : callback(std::move(callback)) { }
 
     // NOLINT(misc-no-recursion)
     void SourceManager::resolve(const SourceFile &file, std::unordered_set<const SourceFile *> &visited) {
@@ -166,5 +166,6 @@ namespace kara::builder {
     }
 
     SourceManager::SourceManager(SourceDatabase &database, std::vector<Library> libraries)
-        : database(database), libraries(std::move(libraries)) {}
+        : database(database)
+        , libraries(std::move(libraries)) { }
 }

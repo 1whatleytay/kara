@@ -32,26 +32,15 @@ namespace kara::builder {
 
     struct Platform {
         // not very safe but works I hope
-        virtual FormatArgumentsResult formatArguments(
-            const Target &target,
-            const FormatArgumentsPackage &package);
+        virtual FormatArgumentsResult formatArguments(const Target &target, const FormatArgumentsPackage &package);
 
-        virtual llvm::Value *invokeFunction(
-            const ops::Context &context,
-            llvm::FunctionCallee function,
-            llvm::Type *returnType,
-            const std::vector<llvm::Value *> &values);
+        virtual llvm::Value *invokeFunction(const ops::Context &context, llvm::FunctionCallee function,
+            llvm::Type *returnType, const std::vector<llvm::Value *> &values);
 
-        virtual std::vector<llvm::Value *> tieArguments(
-            const ops::Context &context,
-            llvm::Type *returnType,
-            const std::vector<llvm::Type *> &argumentTypes,
-            const std::vector<llvm::Argument *> &arguments);
+        virtual std::vector<llvm::Value *> tieArguments(const ops::Context &context, llvm::Type *returnType,
+            const std::vector<llvm::Type *> &argumentTypes, const std::vector<llvm::Argument *> &arguments);
 
-        virtual void tieReturn(
-            const ops::Context &context,
-            llvm::Type *returnType,
-            llvm::Value *value,
+        virtual void tieReturn(const ops::Context &context, llvm::Type *returnType, llvm::Value *value,
             const std::vector<llvm::Argument *> &arguments);
 
         static std::unique_ptr<Platform> byNative();
@@ -61,26 +50,15 @@ namespace kara::builder {
     };
 
     struct SysVPlatform : public Platform {
-        FormatArgumentsResult formatArguments(
-            const Target &target,
-            const FormatArgumentsPackage &package) override;
+        FormatArgumentsResult formatArguments(const Target &target, const FormatArgumentsPackage &package) override;
 
-        llvm::Value *invokeFunction(
-            const ops::Context &context,
-            llvm::FunctionCallee function,
-            llvm::Type *returnType,
+        llvm::Value *invokeFunction(const ops::Context &context, llvm::FunctionCallee function, llvm::Type *returnType,
             const std::vector<llvm::Value *> &values) override;
 
-        std::vector<llvm::Value *> tieArguments(
-            const ops::Context &context,
-            llvm::Type *returnType,
-            const std::vector<llvm::Type *> &argumentTypes,
-            const std::vector<llvm::Argument *> &arguments) override;
+        std::vector<llvm::Value *> tieArguments(const ops::Context &context, llvm::Type *returnType,
+            const std::vector<llvm::Type *> &argumentTypes, const std::vector<llvm::Argument *> &arguments) override;
 
-        void tieReturn(
-            const ops::Context &context,
-            llvm::Type *returnType,
-            llvm::Value *value,
+        void tieReturn(const ops::Context &context, llvm::Type *returnType, llvm::Value *value,
             const std::vector<llvm::Argument *> &arguments) override;
     };
 }

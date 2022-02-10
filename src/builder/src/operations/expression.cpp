@@ -135,9 +135,7 @@ namespace kara::builder::ops::modifiers {
                 auto pointerToElementPointer = llvm::PointerType::get(elementPointer, 0);
 
                 return context.ir->CreateGEP(
-                    elementPointer,
-                    context.ir->CreateLoad(pointerToElementPointer, dataPtr),
-                    ops::get(context, index));
+                    elementPointer, context.ir->CreateLoad(pointerToElementPointer, dataPtr), ops::get(context, index));
             }
 
             default:
@@ -317,13 +315,14 @@ namespace kara::builder::ops::expression {
         }
     }
 
-//    builder::Wrapped makeNounModifier(const Context &context, const builder::Wrapped &value, const hermes::Node *node) {
-//        switch (node->is<parser::Kind>()) {
-//
-//        default:
-//            throw;
-//        }
-//    }
+    //    builder::Wrapped makeNounModifier(const Context &context, const builder::Wrapped &value, const hermes::Node
+    //    *node) {
+    //        switch (node->is<parser::Kind>()) {
+    //
+    //        default:
+    //            throw;
+    //        }
+    //    }
 
     builder::Wrapped makeUnary(const Context &context, const builder::Wrapped &wrapped, const parser::Unary *node) {
         auto value = [&context, &wrapped]() { return ops::makeInfer(context, wrapped); };
@@ -349,8 +348,8 @@ namespace kara::builder::ops::expression {
     builder::Wrapped makeNoun(const Context &context, const utils::ExpressionNoun &noun) {
         builder::Wrapped result = ops::expression::makeNounContent(context, noun.content);
 
-//        for (const hermes::Node *modifier : noun.modifiers)
-//            result = ops::expression::makeNounModifier(context, result, modifier);
+        //        for (const hermes::Node *modifier : noun.modifiers)
+        //            result = ops::expression::makeNounModifier(context, result, modifier);
 
         return result;
     }

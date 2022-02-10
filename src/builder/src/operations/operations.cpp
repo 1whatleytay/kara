@@ -327,7 +327,6 @@ namespace kara::builder::ops {
                 "Cannot use operator on ls of type {} and rs of type {}.", toString(left.type), toString(right.type));
         }
 
-
         builder::Result makeFallback(
             const Context &context, const builder::Result &left, const builder::Result &right) {
             return die(handlers::resolve(

@@ -80,9 +80,7 @@ namespace kara::cli {
             }
         };
 
-        auto isQuote = [&](char c) {
-            return quotes.find(c) != quotes.end();
-        };
+        auto isQuote = [&](char c) { return quotes.find(c) != quotes.end(); };
 
         // important escapes: \space and \"
 
@@ -90,9 +88,7 @@ namespace kara::cli {
             char c = input[index];
 
             if (currentQuote) {
-                auto currentQuoteEscape = [&]() {
-                    return std::string("\\") + *currentQuote;
-                };
+                auto currentQuoteEscape = [&]() { return std::string("\\") + *currentQuote; };
 
                 if (c == *currentQuote) { // end quote
                     currentQuote = std::nullopt;
@@ -166,21 +162,20 @@ namespace kara::cli {
         return result;
     }
 
-
     std::vector<std::string> Platform::parseDirectoriesFromCompileArgument(std::string_view argument) {
         if (argument.size() > 2 && argument.substr(0, 2) == "-I") {
             return { std::string(argument.substr(2)) };
         }
 
-        return { };
+        return {};
     }
 
-    std::vector<std::string> Platform::defaultLinkerArguments() {
-        return { };
-    }
+    std::vector<std::string> Platform::defaultLinkerArguments() { return {}; }
 
     Platform::Platform(std::string root, std::string triple, BuildLockFile &lock)
-        : root(std::move(root)), triple(std::move(triple)), lock(lock) { }
+        : root(std::move(root))
+        , triple(std::move(triple))
+        , lock(lock) { }
 
     std::vector<std::string> MacOSPlatform::defaultLinkerArguments() {
         llvm::Triple tripleInfo(this->triple);
@@ -221,8 +216,7 @@ namespace kara::cli {
         };
 
         if (sysroot.empty()) {
-            log(LogSource::platform,
-                "XCode sysroot cannot be found, link will probably fail. are devtools installed?");
+            log(LogSource::platform, "XCode sysroot cannot be found, link will probably fail. are devtools installed?");
         } else {
             result.insert(result.end(),
                 {

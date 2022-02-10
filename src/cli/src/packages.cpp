@@ -15,11 +15,8 @@
 #include <iostream>
 
 namespace kara::cli {
-    PackageBuildResult PackageManager::build(
-        const fs::path &config,
-        const std::string &name,
-        const std::string &suggestTarget,
-        const std::vector<std::string> &arguments) {
+    PackageBuildResult PackageManager::build(const fs::path &config, const std::string &name,
+        const std::string &suggestTarget, const std::vector<std::string> &arguments) {
         if (config.filename() == "CMakeLists.txt") {
             log(LogSource::package, "Building CMake Project {}", config);
 
@@ -32,7 +29,8 @@ namespace kara::cli {
             std::vector<std::string> cmakeArguments = {
                 root,
                 fs::absolute(package).string(),
-                "-G", "CodeBlocks - Unix Makefiles",
+                "-G",
+                "CodeBlocks - Unix Makefiles",
             };
 
             if (invokeCLI("cmake", cmakeArguments, packageBuild.string()))
@@ -169,9 +167,8 @@ namespace kara::cli {
                     target = defaultTarget;
             }
 
-            auto it = std::find_if(cbp.targets.begin(), cbp.targets.end(), [&target](const CBPTarget &t) {
-                return t.name == target && !t.fast;
-            });
+            auto it = std::find_if(cbp.targets.begin(), cbp.targets.end(),
+                [&target](const CBPTarget &t) { return t.name == target && !t.fast; });
 
             if (it == cbp.targets.end())
                 throw std::runtime_error(fmt::format("Cannot find target named {}\n", target));
@@ -191,8 +188,10 @@ namespace kara::cli {
 
             std::vector<std::string> buildArguments = {
                 root,
-                "--build", ".",
-                "--target", targetInfo.name,
+                "--build",
+                ".",
+                "--target",
+                targetInfo.name,
             };
 
             if (!arguments.empty()) {
@@ -229,11 +228,12 @@ namespace kara::cli {
 
             log(LogSource::package, "Generated library source file at {}", fs::absolute(libraryOutputPath).string());
 
-//            lockFile.packagesInstalled[url] = { libraryOutputFilename };
-//            lockFileWriteStream() << lockFile.serialize();
-//
-//            logHeader(LogSource::package);
-//            fmt::print(fmt::emphasis::bold | fmt::fg(fmt::color::forest_green), "Package {} installed.\n", name);
+            //            lockFile.packagesInstalled[url] = { libraryOutputFilename };
+            //            lockFileWriteStream() << lockFile.serialize();
+            //
+            //            logHeader(LogSource::package);
+            //            fmt::print(fmt::emphasis::bold | fmt::fg(fmt::color::forest_green), "Package {} installed.\n",
+            //            name);
 
             return PackageBuildResult { { libraryOutputPath }, { target } };
         } else if (config.extension() == ".yaml") {
@@ -248,18 +248,14 @@ namespace kara::cli {
     }
 
     PackageBuildResult PackageManager::download(
-        const std::string &url,
-        const std::string &suggestTarget,
-        const std::vector<std::string> &arguments) {
+        const std::string &url, const std::string &suggestTarget, const std::vector<std::string> &arguments) {
         std::string name = url;
 
         UriUriA uriData;
 
         if (!uriParseSingleUriA(&uriData, url.c_str(), nullptr)) {
             if (uriData.pathTail) {
-                name = std::string(
-                    uriData.pathTail->text.first,
-                    uriData.pathTail->text.afterLast);
+                name = std::string(uriData.pathTail->text.first, uriData.pathTail->text.afterLast);
 
                 // drop .git
                 std::string trail = ".git";
@@ -319,18 +315,15 @@ namespace kara::cli {
     }
 
     std::vector<std::string> PackageManager::install(
-        const std::string &url,
-        const std::string &suggestTarget,
-        const std::vector<std::string> &arguments) {
+        const std::string &url, const std::string &suggestTarget, const std::vector<std::string> &arguments) {
         // could be O(1) but I want to make sure serialization order is consistent
         auto it = lockFile.packagesInstalled.find(url);
         if (it == lockFile.packagesInstalled.end())
             return download(url, suggestTarget, arguments).configFiles;
 
         std::vector<std::string> output(it->second.size());
-        std::transform(it->second.begin(), it->second.end(), output.begin(), [this](const auto &r) {
-            return (packagesDirectory / r).string();
-        });
+        std::transform(it->second.begin(), it->second.end(), output.begin(),
+            [this](const auto &r) { return (packagesDirectory / r).string(); });
 
         return output;
     }
@@ -346,11 +339,10 @@ namespace kara::cli {
     PackageBuildResult PackageManager::buildCMakePackage(const std::string &name) {
         // cmake --find-package -DNAME=Vulkan -DCOMPILER_ID=GNU -DLANGUAGE=C -DMODE=COMPILE
 
-        const char *cmakeFileContents =
-            "# Auto File For CMake Package Loading\n"
-            "project(package-loader)\n"
-            "\n"
-            "cmake_minimum_required(VERSION 3.17)\n";
+        const char *cmakeFileContents = "# Auto File For CMake Package Loading\n"
+                                        "project(package-loader)\n"
+                                        "\n"
+                                        "cmake_minimum_required(VERSION 3.17)\n";
 
         auto packageLocation = packagesDirectory / "cmake" / "package_loader";
 
@@ -420,14 +412,13 @@ namespace kara::cli {
         // libraries unused?
         library.options.linkerOptions = linkArgumentsCleaned;
         library.options.includeArguments.emplace_back("--");
-        library.options.includeArguments.insert(library.options.includeArguments.end(),
-            compileArgumentsParsed.begin(), compileArgumentsParsed.end());
+        library.options.includeArguments.insert(
+            library.options.includeArguments.end(), compileArgumentsParsed.begin(), compileArgumentsParsed.end());
 
         for (const auto &argument : compileArgumentsParsed) {
             auto dirs = platform.parseDirectoriesFromCompileArgument(argument);
 
-            library.options.includes.insert(library.options.includes.end(),
-                dirs.begin(), dirs.end());
+            library.options.includes.insert(library.options.includes.end(), dirs.begin(), dirs.end());
         }
 
         auto libraryOutput = library.serialize();
@@ -448,7 +439,9 @@ namespace kara::cli {
     }
 
     PackageManager::PackageManager(Platform &platform, fs::path packagesDirectory, std::string root)
-        : platform(platform), packagesDirectory(std::move(packagesDirectory)), root(std::move(root)) {
+        : platform(platform)
+        , packagesDirectory(std::move(packagesDirectory))
+        , root(std::move(root)) {
         if (!fs::exists(this->packagesDirectory))
             fs::create_directories(this->packagesDirectory);
 

@@ -166,8 +166,8 @@ namespace kara::builder {
                 for (size_t a = 0; a < parameters.size(); a++) {
                     auto parameterNode = parameters[a];
 
-                    cache.variables[parameterNode] = std::make_unique<builder::Variable>(
-                        parameterNode, entryContext, realArguments[a]);
+                    cache.variables[parameterNode]
+                        = std::make_unique<builder::Variable>(parameterNode, entryContext, realArguments[a]);
                 }
             }
 
@@ -310,8 +310,7 @@ namespace kara::builder {
             };
 
             if (returnTypename == from(utils::PrimitiveType::Nothing)) {
-                builder.platform->tieReturn(
-                    exitContext, returnType, nullptr, arguments);
+                builder.platform->tieReturn(exitContext, returnType, nullptr, arguments);
             } else {
                 builder.platform->tieReturn(
                     exitContext, returnType, exit.CreateLoad(returnType, returnValue, "final"), arguments);

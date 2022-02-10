@@ -20,10 +20,8 @@ namespace kara::cli {
 
         virtual std::vector<std::string> defaultLinkerArguments();
 
-        static std::unique_ptr<Platform> byNative(
-            std::string root, BuildLockFile &lock);
-        static std::unique_ptr<Platform> byTriple(
-            std::string root, std::string name, BuildLockFile &lock);
+        static std::unique_ptr<Platform> byNative(std::string root, BuildLockFile &lock);
+        static std::unique_ptr<Platform> byTriple(std::string root, std::string name, BuildLockFile &lock);
 
         explicit Platform(std::string root, std::string triple, BuildLockFile &lock);
         virtual ~Platform() = default;

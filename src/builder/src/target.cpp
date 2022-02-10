@@ -20,17 +20,17 @@ namespace kara::builder {
         LLVMInitializeX86TargetInfo();
         LLVMInitializeX86TargetMC();
 
-//        if (allTargets)
-//        else
-//            llvm::InitializeNativeTarget();
+        //        if (allTargets)
+        //        else
+        //            llvm::InitializeNativeTarget();
 
-//        LLVMInitializeX86TargetInfo();
-//
-//        LLVMInitializeX86Target();
-//        LLVMInitializeX86TargetMC();
-//
-//        LLVMInitializeX86AsmParser();
-//        LLVMInitializeX86AsmPrinter();
+        //        LLVMInitializeX86TargetInfo();
+        //
+        //        LLVMInitializeX86Target();
+        //        LLVMInitializeX86TargetMC();
+        //
+        //        LLVMInitializeX86AsmParser();
+        //        LLVMInitializeX86AsmPrinter();
 
         // Web Assembly...
         // ARM :D

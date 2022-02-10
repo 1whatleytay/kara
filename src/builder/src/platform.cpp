@@ -30,9 +30,7 @@ namespace kara::builder {
         return result;
     }
 
-    std::unique_ptr<Platform> Platform::byNative() {
-        return Platform::byTriple(llvm::sys::getDefaultTargetTriple());
-    }
+    std::unique_ptr<Platform> Platform::byNative() { return Platform::byTriple(llvm::sys::getDefaultTargetTriple()); }
 
     std::unique_ptr<Platform> Platform::byTriple(const std::string &name) {
         llvm::Triple triple(name);
@@ -56,9 +54,7 @@ namespace kara::builder {
         }
     }
 
-    FormatArgumentsResult Platform::formatArguments(
-        const Target &target,
-        const FormatArgumentsPackage &package) {
+    FormatArgumentsResult Platform::formatArguments(const Target &target, const FormatArgumentsPackage &package) {
 
         FormatArgumentsResult result = { package.returnType };
         result.parameters.reserve(package.parameters.size());
@@ -70,11 +66,8 @@ namespace kara::builder {
         return result;
     }
 
-    llvm::Value *Platform::invokeFunction(
-        const ops::Context &context,
-        llvm::FunctionCallee function,
-        llvm::Type *returnType,
-        const std::vector<llvm::Value *> &values) {
+    llvm::Value *Platform::invokeFunction(const ops::Context &context, llvm::FunctionCallee function,
+        llvm::Type *returnType, const std::vector<llvm::Value *> &values) {
         if (context.ir) {
             return context.ir->CreateCall(function, values);
         }
@@ -82,11 +75,8 @@ namespace kara::builder {
         return nullptr;
     }
 
-    std::vector<llvm::Value *> Platform::tieArguments(
-        const ops::Context &context,
-        llvm::Type *returnType,
-        const std::vector<llvm::Type *> &argumentTypes,
-        const std::vector<llvm::Argument *> &arguments) {
+    std::vector<llvm::Value *> Platform::tieArguments(const ops::Context &context, llvm::Type *returnType,
+        const std::vector<llvm::Type *> &argumentTypes, const std::vector<llvm::Argument *> &arguments) {
         std::vector<llvm::Value *> values;
         values.reserve(arguments.size());
 
@@ -96,10 +86,7 @@ namespace kara::builder {
         return values;
     }
 
-    void Platform::tieReturn(
-        const ops::Context &context,
-        llvm::Type *returnType,
-        llvm::Value *value,
+    void Platform::tieReturn(const ops::Context &context, llvm::Type *returnType, llvm::Value *value,
         const std::vector<llvm::Argument *> &arguments) {
         assert(context.ir);
 
@@ -231,8 +218,7 @@ namespace kara::builder {
         return result;
     }
 
-    std::optional<std::vector<llvm::Type *>> getSysVLLVMTypes(
-        const builder::Target &target, llvm::Type *root) {
+    std::optional<std::vector<llvm::Type *>> getSysVLLVMTypes(const builder::Target &target, llvm::Type *root) {
         auto size = target.layout->getTypeStoreSize(root);
 
         // 4 ints, 2 double words
@@ -249,12 +235,11 @@ namespace kara::builder {
         return combineSysVLLVMTypes(target, *types);
     }
 
-    FormatArgumentsResult SysVPlatform::formatArguments(
-        const Target &target, const FormatArgumentsPackage &package) {
+    FormatArgumentsResult SysVPlatform::formatArguments(const Target &target, const FormatArgumentsPackage &package) {
         FormatArgumentsResult result;
 
         // ignoring floats used/max floats registers for now
-//        uint32_t floatsUsed = 0;
+        //        uint32_t floatsUsed = 0;
 
         // dropping attributes for now as well, seem like they aren't super important, maybe
 
@@ -281,12 +266,10 @@ namespace kara::builder {
 
             if (types) {
                 if (types->size() == 1) {
-                    result.parameters.emplace_back(
-                        name, types->front(), llvm::AttrBuilder());
+                    result.parameters.emplace_back(name, types->front(), llvm::AttrBuilder());
                 } else {
                     for (size_t a = 0; a < types->size(); a++) {
-                        result.parameters.emplace_back(
-                            fmt::format("{}_{}", name, a), (*types)[a], llvm::AttrBuilder());
+                        result.parameters.emplace_back(fmt::format("{}_{}", name, a), (*types)[a], llvm::AttrBuilder());
                     }
                 }
             } else {
@@ -294,19 +277,15 @@ namespace kara::builder {
 
                 // mark byval
 
-                result.parameters.emplace_back(
-                    name, pointerType, llvm::AttrBuilder().addByValAttr(type));
+                result.parameters.emplace_back(name, pointerType, llvm::AttrBuilder().addByValAttr(type));
             }
         }
 
         return result;
     }
 
-    llvm::Value *SysVPlatform::invokeFunction(
-        const ops::Context &context,
-        llvm::FunctionCallee function,
-        llvm::Type *returnType,
-        const std::vector<llvm::Value *> &values) {
+    llvm::Value *SysVPlatform::invokeFunction(const ops::Context &context, llvm::FunctionCallee function,
+        llvm::Type *returnType, const std::vector<llvm::Value *> &values) {
         if (!context.ir)
             return nullptr;
 
@@ -359,10 +338,7 @@ namespace kara::builder {
 
                     assert(sysVSize >= valueSize);
 
-                    context.ir->CreateMemCpy(
-                        i8Data, llvm::MaybeAlign(),
-                        i8ValueData, llvm::MaybeAlign(),
-                        valueSize);
+                    context.ir->CreateMemCpy(i8Data, llvm::MaybeAlign(), i8ValueData, llvm::MaybeAlign(), valueSize);
 
                     // data holds something good now
 
@@ -400,11 +376,8 @@ namespace kara::builder {
         }
     }
 
-    std::vector<llvm::Value *> SysVPlatform::tieArguments(
-        const ops::Context &context,
-        llvm::Type *returnType,
-        const std::vector<llvm::Type *> &argumentTypes,
-        const std::vector<llvm::Argument *> &arguments) {
+    std::vector<llvm::Value *> SysVPlatform::tieArguments(const ops::Context &context, llvm::Type *returnType,
+        const std::vector<llvm::Type *> &argumentTypes, const std::vector<llvm::Argument *> &arguments) {
         // i have spread out arguments
         // should probably go through expected argument types, split them out
         // check if they're what i get in values
@@ -426,9 +399,7 @@ namespace kara::builder {
         if (!returnSysVTypes) // sret
             argumentIndex++;
 
-        auto pop = [&arguments, &argumentIndex]() {
-            return arguments[argumentIndex++];
-        };
+        auto pop = [&arguments, &argumentIndex]() { return arguments[argumentIndex++]; };
 
         for (auto argumentType : argumentTypes) {
             auto sysVTypes = getSysVLLVMTypes(context.builder.target, argumentType);
@@ -465,10 +436,7 @@ namespace kara::builder {
 
                     assert(sysVSize >= valueSize);
 
-                    context.ir->CreateMemCpy(
-                        i8ValueData, llvm::MaybeAlign(),
-                        i8Data, llvm::MaybeAlign(),
-                        valueSize);
+                    context.ir->CreateMemCpy(i8ValueData, llvm::MaybeAlign(), i8Data, llvm::MaybeAlign(), valueSize);
 
                     formattedValues.push_back(context.ir->CreateLoad(argumentType, valueData));
                 }
@@ -484,10 +452,7 @@ namespace kara::builder {
         return formattedValues;
     }
 
-    void SysVPlatform::tieReturn(
-        const ops::Context &context,
-        llvm::Type *returnType,
-        llvm::Value *value,
+    void SysVPlatform::tieReturn(const ops::Context &context, llvm::Type *returnType, llvm::Value *value,
         const std::vector<llvm::Argument *> &arguments) {
         assert(context.ir && context.function);
 
@@ -519,10 +484,7 @@ namespace kara::builder {
 
                 assert(sysVSize >= valueSize);
 
-                context.ir->CreateMemCpy(
-                    i8Data, llvm::MaybeAlign(),
-                    i8ValueData, llvm::MaybeAlign(),
-                    valueSize);
+                context.ir->CreateMemCpy(i8Data, llvm::MaybeAlign(), i8ValueData, llvm::MaybeAlign(), valueSize);
 
                 // data holds something good now
 

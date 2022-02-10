@@ -141,24 +141,24 @@ namespace kara::builder {
     }
 
     const hermes::Node *Builder::lookupDestroy(const utils::Typename &type) {
-         std::string name;
+        std::string name;
 
-         if (auto other = std::get_if<utils::NamedTypename>(&type)) { // i think this is dangerous to support
-             name = other->type->name;
-         } else if (auto ref = std::get_if<utils::ReferenceTypename>(&type)) { // ? hmm this doesnt make sense idt
-             if (auto sub = std::get_if<utils::NamedTypename>(ref->value.get())) {
-                 name = sub->type->name;
-             }
-         }
+        if (auto other = std::get_if<utils::NamedTypename>(&type)) { // i think this is dangerous to support
+            name = other->type->name;
+        } else if (auto ref = std::get_if<utils::ReferenceTypename>(&type)) { // ? hmm this doesnt make sense idt
+            if (auto sub = std::get_if<utils::NamedTypename>(ref->value.get())) {
+                name = sub->type->name;
+            }
+        }
 
-         if (name.empty())
-             return nullptr;
+        if (name.empty())
+            return nullptr;
 
-         auto it = destroyInvocables.find(name);
-         if (it == destroyInvocables.end())
-             return nullptr;
+        auto it = destroyInvocables.find(name);
+        if (it == destroyInvocables.end())
+            return nullptr;
 
-         return it->second;
+        return it->second;
     }
 
     bool Builder::needsDestroy(const utils::Typename &type) {
@@ -169,31 +169,19 @@ namespace kara::builder {
                 auto base = builder.makeType(type.type); // cycle?
                 return builder.lookupDestroy(type) || base->implicitDestructor; // might need some better checking here
             }
-            bool operator()(const utils::ArrayTypename &type) {
-                return type.kind == utils::ArrayKind::VariableSize;
-            }
-            bool operator()(const utils::FunctionTypename &type) {
-                return type.kind == utils::FunctionKind::Regular;
-            }
+            bool operator()(const utils::ArrayTypename &type) { return type.kind == utils::ArrayKind::VariableSize; }
+            bool operator()(const utils::FunctionTypename &type) { return type.kind == utils::FunctionKind::Regular; }
             bool operator()(const utils::OptionalTypename &type) {
                 return builder.needsDestroy(*type.value); // ?
             }
-            bool operator()(const utils::PrimitiveTypename &type) {
-                return false;
-            }
-            bool operator()(const utils::ReferenceTypename &type) {
-                return type.kind != utils::ReferenceKind::Regular;
-            }
+            bool operator()(const utils::PrimitiveTypename &type) { return false; }
+            bool operator()(const utils::ReferenceTypename &type) { return type.kind != utils::ReferenceKind::Regular; }
         } visitor { *this };
 
         return std::visit(visitor, type);
     }
 
-    Builder::Builder(
-        const SourceFile &file,
-        SourceManager &manager,
-        const Target &target,
-        const options::Options &opts)
+    Builder::Builder(const SourceFile &file, SourceManager &manager, const Target &target, const options::Options &opts)
         : root(file.root.get())
         , file(file)
         , manager(manager)

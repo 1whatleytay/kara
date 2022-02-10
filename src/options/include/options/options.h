@@ -17,12 +17,12 @@ namespace kara::options {
     };
 
     struct Options {
-//        std::set<std::string> inputs;
-//        std::string output;
-//
+        //        std::set<std::string> inputs;
+        //        std::string output;
+        //
         std::string triple; // unused?
 
-//        std::set<std::string> libraries;
+        //        std::set<std::string> libraries;
 
         std::string malloc = "malloc";
         std::string free = "free";

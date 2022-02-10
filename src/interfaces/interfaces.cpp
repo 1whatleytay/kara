@@ -85,9 +85,8 @@ std::string toTypeString(const hermes::Node *node) {
         auto parameters = e->parameters();
 
         std::vector<std::string> text(parameters.size());
-        std::transform(parameters.begin(), parameters.end(), text.begin(), [](const auto &p) {
-            return toTypeString(p);
-        });
+        std::transform(
+            parameters.begin(), parameters.end(), text.begin(), [](const auto &p) { return toTypeString(p); });
 
         auto locked = e->isLocked ? " locked" : "";
         const char *flags = "";

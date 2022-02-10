@@ -34,15 +34,12 @@ namespace kara::cli {
                     localType = "kara";
 
                 std::transform(
-                    localType.begin(), localType.end(), localType.begin(),
-                    [](char c) { return std::tolower(c); });
+                    localType.begin(), localType.end(), localType.begin(), [](char c) { return std::tolower(c); });
 
                 if (localType == "c") {
                     for (const auto &library : targetInfo.includes) {
                         if (auto path = library.match(filePath)) {
-                            std::vector<const char *> arguments = {
-                                root.c_str(), path->c_str()
-                            };
+                            std::vector<const char *> arguments = { root.c_str(), path->c_str() };
                             arguments.reserve(library.arguments.size());
 
                             for (const auto &argument : library.arguments)
@@ -60,9 +57,7 @@ namespace kara::cli {
 
                             emitter << YAML::EndMap;
 
-                            setLogging(true, [&emitter]() {
-                                fmt::print("{}\n", emitter.c_str());
-                            });
+                            setLogging(true, [&emitter]() { fmt::print("{}\n", emitter.c_str()); });
 
                             return; // dangerous...
                         }

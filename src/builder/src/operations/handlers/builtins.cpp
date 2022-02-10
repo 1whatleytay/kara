@@ -8,9 +8,7 @@
 #include <cassert>
 
 namespace kara::builder::ops::handlers::builtins {
-    bool named(const std::string &input, const std::string &required) {
-        return input.empty() || input == required;
-    }
+    bool named(const std::string &input, const std::string &required) { return input.empty() || input == required; }
 
     namespace arrays {
         Maybe<builder::Result> size(const Context &context, const Parameters &parameters) {
@@ -259,8 +257,8 @@ namespace kara::builder::ops::handlers::builtins {
 
                 auto baseTypePointer = llvm::PointerType::get(baseType, 0);
 
-                auto dataCasted = context.ir->CreatePointerCast(
-                    context.ir->CreateLoad(baseTypePointer, dataPtr), dataPtrType);
+                auto dataCasted
+                    = context.ir->CreatePointerCast(context.ir->CreateLoad(baseTypePointer, dataPtr), dataPtrType);
 
                 auto i64 = llvm::Type::getInt64Ty(context.builder.context);
 
@@ -338,8 +336,8 @@ namespace kara::builder::ops::handlers::builtins {
 
                 auto baseTypePointer = llvm::PointerType::get(baseType, 0);
 
-                auto dataCasted = context.ir->CreatePointerCast(
-                    context.ir->CreateLoad(baseTypePointer, dataPtr), dataPtrType);
+                auto dataCasted
+                    = context.ir->CreatePointerCast(context.ir->CreateLoad(baseTypePointer, dataPtr), dataPtrType);
 
                 // should use vector resizing
                 auto i64 = llvm::Type::getInt64Ty(context.builder.context);

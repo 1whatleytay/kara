@@ -11,29 +11,24 @@ namespace kara::options {
         : reason(std::move(reason)) { }
 
     bool Options::operator==(const Options &other) const {
-        return triple == other.triple
-            && malloc == other.malloc
-            && free == other.free
-            && realloc == other.realloc
-            && rawPlatform == other.rawPlatform
-            && mutableGlobals == other.mutableGlobals;
+        return triple == other.triple && malloc == other.malloc && free == other.free && realloc == other.realloc
+            && rawPlatform == other.rawPlatform && mutableGlobals == other.mutableGlobals;
     }
 
-    bool Options::operator!=(const Options &other) const {
-        return !operator==(other);
-    }
+    bool Options::operator!=(const Options &other) const { return !operator==(other); }
 
     void Options::connect(CLI::App &app) {
-//        app.add_option("-i,--input", inputs, "Input source files.")->required();
-//        auto outputOption = app.add_option("-o,--output", output, "Output binary files.");
+        //        app.add_option("-i,--input", inputs, "Input source files.")->required();
+        //        auto outputOption = app.add_option("-o,--output", output, "Output binary files.");
 
         app.add_option("-t,--triple", triple, "Target triple.");
 
-//        app.add_flag("--optimize", optimize, "Whether or not to optimize LLVM ir with passes.");
-//        app.add_flag("--interpret", interpret, "Whether or not to interpret and run the code.")->excludes(outputOption);
-//        app.add_flag("--print-ir", printIR, "Whether or not to print resultant IR.");
+        //        app.add_flag("--optimize", optimize, "Whether or not to optimize LLVM ir with passes.");
+        //        app.add_flag("--interpret", interpret, "Whether or not to interpret and run the
+        //        code.")->excludes(outputOption); app.add_flag("--print-ir", printIR, "Whether or not to print
+        //        resultant IR.");
 
-//        app.add_option("-l,--library", libraries, "JSON files describing libraries.");
+        //        app.add_option("-l,--library", libraries, "JSON files describing libraries.");
 
         app.add_option("--malloc", malloc, "Name of malloc stub function to link against (i8 * (size_t)).");
         app.add_option("--free", free, "Name of free stub function to link against (void (i8 *)).");

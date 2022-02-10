@@ -16,9 +16,7 @@ namespace kara::cli {
         app->parse_complete_callback([this]() { execute(); });
     }
 
-    void CLICreateOptions::connect() {
-        app->add_option("name", name, "Name of the project.")->required();
-    }
+    void CLICreateOptions::connect() { app->add_option("name", name, "Name of the project.")->required(); }
 
     void CLIAddOptions::connect() {
         app->add_option("url", url, "URL to a Kara/CMake package.")->required();
@@ -36,9 +34,7 @@ namespace kara::cli {
         app->add_option("-p,--project", projectFile, "Project file to use.");
     }
 
-    void CLICleanOptions::connect() {
-        app->add_option("-p,--project", projectFile, "Project file to use.");
-    }
+    void CLICleanOptions::connect() { app->add_option("-p,--project", projectFile, "Project file to use."); }
 
     void CLIRemoveOptions::connect() { }
 
@@ -52,9 +48,7 @@ namespace kara::cli {
         app->add_flag("--print-ir", printIr, "Whether or not to print generated IR.");
     }
 
-    void CLICompileOptions::connect() {
-        compileOptions.connect(*app);
-    }
+    void CLICompileOptions::connect() { compileOptions.connect(*app); }
 
     void CLIExposeOptions::connect() {
         app->add_option("file", filePath, "The path of the file to expose.")->required();
@@ -87,9 +81,7 @@ namespace kara::cli {
 
         try {
             app.parse(count, args);
-        } catch (const CLI::Error &e) {
-            fmt::print("{}\n", app.help());
-        } catch (const std::runtime_error &e) {
+        } catch (const CLI::Error &e) { fmt::print("{}\n", app.help()); } catch (const std::runtime_error &e) {
             log(LogSource::error, "{}", e.what());
         }
     }

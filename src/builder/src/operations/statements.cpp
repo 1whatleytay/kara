@@ -58,8 +58,7 @@ namespace kara::builder::ops::statements {
 
             auto converted = ops::makeConvert(conditionContext, conditionResult, from(utils::PrimitiveType::Bool));
             if (!converted) {
-                throw VerifyError(
-                    node->children.front().get(), "Condition for if statement must evaluate to a bool.");
+                throw VerifyError(node->children.front().get(), "Condition for if statement must evaluate to a bool.");
             }
 
             conditionBuilder.CreateCondBr(ops::get(conditionContext, *converted), trueScope, falseNext);
@@ -394,9 +393,7 @@ namespace kara::builder::ops::statements {
                 default:
                     throw;
                 }
-            } catch (const std::runtime_error &e) {
-                throw VerifyError(child.get(), "{}", e.what());
-            }
+            } catch (const std::runtime_error &e) { throw VerifyError(child.get(), "{}", e.what()); }
 
             if (context.ir)
                 accumulator.commit(context);

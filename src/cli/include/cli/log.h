@@ -27,8 +27,8 @@ namespace kara::cli {
 
     bool logHeader(const LogSource &source);
 
-    template <typename ...Args>
-    void log(const LogSource &source, const char *format, Args && ... args) {
+    template <typename... Args>
+    void log(const LogSource &source, const char *format, Args &&...args) {
         if (logHeader(source)) {
             fmt::print(source.body, format, args...);
             fmt::print("\n");

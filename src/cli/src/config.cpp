@@ -38,43 +38,34 @@ namespace kara::cli {
     }
 
     bool TargetOptions::operator==(const TargetOptions &other) const {
-        return includes == other.includes
-            && includeArguments == other.includeArguments
-            && libraries == other.libraries
-            && dynamicLibraries == other.dynamicLibraries
-            && linkerOptions == other.linkerOptions
+        return includes == other.includes && includeArguments == other.includeArguments && libraries == other.libraries
+            && dynamicLibraries == other.dynamicLibraries && linkerOptions == other.linkerOptions
             && defaultOptions == other.defaultOptions;
     }
 
-    bool TargetOptions::operator!=(const TargetOptions &other) const {
-        return !operator==(other);
-    }
-
+    bool TargetOptions::operator!=(const TargetOptions &other) const { return !operator==(other); }
 
     void TargetOptions::merge(const TargetOptions &other) {
         if (!other.includes.empty()) {
-            includes.insert(includes.end(),
-                other.includes.begin(), other.includes.end());
+            includes.insert(includes.end(), other.includes.begin(), other.includes.end());
         }
 
         if (!other.includeArguments.empty()) {
-            includeArguments.insert(includeArguments.end(),
-                other.includeArguments.begin(), other.includeArguments.end());
+            includeArguments.insert(
+                includeArguments.end(), other.includeArguments.begin(), other.includeArguments.end());
         }
 
         if (!other.libraries.empty()) {
-            libraries.insert(libraries.end(),
-                other.libraries.begin(), other.libraries.end());
+            libraries.insert(libraries.end(), other.libraries.begin(), other.libraries.end());
         }
 
         if (!other.dynamicLibraries.empty()) {
-            dynamicLibraries.insert(dynamicLibraries.end(),
-                other.dynamicLibraries.begin(), other.dynamicLibraries.end());
+            dynamicLibraries.insert(
+                dynamicLibraries.end(), other.dynamicLibraries.begin(), other.dynamicLibraries.end());
         }
 
         if (!other.linkerOptions.empty()) {
-            linkerOptions.insert(linkerOptions.end(),
-                other.linkerOptions.begin(), other.linkerOptions.end());
+            linkerOptions.insert(linkerOptions.end(), other.linkerOptions.begin(), other.linkerOptions.end());
         }
 
         defaultOptions.merge(other.defaultOptions);
@@ -177,10 +168,14 @@ namespace kara::cli {
 
             auto nameFromKind = [](TargetImportKind k) {
                 switch (k) {
-                case ProjectFile: return "file";
-                case RepositoryUrl: return "url";
-                case CMakePackage: return "cmake";
-                default: throw std::runtime_error("Unimplemented target import kind.");
+                case ProjectFile:
+                    return "file";
+                case RepositoryUrl:
+                    return "url";
+                case CMakePackage:
+                    return "cmake";
+                default:
+                    throw std::runtime_error("Unimplemented target import kind.");
                 }
             };
 
@@ -236,23 +231,23 @@ namespace kara::cli {
 
     // assumption: resolves exactly the targets that it depends on
     // later: there should be some common store for targets
-//    void TargetConfig::resolveConfigs(std::unordered_map<std::string, const TargetConfig *> &values) const {
-//        auto evaluatedName = resolveName();
-//
-//        if (!values.insert({ evaluatedName, this }).second)
-//            throw std::runtime_error(fmt::format("Multiple configs found with name {}.", evaluatedName));
-//
-//        throw; // i dont want to think about this right now
-////        for (const auto &config : configs)
-////            config.resolveConfigs(values);
-//    }
+    //    void TargetConfig::resolveConfigs(std::unordered_map<std::string, const TargetConfig *> &values) const {
+    //        auto evaluatedName = resolveName();
+    //
+    //        if (!values.insert({ evaluatedName, this }).second)
+    //            throw std::runtime_error(fmt::format("Multiple configs found with name {}.", evaluatedName));
+    //
+    //        throw; // i dont want to think about this right now
+    ////        for (const auto &config : configs)
+    ////            config.resolveConfigs(values);
+    //    }
 
-//    std::unordered_map<std::string, const TargetConfig *> TargetConfig::resolveConfigs() const {
-//        std::unordered_map<std::string, const TargetConfig *> result;
-//        resolveConfigs(result);
-//
-//        return result;
-//    }
+    //    std::unordered_map<std::string, const TargetConfig *> TargetConfig::resolveConfigs() const {
+    //        std::unordered_map<std::string, const TargetConfig *> result;
+    //        resolveConfigs(result);
+    //
+    //        return result;
+    //    }
 
     std::string TargetConfig::serialize() const {
         YAML::Emitter emitterBase;
@@ -261,10 +256,14 @@ namespace kara::cli {
 
         auto typeName = [this]() {
             switch (type) {
-            case TargetType::Library: return "library";
-            case TargetType::Executable: return "executable";
-            case TargetType::Interface: return "interface";
-            default: throw;
+            case TargetType::Library:
+                return "library";
+            case TargetType::Executable:
+                return "executable";
+            case TargetType::Interface:
+                return "interface";
+            default:
+                throw;
             }
         };
 
@@ -318,22 +317,23 @@ namespace kara::cli {
 
         options.serializeInline(emitter());
 
-//        if (!packages.empty()) {
-//            emitter() << YAML::Key << "packages";
-//            emitter() << YAML::BeginMap;
-//            for (const auto &pair : packages) {
-//                emitter() << YAML::Key << pair.first;
-//                emitter() << YAML::Value << YAML::Flow << pair.second;
-//            }
-//            emitter() << YAML::EndMap;
-//        }
+        //        if (!packages.empty()) {
+        //            emitter() << YAML::Key << "packages";
+        //            emitter() << YAML::BeginMap;
+        //            for (const auto &pair : packages) {
+        //                emitter() << YAML::Key << pair.first;
+        //                emitter() << YAML::Value << YAML::Flow << pair.second;
+        //            }
+        //            emitter() << YAML::EndMap;
+        //        }
 
         emitterBase << YAML::EndMap;
 
         return emitterBase.c_str();
     }
 
-    TargetConfig::TargetConfig(fs::path root, const YAML::Node &node) : root(std::move(root)) {
+    TargetConfig::TargetConfig(fs::path root, const YAML::Node &node)
+        : root(std::move(root)) {
         if (auto value = node["type"]) {
             std::unordered_map<std::string, TargetType> targetMap = {
                 { "library", TargetType::Library },
@@ -370,22 +370,22 @@ namespace kara::cli {
 
         options = TargetOptions(node);
 
-//        if (auto value = node["packages"]) {
-//            for (const auto &pair : value) {
-//                auto path = pair.first.as<std::string>();
-//                auto toImport = pair.second.as<std::vector<std::string>>();
-//
-//                packages[path] = toImport;
-//            }
-//        }
+        //        if (auto value = node["packages"]) {
+        //            for (const auto &pair : value) {
+        //                auto path = pair.first.as<std::string>();
+        //                auto toImport = pair.second.as<std::vector<std::string>>();
+        //
+        //                packages[path] = toImport;
+        //            }
+        //        }
 
         // you have to ask pm to do this now
-//        for (const auto &part : import) {
-//            auto path = fs::path(part);
-//            auto newPath = path.is_absolute() ? path : this->root.parent_path() / path;
-//
-//            configs.push_back(TargetConfig::loadFromThrows(newPath.string()));
-//        }
+        //        for (const auto &part : import) {
+        //            auto path = fs::path(part);
+        //            auto newPath = path.is_absolute() ? path : this->root.parent_path() / path;
+        //
+        //            configs.push_back(TargetConfig::loadFromThrows(newPath.string()));
+        //        }
     }
 
     std::optional<TargetConfig> TargetConfig::loadFrom(const std::string &path) {

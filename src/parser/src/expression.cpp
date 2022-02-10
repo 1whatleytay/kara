@@ -18,8 +18,7 @@ namespace kara::parser {
     }
 
     utils::ExpressionResult combine(
-        std::vector<utils::ExpressionResult> results,
-        std::vector<const Operator *> operators) {
+        std::vector<utils::ExpressionResult> results, std::vector<const Operator *> operators) {
         // to support /, we need a list of operators that have the left-grouping behavior
 
         // okay, so first we go through the array and look for group-to-left operators
@@ -130,10 +129,10 @@ namespace kara::parser {
 
                 modifiers.insert(modifiers.end(), unary.rbegin(), unary.rend());
 
-//                auto grab = std::move(results.back());
-//                results.pop_back();
-//
-//                results.emplace_back(applyModifiers(std::move(grab), modifiers));
+                //                auto grab = std::move(results.back());
+                //                results.pop_back();
+                //
+                //                results.emplace_back(applyModifiers(std::move(grab), modifiers));
 
                 results.back() = applyModifiers(std::move(results.back()), modifiers);
 
@@ -157,7 +156,7 @@ namespace kara::parser {
 
                     // implied
                     // results.clear();
-//                     operators.clear();
+                    //                     operators.clear();
                 } else if (literal.find(child->is<parser::Kind>()) != literal.end()) {
                     results.emplace_back(utils::ExpressionNoun { child.get() });
                 } else if (child->is(Kind::Operator)) {

@@ -8,7 +8,9 @@
 #include <vector>
 #include <unordered_map>
 
-namespace YAML { struct Node; }
+namespace YAML {
+    struct Node;
+}
 
 namespace kara::cli {
     struct Platform;
@@ -30,18 +32,14 @@ namespace kara::cli {
 
         // Returns list of .yaml config files, equivalent to import: in TargetConfig
 
-        PackageBuildResult build(const fs::path &root,
-            const std::string &name,
-            const std::string &suggestTarget = "",
+        PackageBuildResult build(const fs::path &root, const std::string &name, const std::string &suggestTarget = "",
             const std::vector<std::string> &arguments = {});
 
         // reinstall
-        PackageBuildResult download(const std::string &url,
-            const std::string &suggestTarget = "",
+        PackageBuildResult download(const std::string &url, const std::string &suggestTarget = "",
             const std::vector<std::string> &arguments = {});
         // checks lock file
-        std::vector<std::string> install(const std::string &url,
-            const std::string &suggestTarget = "",
+        std::vector<std::string> install(const std::string &url, const std::string &suggestTarget = "",
             const std::vector<std::string> &arguments = {});
 
         PackageBuildResult buildCMakePackage(const std::string &name);

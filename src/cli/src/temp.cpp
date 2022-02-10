@@ -57,8 +57,7 @@ if (options.interpret) {
 
     for (const auto &library : libraries) {
         for (const auto &lib : library.libraries) {
-            auto loader
-                = llvm::orc::StaticLibraryDefinitionGenerator::Load(jit->getObjLinkingLayer(), lib.c_str());
+            auto loader = llvm::orc::StaticLibraryDefinitionGenerator::Load(jit->getObjLinkingLayer(), lib.c_str());
 
             if (!loader) {
                 fmt::print("Failed to load library {}.\n", lib.string());
@@ -68,8 +67,7 @@ if (options.interpret) {
         }
 
         for (const auto &lib : library.dynamicLibraries) {
-            auto loader
-                = llvm::orc::DynamicLibrarySearchGenerator::Load(lib.c_str(), target.layout->getGlobalPrefix());
+            auto loader = llvm::orc::DynamicLibrarySearchGenerator::Load(lib.c_str(), target.layout->getGlobalPrefix());
 
             if (!loader) {
                 fmt::print("Failed to load dynamic library {}.\n", lib.string());
@@ -87,7 +85,6 @@ if (options.interpret) {
 
     fmt::print("Returned {}.\n", entry());
 }
-
 
 struct TransferState {
     enum class Stage {

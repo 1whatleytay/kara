@@ -88,9 +88,8 @@ namespace kara::cli {
             auto parameters = e->parameters();
 
             std::vector<std::string> text(parameters.size());
-            std::transform(parameters.begin(), parameters.end(), text.begin(), [](const auto &p) {
-                return toTypeString(p);
-            });
+            std::transform(
+                parameters.begin(), parameters.end(), text.begin(), [](const auto &p) { return toTypeString(p); });
 
             auto locked = e->isLocked ? " locked" : "";
             const char *flags = "";
@@ -104,8 +103,7 @@ namespace kara::cli {
                 throw;
             }
 
-            return fmt::format("func{}{}({}) {}", locked, flags,
-                fmt::join(text, ", "), toTypeString(e->returnType()));
+            return fmt::format("func{}{}({}) {}", locked, flags, fmt::join(text, ", "), toTypeString(e->returnType()));
         }
 
         default:

@@ -12,7 +12,8 @@
 #include <cassert>
 
 namespace kara::builder {
-    Variable::Variable(const parser::Variable *node, builder::Builder &builder) : node(node) {
+    Variable::Variable(const parser::Variable *node, builder::Builder &builder)
+        : node(node) {
         if (node->isMutable && !builder.options.mutableGlobals)
             throw VerifyError(node, "Global variables cannot be mutable.");
 

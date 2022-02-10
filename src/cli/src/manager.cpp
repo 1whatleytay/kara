@@ -35,9 +35,9 @@ namespace kara::cli {
         }
 
         case TargetImportKind::RepositoryUrl: {
-//            assert(package.targets.size() == 1); // for name...
-//            auto suggestedTarget = package.targets.front();
-//
+            //            assert(package.targets.size() == 1); // for name...
+            //            auto suggestedTarget = package.targets.front();
+            //
             auto it = configsByUrl.find(package.path);
 
             if (it == configsByUrl.end()) {
@@ -71,9 +71,9 @@ namespace kara::cli {
             auto it = configsByName.find(name);
 
             if (it != configsByName.end()) {
-                throw std::runtime_error(fmt::format(
-                    "Name conflict between config files, name `{}` is taken by {} and {}.",
-                    name, it->second->root.string(), config.root.string()));
+                throw std::runtime_error(
+                    fmt::format("Name conflict between config files, name `{}` is taken by {} and {}.", name,
+                        it->second->root.string(), config.root.string()));
             }
 
             configsByName[name] = &config;
@@ -113,8 +113,8 @@ namespace kara::cli {
                     assert(package.targets.size() == 1); // for name...
                     auto suggestedTarget = package.targets.front();
 
-                    auto result = packages.build(pathToConfig,
-                        suggestedTarget, suggestedTarget, package.buildArguments);
+                    auto result
+                        = packages.build(pathToConfig, suggestedTarget, suggestedTarget, package.buildArguments);
 
                     paths = result.configFiles; // name?
                 } else {
@@ -177,14 +177,10 @@ namespace kara::cli {
     }
 
     std::string invokeLinker(const std::string &linker, const std::vector<std::string> &arguments) {
-        using LinkFunction = bool (*)(
-            llvm::ArrayRef<const char *>, bool,
-            llvm::raw_ostream &, llvm::raw_ostream &);
+        using LinkFunction = bool (*)(llvm::ArrayRef<const char *>, bool, llvm::raw_ostream &, llvm::raw_ostream &);
 
         std::vector<const char *> cstrings(arguments.size());
-        std::transform(arguments.begin(), arguments.end(), cstrings.begin(), [](const auto &e) {
-            return e.c_str();
-        });
+        std::transform(arguments.begin(), arguments.end(), cstrings.begin(), [](const auto &e) { return e.c_str(); });
 
         std::unordered_map<std::string, LinkFunction> functions = {
             { "elf", lld::elf::link },
@@ -243,11 +239,11 @@ namespace kara::cli {
         if (it != targetInfos.end())
             return *it->second;
 
-//        auto targetIt = targetCache.configsByName.find(target);
-//        if (targetIt == targetCache.configsByName.end())
-//            throw std::runtime_error(fmt::format("Cannot find target {} in project file.", target));
+        //        auto targetIt = targetCache.configsByName.find(target);
+        //        if (targetIt == targetCache.configsByName.end())
+        //            throw std::runtime_error(fmt::format("Cannot find target {} in project file.", target));
 
-//        auto &targetConfig = targetIt->second;
+        //        auto &targetConfig = targetIt->second;
         auto targetConfig = target; // change later, is just test alias right now for target
 
         auto result = std::make_unique<TargetInfo>();
@@ -264,10 +260,8 @@ namespace kara::cli {
         if (!targetConfig->options.includes.empty()) {
             std::vector<fs::path> paths;
             paths.reserve(targetConfig->options.includes.size());
-            std::transform(
-                targetConfig->options.includes.begin(), targetConfig->options.includes.end(),
-                std::back_inserter(paths),
-                [](const auto &r) { return fs::path(r); });
+            std::transform(targetConfig->options.includes.begin(), targetConfig->options.includes.end(),
+                std::back_inserter(paths), [](const auto &r) { return fs::path(r); });
 
             result->includes.push_back(builder::Library {
                 std::move(paths),
@@ -276,11 +270,11 @@ namespace kara::cli {
         }
 
         // Add packages to list of targets to build.
-//        for (const auto &package : targetConfig->packages) {
-//            assert(package.second.size() == 1); // mistake
-//
-//            result->depends.push_back(package.second.front());
-//        }
+        //        for (const auto &package : targetConfig->packages) {
+        //            assert(package.second.size() == 1); // mistake
+        //
+        //            result->depends.push_back(package.second.front());
+        //        }
 
         // Build targets that are depended on
         for (const auto &toBuild : result->depends) {
@@ -289,15 +283,14 @@ namespace kara::cli {
 
             result->defaultOptions.merge(otherResult.defaultOptions);
 
-            result->libraries.insert(result->libraries.end(),
-                otherResult.libraries.begin(), otherResult.libraries.end());
+            result->libraries.insert(
+                result->libraries.end(), otherResult.libraries.begin(), otherResult.libraries.end());
 
-            result->dynamicLibraries.insert(result->dynamicLibraries.end(),
-                otherResult.dynamicLibraries.begin(), otherResult.dynamicLibraries.end());
+            result->dynamicLibraries.insert(result->dynamicLibraries.end(), otherResult.dynamicLibraries.begin(),
+                otherResult.dynamicLibraries.end());
 
             // might have duplicates
-            result->includes.insert(result->includes.end(),
-                otherResult.includes.begin(), otherResult.includes.end());
+            result->includes.insert(result->includes.end(), otherResult.includes.begin(), otherResult.includes.end());
 
             result->linkerOptions.insert(
                 result->linkerOptions.begin(), otherResult.linkerOptions.begin(), otherResult.linkerOptions.end());
@@ -317,20 +310,18 @@ namespace kara::cli {
         if (it != updatedTargets.end())
             return *it->second;
 
-//        auto targetIt = targetCache.configsByName.find(target);
-//        if (targetIt == targetCache.configsByName.end())
-//            throw std::runtime_error(fmt::format("Cannot find target {} in project file.", target));
-//
-//        auto &targetConfig = targetIt->second;
+        //        auto targetIt = targetCache.configsByName.find(target);
+        //        if (targetIt == targetCache.configsByName.end())
+        //            throw std::runtime_error(fmt::format("Cannot find target {} in project file.", target));
+        //
+        //        auto &targetConfig = targetIt->second;
 
         auto targetConfig = target;
         auto name = target->resolveName();
 
         auto &targetInfo = readTarget(target);
 
-        auto result = std::make_unique<TargetResult>(TargetResult {
-            targetInfo, nullptr
-        });
+        auto result = std::make_unique<TargetResult>(TargetResult { targetInfo, nullptr });
 
         for (const auto &toBuild : targetInfo.depends)
             makeTarget(toBuild, root, linkerType);
@@ -448,12 +439,7 @@ namespace kara::cli {
                 libraryNames.insert(file);
             }
 
-            std::vector<std::string> arguments = {
-                root,
-                outputFile.string(),
-                "-o",
-                linkFile.string()
-            };
+            std::vector<std::string> arguments = { root, outputFile.string(), "-o", linkFile.string() };
 
             auto additionalArguments = platform->defaultLinkerArguments();
             arguments.insert(arguments.end(), additionalArguments.begin(), additionalArguments.end());

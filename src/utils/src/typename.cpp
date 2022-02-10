@@ -153,9 +153,8 @@ namespace kara::utils {
         })();
 
         std::vector<std::string> types(type.parameters.size());
-        std::transform(type.parameters.begin(), type.parameters.end(), types.begin(), [](const auto &t) {
-            return toString(t.second);
-        });
+        std::transform(type.parameters.begin(), type.parameters.end(), types.begin(),
+            [](const auto &t) { return toString(t.second); });
 
         return fmt::format("{}({}) {}", heading, fmt::join(types, ", "), toString(*type.returnType));
     }

@@ -4,7 +4,7 @@ BreakBeforeBraces: Attach
 Language: Cpp
 NamespaceIndentation: All
 PointerAlignment: Right
-SortIncludes: 'true'
+SortIncludes: 'false'
 ColumnLimit: 120
 AlwaysBreakTemplateDeclarations: 'Yes'
 ...
