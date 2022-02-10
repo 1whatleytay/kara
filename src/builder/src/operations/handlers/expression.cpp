@@ -107,7 +107,9 @@ namespace kara::builder::ops::handlers {
         return builder::Result {
             (value.flags & (builder::Result::FlagMutable | builder::Result::FlagTemporary))
                 | builder::Result::FlagReference,
-            context.ir ? context.ir->CreateStructGEP(ops::ref(context, structRef), index, node->name) : nullptr,
+            context.ir
+                ? context.ir->CreateStructGEP(builderType->type, ops::ref(context, structRef), index, node->name)
+                : nullptr,
             context.builder.resolveTypename(varNode->fixedType()),
             context.accumulator,
         };
@@ -207,9 +209,9 @@ namespace kara::builder::ops::handlers {
         return true;
     }
 
-    bool makeInitializeIgnore(const Context &context, llvm::Value *ptr, const utils::Typename &type) { return true; }
+    bool makeInitializeIgnore(const Context &context, llvm::Value *, const utils::Typename &type) { return true; }
 
-    bool makeDestroyReference(const Context &context, llvm::Value *ptr, const utils::Typename &type) {
+    bool makeDestroyReference(const Context &context, llvm::Value *, const utils::Typename &type) {
         auto reference = std::get_if<utils::ReferenceTypename>(&type);
 
         // return true will mark reference as handled
@@ -222,15 +224,17 @@ namespace kara::builder::ops::handlers {
         if (!(reference && reference->kind == utils::ReferenceKind::Unique))
             return false;
 
-        auto free = context.builder.getFree();
+        auto elementType = context.builder.makeTypename(*reference->value);
+
+        auto freeFunc = context.builder.getFree();
         auto dataType = llvm::Type::getInt8PtrTy(context.builder.context);
-        auto value = context.ir->CreateLoad(ptr);
+        auto value = context.ir->CreateLoad(elementType, ptr);
 
         auto pointer = context.ir->CreatePointerCast(value, dataType);
 
         ops::makeDestroy(context, value, *reference->value);
 
-        context.ir->CreateCall(free, { pointer });
+        context.ir->CreateCall(freeFunc, { pointer });
 
         return true;
     }
@@ -242,6 +246,10 @@ namespace kara::builder::ops::handlers {
 
         if (!(array && array->kind == utils::ArrayKind::VariableSize))
             return false;
+
+        auto arrayStructType = context.builder.makeVariableArrayType(*array->value);
+        auto elementType = context.builder.makeTypename(*array->value);
+        auto elementPointer = llvm::PointerType::get(elementType, 0);
 
         // i regret assembling this a bit
         builder::Result decoy {
@@ -256,8 +264,8 @@ namespace kara::builder::ops::handlers {
         auto free = context.builder.getFree();
         auto dataType = llvm::Type::getInt8PtrTy(context.builder.context);
 
-        auto dataPtr = context.ir->CreateStructGEP(ops::ref(context, arrayResult), 2); // 2 is data
-        auto dataPtrCasted = context.ir->CreatePointerCast(context.ir->CreateLoad(dataPtr), dataType);
+        auto dataPtr = context.ir->CreateStructGEP(arrayStructType, ops::ref(context, arrayResult), 2); // 2 is data
+        auto dataPtrCasted = context.ir->CreatePointerCast(context.ir->CreateLoad(elementPointer, dataPtr), dataType);
 
         context.ir->CreateCall(free, { dataPtrCasted });
 

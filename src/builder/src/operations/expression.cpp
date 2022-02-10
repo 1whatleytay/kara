@@ -114,21 +114,30 @@ namespace kara::builder::ops::modifiers {
             if (!context.ir)
                 return nullptr;
 
+            auto baseType = context.builder.makeTypename(sub.type);
+
             switch (arrayType->kind) {
-            case utils::ArrayKind::FixedSize:
-                return context.ir->CreateGEP(ops::ref(context, sub),
-                    { llvm::ConstantInt::get(llvm::Type::getInt64Ty(context.builder.context), 0),
-                        ops::get(context, index) });
+            case utils::ArrayKind::FixedSize: {
+                auto zero = llvm::ConstantInt::get(llvm::Type::getInt64Ty(context.builder.context), 0);
+
+                return context.ir->CreateGEP(baseType, ops::ref(context, sub), { zero, ops::get(context, index) });
+            }
 
             case utils::ArrayKind::Unbounded:
             case utils::ArrayKind::UnboundedSized: // TODO: no good for stack
                 // allocated arrays
-                return context.ir->CreateGEP(ops::ref(context, sub), ops::get(context, index));
+                return context.ir->CreateGEP(baseType, ops::ref(context, sub), ops::get(context, index));
 
             case utils::ArrayKind::VariableSize: {
-                auto dataPtr = context.ir->CreateStructGEP(ops::ref(context, sub), 2); // data is at 2
+                auto dataPtr = context.ir->CreateStructGEP(baseType, ops::ref(context, sub), 2); // data is at 2
 
-                return context.ir->CreateGEP(context.ir->CreateLoad(dataPtr), ops::get(context, index));
+                auto elementPointer = context.builder.makeTypename(*arrayType->value);
+                auto pointerToElementPointer = llvm::PointerType::get(elementPointer, 0);
+
+                return context.ir->CreateGEP(
+                    elementPointer,
+                    context.ir->CreateLoad(pointerToElementPointer, dataPtr),
+                    ops::get(context, index));
             }
 
             default:

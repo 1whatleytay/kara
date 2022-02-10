@@ -21,8 +21,14 @@ namespace kara::builder::ops {
     }
 
     llvm::Value *get(const Context &context, const builder::Result &result) {
-        if (result.isSet(builder::Result::FlagReference))
-            return context.ir ? context.ir->CreateLoad(result.value) : nullptr;
+        if (result.isSet(builder::Result::FlagReference)) {
+            if (context.ir) {
+                auto sourceType = context.builder.makeTypename(result.type);
+                return context.ir->CreateLoad(sourceType, result.value);
+            }
+
+            return nullptr;
+        }
 
         return result.value;
     }
@@ -192,7 +198,7 @@ namespace kara::builder::ops {
                     // Why makeInfer here?
                     // The idea is that I can have a variable (y func () nothing)
                     // And then I can type `y` and have it call using the code in makeInfer.
-                    // this doesn't work anymore cuz now if you do &z it will evaluate z right away?
+                    // this doesn't work cuz now if you do &z it will evaluate z right away?
                     // future taylor: moving this double make infer to ops::expression::make
                     return builder::Result {
                         builder::Result::FlagReference | (info->node->isMutable ? builder::Result::FlagMutable : 0),
@@ -230,8 +236,8 @@ namespace kara::builder::ops {
                     throw VerifyError(result.from, "Reference does not implicitly resolve to anything.");
                 }
 
-                // if variable, return first
-                // if function, find one with 0 params or infer params, e.g. some
+                // if it is a variable, return first
+                // if it is a function, find one with 0 params or infer params, e.g. some
                 // version of match is needed
             }
         } visitor { context };
@@ -256,8 +262,14 @@ namespace kara::builder::ops {
             value.flags |= r->isMutable ? builder::Result::FlagMutable : 0;
             value.flags |= builder::Result::FlagReference;
 
-            if (value.isSet(builder::Result::FlagReference))
-                value.value = context.ir ? context.ir->CreateLoad(value.value) : nullptr;
+            if (value.isSet(builder::Result::FlagReference)) {
+                if (context.ir) {
+                    auto valueType = context.builder.makeTypename(value.type);
+                    value.value = context.ir->CreateLoad(valueType, value.value);
+                }
+
+                value.value = nullptr;
+            }
 
             value.type = *r->value;
         }

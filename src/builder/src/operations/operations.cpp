@@ -84,7 +84,7 @@ namespace kara::builder::ops {
                 auto variable = new llvm::GlobalVariable(*context.builder.module, initial->getType(), true,
                     llvm::GlobalVariable::LinkageTypes::PrivateLinkage, initial, fmt::format("str_{}", convertedText));
 
-                ptr = context.ir->CreateStructGEP(variable, 0);
+                ptr = context.ir->CreateStructGEP(initial->getType(), variable, 0);
             }
 
             auto stringType = utils::ReferenceTypename {
@@ -132,9 +132,9 @@ namespace kara::builder::ops {
                 for (size_t a = 0; a < values.size(); a++) {
                     const builder::Result &result = values[a];
 
-                    llvm::Value *index = llvm::ConstantInt::get(llvm::Type::getInt64Ty(context.builder.context), a);
-                    llvm::Value *point = context.ir->CreateInBoundsGEP(
-                        value, { llvm::ConstantInt::get(llvm::Type::getInt64Ty(context.builder.context), 0), index });
+                    auto zero = llvm::ConstantInt::get(llvm::Type::getInt64Ty(context.builder.context), 0);
+                    auto index = llvm::ConstantInt::get(llvm::Type::getInt64Ty(context.builder.context), a);
+                    llvm::Value *point = context.ir->CreateInBoundsGEP(arrayType, value, { zero, index });
 
                     context.ir->CreateStore(ops::get(context, result), point);
                 }

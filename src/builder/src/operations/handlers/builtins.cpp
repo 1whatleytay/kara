@@ -8,7 +8,9 @@
 #include <cassert>
 
 namespace kara::builder::ops::handlers::builtins {
-    bool named(const std::string &input, const std::string &required) { return input.empty() || input == required; }
+    bool named(const std::string &input, const std::string &required) {
+        return input.empty() || input == required;
+    }
 
     namespace arrays {
         Maybe<builder::Result> size(const Context &context, const Parameters &parameters) {
@@ -54,10 +56,12 @@ namespace kara::builder::ops::handlers::builtins {
                 auto real = makeRealType(context, value);
                 assert(std::holds_alternative<utils::ArrayTypename>(real.type));
 
+                auto arrayStructType = context.builder.makeVariableArrayType(*array->value);
+
                 // mutable should probably be turned off after
                 return builder::Result {
                     builder::Result::FlagReference | (real.flags & builder::Result::FlagMutable),
-                    context.ir ? context.ir->CreateStructGEP(ops::ref(context, real), 0) : nullptr,
+                    context.ir ? context.ir->CreateStructGEP(arrayStructType, ops::ref(context, real), 0) : nullptr,
                     utils::PrimitiveTypename { utils::PrimitiveType::ULong },
                     context.accumulator,
                 };
@@ -86,9 +90,11 @@ namespace kara::builder::ops::handlers::builtins {
             auto real = makeRealType(context, value);
             assert(std::holds_alternative<utils::ArrayTypename>(real.type));
 
+            auto arrayStructType = context.builder.makeVariableArrayType(*array->value);
+
             return builder::Result {
                 builder::Result::FlagReference | (real.flags & builder::Result::FlagMutable),
-                context.ir ? context.ir->CreateStructGEP(ops::ref(context, real), 1) : nullptr,
+                context.ir ? context.ir->CreateStructGEP(arrayStructType, ops::ref(context, real), 1) : nullptr,
                 utils::PrimitiveTypename { utils::PrimitiveType::ULong },
                 context.accumulator,
             };
@@ -112,9 +118,11 @@ namespace kara::builder::ops::handlers::builtins {
             auto real = makeRealType(context, value);
             assert(std::holds_alternative<utils::ArrayTypename>(real.type));
 
+            auto arrayStructType = context.builder.makeVariableArrayType(*array->value);
+
             return builder::Result {
                 builder::Result::FlagReference | (real.flags & builder::Result::FlagMutable),
-                context.ir ? context.ir->CreateStructGEP(ops::ref(context, real), 2) : nullptr,
+                context.ir ? context.ir->CreateStructGEP(arrayStructType, ops::ref(context, real), 2) : nullptr,
                 utils::ReferenceTypename {
                     array->value,
                     real.isSet(builder::Result::FlagMutable),
@@ -151,13 +159,16 @@ namespace kara::builder::ops::handlers::builtins {
             auto &size = *converted;
 
             if (context.ir) {
-                auto realloc = context.builder.getRealloc();
+                auto reallocFunc = context.builder.getRealloc();
 
                 auto ptr = ops::ref(context, arrayResult);
 
-                auto sizePtr = context.ir->CreateStructGEP(ptr, 0); // 0 is size
-                auto capacityPtr = context.ir->CreateStructGEP(ptr, 1); // 1 is capacity
-                auto dataPtr = context.ir->CreateStructGEP(ptr, 2); // 2 is data
+                auto baseType = context.builder.makeTypename(*array->value);
+                auto arrayStructType = context.builder.makeVariableArrayType(*array->value);
+
+                auto sizePtr = context.ir->CreateStructGEP(arrayStructType, ptr, 0); // 0 is size
+                auto capacityPtr = context.ir->CreateStructGEP(arrayStructType, ptr, 1); // 1 is capacity
+                auto dataPtr = context.ir->CreateStructGEP(arrayStructType, ptr, 2); // 2 is data
 
                 assert(dataPtr->getType()->isPointerTy());
 
@@ -171,13 +182,16 @@ namespace kara::builder::ops::handlers::builtins {
                 auto dataSize = context.builder.target.layout->getTypeAllocSize(dataElementType);
                 auto constantSize = llvm::ConstantInt::get(llvm::Type::getInt64Ty(context.builder.context), dataSize);
 
-                auto dataCasted = context.ir->CreatePointerCast(context.ir->CreateLoad(dataPtr), dataPtrType);
+                auto baseTypePointer = llvm::PointerType::get(baseType, 0);
+
+                auto dataPtrLoaded = context.ir->CreateLoad(baseTypePointer, dataPtr);
+                auto dataCasted = context.ir->CreatePointerCast(dataPtrLoaded, dataPtrType);
 
                 auto llvmSize = ops::get(context, size);
 
                 auto allocSize = context.ir->CreateMul(llvmSize, constantSize);
 
-                auto newData = context.ir->CreateCall(realloc, { dataCasted, allocSize });
+                auto newData = context.ir->CreateCall(reallocFunc, { dataCasted, allocSize });
                 auto newDataCasted = context.ir->CreatePointerCast(newData, dataPtrRealType);
 
                 context.ir->CreateStore(newDataCasted, dataPtr);
@@ -220,13 +234,16 @@ namespace kara::builder::ops::handlers::builtins {
             auto &size = *converted;
 
             if (context.ir) {
-                auto realloc = context.builder.getRealloc();
+                auto reallocFunc = context.builder.getRealloc();
+
+                auto baseType = context.builder.makeTypename(*array->value);
+                auto arrayStructType = context.builder.makeVariableArrayType(*array->value);
 
                 auto ptr = ops::ref(context, arrayResult);
 
-                auto sizePtr = context.ir->CreateStructGEP(ptr, 0); // 0 is size
-                auto capacityPtr = context.ir->CreateStructGEP(ptr, 1); // 1 is capacity
-                auto dataPtr = context.ir->CreateStructGEP(ptr, 2); // 2 is data
+                auto sizePtr = context.ir->CreateStructGEP(arrayStructType, ptr, 0); // 0 is size
+                auto capacityPtr = context.ir->CreateStructGEP(arrayStructType, ptr, 1); // 1 is capacity
+                auto dataPtr = context.ir->CreateStructGEP(arrayStructType, ptr, 2); // 2 is data
 
                 assert(dataPtr->getType()->isPointerTy());
 
@@ -240,10 +257,15 @@ namespace kara::builder::ops::handlers::builtins {
                 auto dataSize = context.builder.target.layout->getTypeAllocSize(dataElementType);
                 auto constantSize = llvm::ConstantInt::get(llvm::Type::getInt64Ty(context.builder.context), dataSize);
 
-                auto dataCasted = context.ir->CreatePointerCast(context.ir->CreateLoad(dataPtr), dataPtrType);
+                auto baseTypePointer = llvm::PointerType::get(baseType, 0);
+
+                auto dataCasted = context.ir->CreatePointerCast(
+                    context.ir->CreateLoad(baseTypePointer, dataPtr), dataPtrType);
+
+                auto i64 = llvm::Type::getInt64Ty(context.builder.context);
 
                 auto llvmSize = ops::get(context, size);
-                auto llvmExistingSize = context.ir->CreateLoad(sizePtr);
+                auto llvmExistingSize = context.ir->CreateLoad(i64, sizePtr);
 
                 // don't under allocate the elements in our array
                 // IDK if it works like that but at least be safe
@@ -251,7 +273,7 @@ namespace kara::builder::ops::handlers::builtins {
 
                 auto allocSize = context.ir->CreateMul(maximum, constantSize);
 
-                auto newData = context.ir->CreateCall(realloc, { dataCasted, allocSize });
+                auto newData = context.ir->CreateCall(reallocFunc, { dataCasted, allocSize });
                 auto newDataCasted = context.ir->CreatePointerCast(newData, dataPtrRealType);
 
                 context.ir->CreateStore(newDataCasted, dataPtr);
@@ -291,13 +313,16 @@ namespace kara::builder::ops::handlers::builtins {
             auto &toInsert = *converted;
 
             if (context.ir) {
-                auto realloc = context.builder.getRealloc();
+                auto reallocFunc = context.builder.getRealloc();
 
                 auto ptr = ops::ref(context, arrayResult);
 
-                auto sizePtr = context.ir->CreateStructGEP(ptr, 0); // 0 is size
-                auto capacityPtr = context.ir->CreateStructGEP(ptr, 1); // 1 is capacity
-                auto dataPtr = context.ir->CreateStructGEP(ptr, 2); // 2 is data
+                auto baseType = context.builder.makeTypename(*array->value);
+                auto arrayStructType = context.builder.makeVariableArrayType(*array->value);
+
+                auto sizePtr = context.ir->CreateStructGEP(arrayStructType, ptr, 0); // 0 is size
+                auto capacityPtr = context.ir->CreateStructGEP(arrayStructType, ptr, 1); // 1 is capacity
+                auto dataPtr = context.ir->CreateStructGEP(arrayStructType, ptr, 2); // 2 is data
 
                 assert(dataPtr->getType()->isPointerTy());
 
@@ -311,19 +336,24 @@ namespace kara::builder::ops::handlers::builtins {
                 auto dataSize = context.builder.target.layout->getTypeAllocSize(dataElementType);
                 auto constantSize = llvm::ConstantInt::get(llvm::Type::getInt64Ty(context.builder.context), dataSize);
 
-                auto dataCasted = context.ir->CreatePointerCast(context.ir->CreateLoad(dataPtr), dataPtrType);
+                auto baseTypePointer = llvm::PointerType::get(baseType, 0);
+
+                auto dataCasted = context.ir->CreatePointerCast(
+                    context.ir->CreateLoad(baseTypePointer, dataPtr), dataPtrType);
 
                 // should use vector resizing
+                auto i64 = llvm::Type::getInt64Ty(context.builder.context);
+
                 auto one = llvm::ConstantInt::get(llvm::Type::getInt64Ty(context.builder.context), 1);
-                auto originalSize = context.ir->CreateLoad(sizePtr);
+                auto originalSize = context.ir->CreateLoad(i64, sizePtr);
                 auto llvmSize = context.ir->CreateNUWAdd(originalSize, one);
 
                 auto allocSize = context.ir->CreateMul(llvmSize, constantSize);
 
-                auto newData = context.ir->CreateCall(realloc, { dataCasted, allocSize });
+                auto newData = context.ir->CreateCall(reallocFunc, { dataCasted, allocSize });
                 auto newDataCasted = context.ir->CreatePointerCast(newData, dataPtrRealType);
 
-                auto newElementPtr = context.ir->CreateGEP(newDataCasted, originalSize);
+                auto newElementPtr = context.ir->CreateGEP(baseType, newDataCasted, originalSize);
                 context.ir->CreateStore(ops::get(context, toInsert), newElementPtr);
 
                 context.ir->CreateStore(newDataCasted, dataPtr);
@@ -358,24 +388,29 @@ namespace kara::builder::ops::handlers::builtins {
             assert(std::holds_alternative<utils::ArrayTypename>(real.type));
 
             if (context.ir) {
-                auto free = context.builder.getFree();
+                auto freeFunc = context.builder.getFree();
 
                 auto ptr = ops::ref(context, real);
 
-                auto sizePtr = context.ir->CreateStructGEP(ptr, 0); // 0 is size
-                auto capacityPtr = context.ir->CreateStructGEP(ptr, 1); // 1 is capacity
-                auto dataPtr = context.ir->CreateStructGEP(ptr, 2); // 2 is data
+                auto baseType = context.builder.makeTypename(*array->value);
+                auto arrayStructType = context.builder.makeVariableArrayType(*array->value);
+
+                auto sizePtr = context.ir->CreateStructGEP(arrayStructType, ptr, 0); // 0 is size
+                auto capacityPtr = context.ir->CreateStructGEP(arrayStructType, ptr, 1); // 1 is capacity
+                auto dataPtr = context.ir->CreateStructGEP(arrayStructType, ptr, 2); // 2 is data
 
                 assert(dataPtr->getType()->isPointerTy());
 
                 auto llvmSizeType = llvm::Type::getInt64Ty(context.builder.context);
                 auto llvmDataType = dataPtr->getType()->getPointerElementType();
 
+                auto baseTypePointer = llvm::PointerType::get(baseType, 0);
+
                 auto llvmFreeDataType = llvm::Type::getInt8PtrTy(context.builder.context);
-                auto llvmFreePointer = context.ir->CreateLoad(dataPtr);
+                auto llvmFreePointer = context.ir->CreateLoad(baseTypePointer, dataPtr);
                 auto llvmFreeParameter = context.ir->CreatePointerCast(llvmFreePointer, llvmFreeDataType);
 
-                context.ir->CreateCall(free, { llvmFreeParameter });
+                context.ir->CreateCall(freeFunc, { llvmFreeParameter });
 
                 assert(llvmDataType->isPointerTy());
 
@@ -427,9 +462,12 @@ namespace kara::builder::ops::handlers::builtins {
             auto llvmValue = ops::makeAlloca(context, resultType);
 
             if (context.ir) {
-                auto sizePtr = context.ir->CreateStructGEP(llvmValue, 0); // 0 is size
-                auto capacityPtr = context.ir->CreateStructGEP(llvmValue, 1); // 1 is capacity
-                auto dataPtr = context.ir->CreateStructGEP(llvmValue, 2); // 2 is data
+                auto baseType = context.builder.makeTypename(*array->value);
+                auto arrayStructType = context.builder.makeVariableArrayType(*array->value);
+
+                auto sizePtr = context.ir->CreateStructGEP(arrayStructType, llvmValue, 0); // 0 is size
+                auto capacityPtr = context.ir->CreateStructGEP(arrayStructType, llvmValue, 1); // 1 is capacity
+                auto dataPtr = context.ir->CreateStructGEP(arrayStructType, llvmValue, 2); // 2 is data
 
                 assert(context.cache);
 
@@ -438,12 +476,14 @@ namespace kara::builder::ops::handlers::builtins {
 
                 switch (array->kind) {
                 case utils::ArrayKind::FixedSize: {
+                    auto valueType = context.builder.makeTypename(*array);
+
                     auto sizeType = llvm::Type::getInt64Ty(context.builder.context);
 
                     auto zero = llvm::ConstantInt::get(sizeType, 0);
 
                     size = llvm::ConstantInt::get(sizeType, array->size);
-                    parameter = context.ir->CreateGEP(ops::get(context, value), { zero, zero });
+                    parameter = context.ir->CreateGEP(valueType, ops::get(context, value), { zero, zero }); // ?
                     break;
                 }
 

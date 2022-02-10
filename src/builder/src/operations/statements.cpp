@@ -415,7 +415,8 @@ namespace kara::builder::ops::statements {
         if (context.ir) {
             llvm::IRBuilder<> exit(exitInfo.exitChainEnd);
 
-            auto value = exit.CreateLoad(exitInfo.exitChainType);
+            auto i8 = llvm::Type::getInt8Ty(context.builder.context);
+            auto value = exit.CreateLoad(i8, exitInfo.exitChainType);
 
             llvm::BasicBlock *pass = context.function->exitBlock;
 

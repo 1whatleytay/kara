@@ -381,7 +381,7 @@ namespace kara::builder::ops::matching {
 
                     auto fieldType = context.builder.resolveTypename(field->fixedType());
                     auto llvmValue = ops::get(context, ops::makeConvert(context, m, fieldType).value());
-                    auto llvmPtr = context.ir->CreateStructGEP(value, builderType->indices[field]);
+                    auto llvmPtr = context.ir->CreateStructGEP(builderType->type, value, builderType->indices[field]);
 
                     context.ir->CreateStore(llvmValue, llvmPtr);
                 }

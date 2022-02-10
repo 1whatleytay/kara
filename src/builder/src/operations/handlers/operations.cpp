@@ -479,9 +479,11 @@ namespace kara::builder::ops::handlers {
         auto llvmValue = ops::makeAlloca(context, resultType);
 
         if (context.ir) {
-            auto sizePtr = context.ir->CreateStructGEP(llvmValue, 0); // 0 is size
-            auto capacityPtr = context.ir->CreateStructGEP(llvmValue, 1); // 1 is capacity
-            auto dataPtr = context.ir->CreateStructGEP(llvmValue, 2); // 2 is data
+            auto arrayStructType = context.builder.makeVariableArrayType(*array->value);
+
+            auto sizePtr = context.ir->CreateStructGEP(arrayStructType, llvmValue, 0); // 0 is size
+            auto capacityPtr = context.ir->CreateStructGEP(arrayStructType, llvmValue, 1); // 1 is capacity
+            auto dataPtr = context.ir->CreateStructGEP(arrayStructType, llvmValue, 2); // 2 is data
 
             assert(context.cache);
 
@@ -495,7 +497,11 @@ namespace kara::builder::ops::handlers {
                 auto zero = llvm::ConstantInt::get(sizeType, 0);
 
                 size = llvm::ConstantInt::get(sizeType, array->size);
-                parameter = context.ir->CreateGEP(ops::get(context, value), { zero, zero });
+
+                auto sourceArrayType = context.builder.makeTypename(value.type);
+
+                parameter = context.ir->CreateGEP(sourceArrayType, ops::get(context, value), { zero, zero });
+
                 break;
             }
 
@@ -586,11 +592,11 @@ namespace kara::builder::ops::handlers {
         if (!(typeRef && resultRef && working()))
             return std::nullopt;
 
+        auto arraySourceType = context.builder.makeTypename(result.type);
+
         return builder::Result {
             builder::Result::FlagTemporary,
-            context.ir
-                ? context.ir->CreateStructGEP(ops::get(context, result), 0)
-                : nullptr,
+            context.ir ? context.ir->CreateStructGEP(arraySourceType, ops::get(context, result), 0) : nullptr,
             type,
             context.accumulator,
         };
@@ -628,7 +634,8 @@ namespace kara::builder::ops::handlers {
 
         if (context.ir) {
             value = ops::makeAlloca(context, type);
-            auto holdsPtr = context.ir->CreateStructGEP(value, 0);
+            auto llvmType = context.builder.makeTypename(type);
+            auto holdsPtr = context.ir->CreateStructGEP(llvmType, value, 0);
             context.ir->CreateStore(context.ir->getInt1(false), holdsPtr);
         }
 
@@ -662,11 +669,11 @@ namespace kara::builder::ops::handlers {
         if (!(optional && asPrimTo(type, utils::PrimitiveType::Bool)))
             return std::nullopt;
 
+        auto sourceType = context.builder.makeTypename(result.type);
+
         return builder::Result {
             builder::Result::FlagTemporary | builder::Result::FlagReference,
-            context.ir
-                ? context.ir->CreateStructGEP(ops::ref(context, result), 0)
-                : nullptr,
+            context.ir ? context.ir->CreateStructGEP(sourceType, ops::ref(context, result), 0) : nullptr,
             type,
             context.accumulator,
         };
@@ -689,8 +696,10 @@ namespace kara::builder::ops::handlers {
 
             value = ops::makeAlloca(context, type);
 
-            auto holdsPtr = context.ir->CreateStructGEP(value, 0);
-            auto valuePtr = context.ir->CreateStructGEP(value, 1);
+            auto llvmType = context.builder.makeTypename(type);
+
+            auto holdsPtr = context.ir->CreateStructGEP(llvmType, value, 0);
+            auto valuePtr = context.ir->CreateStructGEP(llvmType, value, 1);
 
             context.ir->CreateStore(context.ir->getInt1(true), holdsPtr);
             context.ir->CreateStore(ops::get(context, *converted), valuePtr);
@@ -892,10 +901,12 @@ namespace kara::builder::ops::handlers {
         if (!optional)
             return std::nullopt;
 
+        auto llvmType = context.builder.makeTypename(value.type);
+
         return builder::Result {
             builder::Result::FlagReference | (value.flags & builder::Result::FlagMutable),
             context.ir
-                ? context.ir->CreateStructGEP(ops::ref(context, value), 1)
+                ? context.ir->CreateStructGEP(llvmType, ops::ref(context, value), 1)
                 : nullptr,
             *optional->value,
             context.accumulator,
@@ -1080,13 +1091,17 @@ namespace kara::builder::ops::handlers {
             auto destType = context.builder.makeTypename(*optional->value);
             auto fallbackTemp = context.function->entry.CreateAlloca(destType, 0, nullptr, "fallback_temp");
 
+            auto boolType = llvm::Type::getInt1Ty(context.builder.context);
+            auto llvmType = context.builder.makeTypename(optionalValue.type);
+            auto elementType = context.builder.makeTypename(*optional->value);
+
             // before branching
             auto leftRef = ops::ref(context, optionalValue);
-            auto holds = context.ir->CreateLoad(context.ir->CreateStructGEP(leftRef, 0));
+            auto holds = context.ir->CreateLoad(boolType, context.ir->CreateStructGEP(llvmType, leftRef, 0));
             context.ir->CreateCondBr(holds, holdsTrue, holdsFalse);
 
             // true block
-            auto leftValue = trueBuilder.CreateLoad(trueBuilder.CreateStructGEP(leftRef, 1));
+            auto leftValue = trueBuilder.CreateLoad(elementType, trueBuilder.CreateStructGEP(llvmType, leftRef, 1));
             trueBuilder.CreateStore(leftValue, fallbackTemp);
             trueBuilder.CreateBr(next);
 
@@ -1102,7 +1117,7 @@ namespace kara::builder::ops::handlers {
             falseBuilder.CreateBr(next);
 
             context.ir->SetInsertPoint(next);
-            value = context.ir->CreateLoad(fallbackTemp);
+            value = context.ir->CreateLoad(destType, fallbackTemp);
 
             // short-circuit uh oh
         }
