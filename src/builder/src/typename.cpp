@@ -189,11 +189,18 @@ namespace kara::builder {
 
                 auto &paramIn = type.parameters;
 
-                std::vector<llvm::Type *> parameters(type.parameters.size());
-                std::transform(paramIn.begin(), paramIn.end(), parameters.begin(),
-                    [this](const auto &v) { return builder.makeTypename(v.second); });
+                std::vector<std::pair<std::string, llvm::Type *>> parameters(type.parameters.size());
 
-                auto functionType = llvm::FunctionType::get(builder.makeTypename(*type.returnType), parameters, false);
+                for (size_t a = 0; a < paramIn.size(); a++) {
+                    parameters[a] = { fmt::format("_{}", a), builder.makeTypename(paramIn[a].second) };
+                }
+
+                auto returnType = builder.makeTypename(*type.returnType);
+
+                auto formattedResult = builder.platform->formatArguments(builder.target, { returnType, parameters });
+
+                auto functionType = llvm::FunctionType::get(
+                    formattedResult.returnType, formattedResult.parameterTypes(), false);
 
                 return llvm::PointerType::get(functionType, 0);
             }

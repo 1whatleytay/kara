@@ -249,8 +249,11 @@ namespace kara::interfaces::header {
 
                 typeName = decl->getNameAsString();
 
+                if (typeName.empty())
+                    typeName = fmt::format("_HeaderGen{}", factory->id++);
+
                 auto typeAlias = std::make_unique<parser::Type>(factory->node, true);
-                typeAlias->name = decl->getNameAsString();
+                typeAlias->name = typeName;
                 typeAlias->isAlias = true;
 
                 auto primitive = std::make_unique<parser::PrimitiveTypename>(typeAlias.get(), true);

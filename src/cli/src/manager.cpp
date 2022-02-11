@@ -384,8 +384,13 @@ namespace kara::cli {
 
         result->module = std::move(base);
 
-        if (llvm::verifyModule(*result->module, &llvm::errs()))
+        if (llvm::verifyModule(*result->module, &llvm::errs())) {
+            fmt::print("Module IR:\n");
+            result->module->print(llvm::outs(), nullptr);
+            fmt::print("\n");
+
             throw std::runtime_error(fmt::format("Module for target {} failed to verify.", name));
+        }
 
         if (logHeader(LogSource::target)) {
             fmt::print("Writing ");

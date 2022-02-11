@@ -55,7 +55,6 @@ namespace kara::builder {
     }
 
     FormatArgumentsResult Platform::formatArguments(const Target &target, const FormatArgumentsPackage &package) {
-
         FormatArgumentsResult result = { package.returnType };
         result.parameters.reserve(package.parameters.size());
 
@@ -146,6 +145,9 @@ namespace kara::builder {
     std::optional<std::vector<llvm::Type *>> combineSysVLLVMTypes(
         const builder::Target &target, const std::vector<llvm::Type *> &types) {
         assert(!types.empty());
+
+        if (types.size() == 1)
+            return types;
 
         std::vector<llvm::Type *> result;
 
@@ -243,30 +245,36 @@ namespace kara::builder {
 
         // dropping attributes for now as well, seem like they aren't super important, maybe
 
-        auto sysVReturnTypes = getSysVLLVMTypes(target, package.returnType);
-
-        if (sysVReturnTypes) {
-            if (sysVReturnTypes->size() == 1) {
-                result.returnType = sysVReturnTypes->front();
-            } else {
-                result.returnType = llvm::StructType::get(*target.context, *sysVReturnTypes, false);
-            }
+        if (package.returnType->isVoidTy()) {
+            result.returnType = package.returnType;
         } else {
-            auto pointerType = llvm::PointerType::get(package.returnType, 0);
+            auto sysVReturnTypes = getSysVLLVMTypes(target, package.returnType);
 
-            // mark sret
+            if (sysVReturnTypes) {
+                if (sysVReturnTypes->size() == 1
+                    && sysVReturnTypes->front()->getTypeID() == package.returnType->getTypeID()) {
 
-            result.returnType = llvm::Type::getVoidTy(*target.context);
-            result.parameters.emplace_back(
-                "returnVal", pointerType, llvm::AttrBuilder().addStructRetAttr(package.returnType));
+                    result.returnType = package.returnType;
+                } else {
+                    result.returnType = llvm::StructType::get(*target.context, *sysVReturnTypes, false);
+                }
+            } else {
+                auto pointerType = llvm::PointerType::get(package.returnType, 0);
+
+                // mark sret
+
+                result.returnType = llvm::Type::getVoidTy(*target.context);
+                result.parameters.emplace_back(
+                    "returnVal", pointerType, llvm::AttrBuilder().addStructRetAttr(package.returnType));
+            }
         }
 
         for (const auto &[name, type] : package.parameters) {
             auto types = getSysVLLVMTypes(target, type);
 
             if (types) {
-                if (types->size() == 1) {
-                    result.parameters.emplace_back(name, types->front(), llvm::AttrBuilder());
+                if (types->size() == 1 && types->front()->getTypeID() == type->getTypeID()) {
+                    result.parameters.emplace_back(name, type, llvm::AttrBuilder());
                 } else {
                     for (size_t a = 0; a < types->size(); a++) {
                         result.parameters.emplace_back(fmt::format("{}_{}", name, a), (*types)[a], llvm::AttrBuilder());
@@ -291,19 +299,21 @@ namespace kara::builder {
 
         assert(context.function);
 
-        std::vector<llvm::Value *> formattedValues;
+        std::vector<std::pair<llvm::Value *, llvm::AttrBuilder>> formattedValues;
         formattedValues.reserve(values.size()); // at least
 
         // first process return type
         // alloca
         llvm::Value *sretPointer = nullptr;
-        auto sysVReturnTypes = getSysVLLVMTypes(context.builder.target, returnType);
+        if (!returnType->isVoidTy()) {
+            auto sysVReturnTypes = getSysVLLVMTypes(context.builder.target, returnType);
 
-        if (!sysVReturnTypes) {
-            // we have to worry about sret
+            if (!sysVReturnTypes) {
+                // we have to worry about sret
 
-            sretPointer = context.function->entry.CreateAlloca(returnType);
-            formattedValues.push_back(sretPointer); // lol
+                sretPointer = context.function->entry.CreateAlloca(returnType);
+                formattedValues.emplace_back(sretPointer, llvm::AttrBuilder().addStructRetAttr(returnType)); // lol
+            }
         }
 
         for (auto value : values) {
@@ -313,7 +323,7 @@ namespace kara::builder {
             if (sysVTypes) {
                 if (sysVTypes->size() == 1 && sysVTypes->front()->getTypeID() == baseType->getTypeID()) {
                     // no struct shenanigans
-                    formattedValues.push_back(value);
+                    formattedValues.emplace_back(value, llvm::AttrBuilder());
                 } else {
                     // struct shenanigans
 
@@ -348,7 +358,7 @@ namespace kara::builder {
                         auto pointer = context.ir->CreateStructGEP(sysVStruct, data, a);
                         auto pointerValue = context.ir->CreateLoad(sysVSubType, pointer);
 
-                        formattedValues.push_back(pointerValue);
+                        formattedValues.emplace_back(pointerValue, llvm::AttrBuilder());
                     }
                 }
             } else {
@@ -363,11 +373,25 @@ namespace kara::builder {
                 auto data = context.function->entry.CreateAlloca(baseType);
                 context.ir->CreateStore(value, data);
 
-                formattedValues.push_back(data); // ?
+                formattedValues.emplace_back(data, llvm::AttrBuilder().addByValAttr(baseType)); // ?
             }
         }
 
-        auto result = context.ir->CreateCall(function, formattedValues);
+        std::vector<llvm::Value *> callValues(formattedValues.size());
+        for (size_t a = 0; a < formattedValues.size(); a++)
+            callValues[a] = formattedValues[a].first;
+
+        auto result = context.ir->CreateCall(function, callValues);
+
+        for (size_t a = 0; a < formattedValues.size(); a++) {
+            const auto &builder = formattedValues[a].second;
+
+            auto set = llvm::AttributeSet::get(context.builder.context, builder);
+
+            for (const auto &attr : set) {
+                result->addParamAttr(a, attr);
+            }
+        }
 
         if (sretPointer) {
             return context.ir->CreateLoad(returnType, sretPointer);
@@ -392,12 +416,14 @@ namespace kara::builder {
         std::vector<llvm::Value *> formattedValues;
         formattedValues.reserve(argumentTypes.size());
 
-        auto returnSysVTypes = getSysVLLVMTypes(context.builder.target, returnType);
-
         size_t argumentIndex = 0;
 
-        if (!returnSysVTypes) // sret
-            argumentIndex++;
+        if (!returnType->isVoidTy()) {
+            auto returnSysVTypes = getSysVLLVMTypes(context.builder.target, returnType);
+
+            if (!returnSysVTypes) // sret
+                argumentIndex++;
+        }
 
         auto pop = [&arguments, &argumentIndex]() { return arguments[argumentIndex++]; };
 
@@ -456,7 +482,7 @@ namespace kara::builder {
         const std::vector<llvm::Argument *> &arguments) {
         assert(context.ir && context.function);
 
-        if (!value) {
+        if (!value || returnType->isVoidTy()) {
             context.ir->CreateRetVoid();
             return;
         }

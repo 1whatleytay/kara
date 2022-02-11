@@ -33,6 +33,9 @@ namespace kara::cli {
                 "CodeBlocks - Unix Makefiles",
             };
 
+            // TODO: adding them here too, just in case, will have to seperate in future
+            cmakeArguments.insert(cmakeArguments.end(), arguments.begin(), arguments.end());
+
             if (invokeCLI("cmake", cmakeArguments, packageBuild.string()))
                 throw std::runtime_error("Failed to build CMake project.");
 
@@ -194,10 +197,10 @@ namespace kara::cli {
                 targetInfo.name,
             };
 
-            if (!arguments.empty()) {
-                buildArguments.emplace_back("--");
-                buildArguments.insert(buildArguments.end(), arguments.begin(), arguments.end());
-            }
+//            if (!arguments.empty()) {
+//                buildArguments.emplace_back("--");
+//                buildArguments.insert(buildArguments.end(), arguments.begin(), arguments.end());
+//            }
 
             if (invokeCLI("cmake", buildArguments, packageBuild.string()))
                 throw std::runtime_error("Failed to build CMake project.");
@@ -290,6 +293,9 @@ namespace kara::cli {
             throw std::runtime_error("Cannot clone git repository.");
 
         PackageBuildResult result;
+
+        auto z = fs::path(package / "CMakeLists.txt").string();
+        auto ex = fs::exists(z);
 
         if (fs::exists(package / "project.yaml")) {
             result = build(package / "project.yaml", name, suggestTarget, arguments);
