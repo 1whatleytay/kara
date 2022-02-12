@@ -13,7 +13,11 @@ namespace kara::cli {
         auto config = TargetConfig::loadFromThrows(projectFile);
 
         // this will annoy someone
-        BuildLockFile lock(YAML::LoadFile(BuildLockFile::createPath(config.outputDirectory)));
+        BuildLockFile lock;
+        auto buildLockPath = BuildLockFile::createPath(config.outputDirectory);
+        if (fs::exists(buildLockPath))
+            lock = BuildLockFile(YAML::LoadFile(buildLockPath));
+
         auto platform = Platform::byNative(root, lock);
 
         PackageManager manager(*platform, config.packagesDirectory, root);

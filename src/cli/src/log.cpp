@@ -24,9 +24,11 @@ namespace kara::cli {
     }
 
     bool logHeader(const LogSource &source) {
-        fmt::print("[");
-        fmt::print(source.header, "{:<4}", source.name);
-        fmt::print("] ");
+        if (loggingEnabled) {
+            fmt::print("[");
+            fmt::print(source.header, "{:<4}", source.name);
+            fmt::print("] ");
+        }
 
         return loggingEnabled;
     }
