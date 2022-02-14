@@ -349,7 +349,7 @@ namespace kara::builder::ops::statements {
 
                     llvm::IRBuilder<> exitBuilder(exitInfo.exitChainBegin, exitInfo.exitChainBegin->begin());
 
-                    ops::makeDestroy(context.move(&exitBuilder), var->value, var->type);
+                    ops::makeDestroy(context.move(&exitBuilder), var->value, var->type); // ptr -> type ??
 
                     cache->variables[child->as<parser::Variable>()] = std::move(var);
 

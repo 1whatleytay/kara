@@ -245,11 +245,20 @@ namespace kara::builder::ops {
         return std::visit(visitor, result);
     }
 
-    const utils::Typename *findRealType(const utils::Typename &type) {
+    ParentChildTypePair findRealTypePair(const utils::Typename &type) {
+        const utils::Typename *parent = nullptr;
         const utils::Typename *subtype = &type;
 
-        while (auto *sub = std::get_if<utils::ReferenceTypename>(subtype))
+        while (auto *sub = std::get_if<utils::ReferenceTypename>(subtype)) {
+            parent = subtype;
             subtype = sub->value.get();
+        }
+
+        return { parent, subtype };
+    }
+
+    const utils::Typename *findRealType(const utils::Typename &type) {
+        auto [parent, subtype] = findRealTypePair(type);
 
         return subtype;
     }
@@ -266,9 +275,9 @@ namespace kara::builder::ops {
                 if (context.ir) {
                     auto valueType = context.builder.makeTypename(value.type);
                     value.value = context.ir->CreateLoad(valueType, value.value);
+                } else {
+                    value.value = nullptr;
                 }
-
-                value.value = nullptr;
             }
 
             value.type = *r->value;

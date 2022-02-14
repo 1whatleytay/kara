@@ -79,7 +79,7 @@ namespace kara::builder::ops::handlers {
         // :| might generate duplicate code here, but pretty sure it generated duplicate code in last system too
 
         // Set up to check if property exists, dereference if needed
-        auto subtype = ops::findRealType(value.type);
+        auto [parent, subtype] = ops::findRealTypePair(value.type);
 
         auto type = std::get_if<utils::NamedTypename>(subtype);
         if (!type)
@@ -104,9 +104,20 @@ namespace kara::builder::ops::handlers {
 
         auto structRef = ops::makeRealType(context, value);
 
+        uint32_t flags = builder::Result::FlagReference | (value.flags & (builder::Result::FlagTemporary));
+
+        if (parent) {
+            auto refType = std::get_if<utils::ReferenceTypename>(parent);
+            assert(refType);
+
+            if (refType->isMutable)
+                flags |= (builder::Result::FlagMutable);
+        } else {
+            flags |= (value.flags & (builder::Result::FlagMutable));
+        }
+
         return builder::Result {
-            (value.flags & (builder::Result::FlagMutable | builder::Result::FlagTemporary))
-                | builder::Result::FlagReference,
+            flags,
             context.ir ? context.ir->CreateStructGEP(builderType->type, ops::ref(context, structRef), index, node->name)
                        : nullptr,
             context.builder.resolveTypename(varNode->fixedType()),
@@ -223,11 +234,11 @@ namespace kara::builder::ops::handlers {
         if (!(reference && reference->kind == utils::ReferenceKind::Unique))
             return false;
 
-        auto elementType = context.builder.makeTypename(*reference->value);
+        auto pointerType = context.builder.makeTypename(*reference);
 
         auto freeFunc = context.builder.getFree();
         auto dataType = llvm::Type::getInt8PtrTy(context.builder.context);
-        auto value = context.ir->CreateLoad(elementType, ptr);
+        auto value = context.ir->CreateLoad(pointerType, ptr);
 
         auto pointer = context.ir->CreatePointerCast(value, dataType);
 

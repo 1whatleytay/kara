@@ -69,6 +69,9 @@ namespace kara::builder::ops {
     builder::Result makePass(const Context &context, const Result &result);
     builder::Result makeInfer(const Context &context, const Wrapped &result);
 
+    using ParentChildTypePair = std::pair<const utils::Typename *, const utils::Typename *>;
+
+    ParentChildTypePair findRealTypePair(const utils::Typename &result);
     const utils::Typename *findRealType(const utils::Typename &result);
     builder::Result makeRealType(const Context &context, const Result &result);
 

@@ -5,7 +5,7 @@ add_library(interfaces STATIC
     src/header.cpp)
 
 target_include_directories(interfaces PUBLIC include)
-target_link_libraries(interfaces PRIVATE clang-global fmt)
+target_link_libraries(interfaces PRIVATE clang-global llvm fmt)
 target_link_libraries(interfaces PUBLIC parser)
 
 add_executable(try interfaces.cpp)

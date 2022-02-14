@@ -11,11 +11,11 @@ namespace kara::builder::ops::handlers::builtins {
     bool named(const std::string &input, const std::string &required) { return input.empty() || input == required; }
 
     namespace arrays {
-        Maybe<builder::Result> size(const Context &context, const Parameters &parameters) {
-            auto input = ops::matching::flatten(parameters);
-
-            // name/size check
-            if (!(input.size() == 1 && named(input[0].first, "array")))
+        std::optional<std::tuple<builder::Result, const utils::ArrayTypename *>> popArray(
+            const ops::Context &context,
+            ops::matching::MatchInputFlattened &input,
+            size_t index = 0, const char *name = "array") {
+            if (!named(input[index].first, "array"))
                 return std::nullopt;
 
             auto &value = input[0].second;
@@ -25,6 +25,21 @@ namespace kara::builder::ops::handlers::builtins {
             auto array = std::get_if<utils::ArrayTypename>(subtype);
             if (!array)
                 return std::nullopt;
+
+            return std::make_tuple(ops::makeRealType(context, value), array);
+        }
+
+        Maybe<builder::Result> size(const Context &context, const Parameters &parameters) {
+            auto input = ops::matching::flatten(parameters);
+
+            if (input.size() != 1)
+                return std::nullopt;
+
+            auto arrayValue = popArray(context, input);
+            if (!arrayValue)
+                return std::nullopt;
+
+            auto [value, array] = *arrayValue;
 
             switch (array->kind) {
             case utils::ArrayKind::UnboundedSized: {
@@ -51,15 +66,12 @@ namespace kara::builder::ops::handlers::builtins {
                 throw;
 
             case utils::ArrayKind::VariableSize: {
-                auto real = makeRealType(context, value);
-                assert(std::holds_alternative<utils::ArrayTypename>(real.type));
-
                 auto arrayStructType = context.builder.makeVariableArrayType(*array->value);
 
                 // mutable should probably be turned off after
                 return builder::Result {
-                    builder::Result::FlagReference | (real.flags & builder::Result::FlagMutable),
-                    context.ir ? context.ir->CreateStructGEP(arrayStructType, ops::ref(context, real), 0) : nullptr,
+                    builder::Result::FlagReference | (value.flags & builder::Result::FlagMutable),
+                    context.ir ? context.ir->CreateStructGEP(arrayStructType, ops::ref(context, value), 0) : nullptr,
                     utils::PrimitiveTypename { utils::PrimitiveType::ULong },
                     context.accumulator,
                 };
@@ -73,26 +85,23 @@ namespace kara::builder::ops::handlers::builtins {
         Maybe<builder::Result> capacity(const Context &context, const Parameters &parameters) {
             auto input = ops::matching::flatten(parameters);
 
-            // name/size check
-            if (!(input.size() == 1 && named(input[0].first, "array")))
+            if (input.size() != 1)
                 return std::nullopt;
 
-            auto &value = input[0].second;
-
-            auto subtype = ops::findRealType(value.type);
-
-            auto array = std::get_if<utils::ArrayTypename>(subtype);
-            if (!(array && array->kind == utils::ArrayKind::VariableSize))
+            auto arrayValue = popArray(context, input);
+            if (!arrayValue)
                 return std::nullopt;
 
-            auto real = makeRealType(context, value);
-            assert(std::holds_alternative<utils::ArrayTypename>(real.type));
+            auto [value, array] = *arrayValue;
+
+            if (array->kind != utils::ArrayKind::VariableSize)
+                return std::nullopt;
 
             auto arrayStructType = context.builder.makeVariableArrayType(*array->value);
 
             return builder::Result {
-                builder::Result::FlagReference | (real.flags & builder::Result::FlagMutable),
-                context.ir ? context.ir->CreateStructGEP(arrayStructType, ops::ref(context, real), 1) : nullptr,
+                builder::Result::FlagReference | (value.flags & builder::Result::FlagMutable),
+                context.ir ? context.ir->CreateStructGEP(arrayStructType, ops::ref(context, value), 1) : nullptr,
                 utils::PrimitiveTypename { utils::PrimitiveType::ULong },
                 context.accumulator,
             };
@@ -101,29 +110,26 @@ namespace kara::builder::ops::handlers::builtins {
         Maybe<builder::Result> data(const Context &context, const Parameters &parameters) {
             auto input = ops::matching::flatten(parameters);
 
-            // name/size check
-            if (!(input.size() == 1 && named(input[0].first, "array")))
+            if (input.size() != 1)
                 return std::nullopt;
 
-            auto &value = input[0].second;
-
-            auto subtype = ops::findRealType(value.type);
-
-            auto array = std::get_if<utils::ArrayTypename>(subtype);
-            if (!(array && array->kind == utils::ArrayKind::VariableSize))
+            auto arrayValue = popArray(context, input);
+            if (!arrayValue)
                 return std::nullopt;
 
-            auto real = makeRealType(context, value);
-            assert(std::holds_alternative<utils::ArrayTypename>(real.type));
+            auto [value, array] = *arrayValue;
+
+            if (array->kind != utils::ArrayKind::VariableSize)
+                return std::nullopt;
 
             auto arrayStructType = context.builder.makeVariableArrayType(*array->value);
 
             return builder::Result {
-                builder::Result::FlagReference | (real.flags & builder::Result::FlagMutable),
-                context.ir ? context.ir->CreateStructGEP(arrayStructType, ops::ref(context, real), 2) : nullptr,
+                builder::Result::FlagReference | (value.flags & builder::Result::FlagMutable),
+                context.ir ? context.ir->CreateStructGEP(arrayStructType, ops::ref(context, value), 2) : nullptr,
                 utils::ReferenceTypename {
                     array->value,
-                    real.isSet(builder::Result::FlagMutable),
+                    value.isSet(builder::Result::FlagMutable),
                     utils::ReferenceKind::Regular,
                 },
                 context.accumulator,
@@ -133,24 +139,24 @@ namespace kara::builder::ops::handlers::builtins {
         Maybe<builder::Result> resize(const Context &context, const Parameters &parameters) {
             auto input = ops::matching::flatten(parameters);
 
-            // name/size check
-            if (!(input.size() == 2 && named(input[0].first, "array") && named(input[1].first, "size")))
+            if (input.size() != 2)
                 return std::nullopt;
 
-            auto &value = input[0].second;
-            auto &second = input[1].second;
-
-            auto subtype = ops::findRealType(value.type);
-
-            auto array = std::get_if<utils::ArrayTypename>(subtype);
-            if (!(array && array->kind == utils::ArrayKind::VariableSize))
+            auto arrayValue = popArray(context, input);
+            if (!arrayValue)
                 return std::nullopt;
 
-            auto arrayResult = ops::makeRealType(context, value);
+            auto [value, array] = *arrayValue;
+
+            if (!named(input[1].first, "size"))
+                return std::nullopt;
+
+            if (array->kind != utils::ArrayKind::VariableSize)
+                return std::nullopt;
 
             auto ulongTypename = utils::PrimitiveTypename { utils::PrimitiveType::ULong };
 
-            auto converted = ops::makeConvert(context, second, ulongTypename);
+            auto converted = ops::makeConvert(context, input[1].second, ulongTypename);
             if (!converted)
                 die("Size parameter must be converted to ulong.");
 
@@ -159,7 +165,7 @@ namespace kara::builder::ops::handlers::builtins {
             if (context.ir) {
                 auto reallocFunc = context.builder.getRealloc();
 
-                auto ptr = ops::ref(context, arrayResult);
+                auto ptr = ops::ref(context, value);
 
                 auto baseType = context.builder.makeTypename(*array->value);
                 auto arrayStructType = context.builder.makeVariableArrayType(*array->value);
@@ -208,24 +214,24 @@ namespace kara::builder::ops::handlers::builtins {
         Maybe<builder::Result> reserve(const Context &context, const Parameters &parameters) {
             auto input = ops::matching::flatten(parameters);
 
-            // name/size check
-            if (!(input.size() == 2 && named(input[0].first, "array") && named(input[1].first, "size")))
+            if (input.size() != 2)
                 return std::nullopt;
 
-            auto &value = input[0].second;
-            auto &second = input[1].second;
-
-            auto subtype = ops::findRealType(value.type);
-
-            auto array = std::get_if<utils::ArrayTypename>(subtype);
-            if (!(array && array->kind == utils::ArrayKind::VariableSize))
+            auto arrayValue = popArray(context, input);
+            if (!arrayValue)
                 return std::nullopt;
 
-            auto arrayResult = ops::makeRealType(context, value);
+            auto [value, array] = *arrayValue;
+
+            if (!named(input[1].first, "size"))
+                return std::nullopt;
+
+            if (array->kind != utils::ArrayKind::VariableSize)
+                return std::nullopt;
 
             auto ulongTypename = utils::PrimitiveTypename { utils::PrimitiveType::ULong };
 
-            auto converted = ops::makeConvert(context, second, ulongTypename);
+            auto converted = ops::makeConvert(context, input[1].second, ulongTypename);
             if (!converted)
                 die("Size parameter must be converted to ulong.");
 
@@ -237,7 +243,7 @@ namespace kara::builder::ops::handlers::builtins {
                 auto baseType = context.builder.makeTypename(*array->value);
                 auto arrayStructType = context.builder.makeVariableArrayType(*array->value);
 
-                auto ptr = ops::ref(context, arrayResult);
+                auto ptr = ops::ref(context, value);
 
                 auto sizePtr = context.ir->CreateStructGEP(arrayStructType, ptr, 0); // 0 is size
                 auto capacityPtr = context.ir->CreateStructGEP(arrayStructType, ptr, 1); // 1 is capacity
@@ -289,31 +295,31 @@ namespace kara::builder::ops::handlers::builtins {
         Maybe<builder::Result> add(const Context &context, const Parameters &parameters) {
             auto input = ops::matching::flatten(parameters);
 
-            // name/size check
-            if (!(input.size() == 2 && named(input[0].first, "array") && named(input[1].first, "value")))
+            if (input.size() != 2)
                 return std::nullopt;
 
-            auto &value = input[0].second;
-            auto &second = input[1].second;
-
-            auto subtype = ops::findRealType(value.type);
-
-            auto array = std::get_if<utils::ArrayTypename>(subtype);
-            if (!(array && array->kind == utils::ArrayKind::VariableSize))
+            auto arrayValue = popArray(context, input);
+            if (!arrayValue)
                 return std::nullopt;
 
-            auto arrayResult = ops::makeRealType(context, value);
+            auto [value, array] = *arrayValue;
 
-            auto converted = ops::makeConvert(context, second, *array->value);
+            if (!named(input[1].first, "value"))
+                return std::nullopt;
+
+            if (array->kind != utils::ArrayKind::VariableSize)
+                return std::nullopt;
+
+            auto converted = ops::makeConvert(context, input[1].second, *array->value);
             if (!converted)
-                die("Value parameter must be converted to {}.", toString(*array->value));
+                die("Size parameter must be converted to ulong.");
 
             auto &toInsert = *converted;
 
             if (context.ir) {
                 auto reallocFunc = context.builder.getRealloc();
 
-                auto ptr = ops::ref(context, arrayResult);
+                auto ptr = ops::ref(context, value);
 
                 auto baseType = context.builder.makeTypename(*array->value);
                 auto arrayStructType = context.builder.makeVariableArrayType(*array->value);
@@ -370,25 +376,22 @@ namespace kara::builder::ops::handlers::builtins {
         Maybe<builder::Result> clear(const Context &context, const Parameters &parameters) {
             auto input = ops::matching::flatten(parameters);
 
-            // name/size check
-            if (!(input.size() == 1 && named(input[0].first, "array")))
+            if (input.size() != 1)
                 return std::nullopt;
 
-            auto &value = input[0].second;
-
-            auto subtype = ops::findRealType(value.type);
-
-            auto array = std::get_if<utils::ArrayTypename>(subtype);
-            if (!(array && array->kind == utils::ArrayKind::VariableSize))
+            auto arrayValue = popArray(context, input);
+            if (!arrayValue)
                 return std::nullopt;
 
-            auto real = makeRealType(context, value);
-            assert(std::holds_alternative<utils::ArrayTypename>(real.type));
+            auto [value, array] = *arrayValue;
+
+            if (array->kind != utils::ArrayKind::VariableSize)
+                return std::nullopt;
 
             if (context.ir) {
                 auto freeFunc = context.builder.getFree();
 
-                auto ptr = ops::ref(context, real);
+                auto ptr = ops::ref(context, value);
 
                 auto baseType = context.builder.makeTypename(*array->value);
                 auto arrayStructType = context.builder.makeVariableArrayType(*array->value);
