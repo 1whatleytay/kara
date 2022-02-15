@@ -51,6 +51,9 @@ namespace kara::builder::ops::handlers::builtins {
 
         Maybe<builder::Result> array(const Context &context, const Parameters &parameters);
 
+        Maybe<builder::Result> first(const Context &context, const Parameters &parameters);
+        Maybe<builder::Result> last(const Context &context, const Parameters &parameters);
+
         constexpr std::array functions = {
             std::make_pair("size", size),
             std::make_pair("capacity", capacity),
@@ -60,11 +63,21 @@ namespace kara::builder::ops::handlers::builtins {
             std::make_pair("add", add),
             std::make_pair("clear", clear),
             std::make_pair("array", array),
+            std::make_pair("first", first),
+            std::make_pair("last", last),
+        };
+    }
+
+    namespace misc {
+        Maybe<builder::Result> byteSize(const Context &context, const Parameters &parameters);
+
+        constexpr std::array functions = {
+            std::make_pair("sizeof", byteSize),
         };
     }
 
     // sorry, no flattening...
-    constexpr auto functions = utility::concat(arrays::functions);
+    constexpr auto functions = utility::concat(arrays::functions, misc::functions);
 
     std::vector<BuiltinFunction> matching(const std::string &name);
 }

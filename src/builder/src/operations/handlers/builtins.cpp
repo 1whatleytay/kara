@@ -518,6 +518,109 @@ namespace kara::builder::ops::handlers::builtins {
                 nullptr,
             };
         }
+
+        Maybe<builder::Result> first(const Context &context, const Parameters &parameters) {
+            auto input = ops::matching::flatten(parameters);
+
+            if (input.size() != 1)
+                return std::nullopt;
+
+            auto arrayValue = popArray(context, input);
+            if (!arrayValue)
+                return std::nullopt;
+
+            auto [value, array] = *arrayValue;
+
+            auto zero = llvm::ConstantInt::get(llvm::Type::getInt64Ty(context.builder.context), 0);
+
+            return ops::modifiers::makeIndexRaw(context, value, zero);
+        }
+
+        Maybe<builder::Result> last(const Context &context, const Parameters &parameters) {
+            auto input = ops::matching::flatten(parameters);
+
+            if (input.size() != 1)
+                return std::nullopt;
+
+            auto arrayValue = popArray(context, input);
+            if (!arrayValue)
+                return std::nullopt;
+
+            auto [value, array] = *arrayValue;
+
+            switch (array->kind) {
+            case utils::ArrayKind::UnboundedSized: {
+                auto expression = array->expression;
+
+                if (!context.cache)
+                    die("Cache required to size field on array.");
+
+                auto cached = context.cache->find(&Cache::expressions, expression);
+
+                if (!cached)
+                    die("Attempting to access size of {} but size has not yet been calculated.", toString(value.type));
+
+                auto index = ops::get(context, *cached);
+
+                if (context.ir) {
+                    auto one = llvm::ConstantInt::get(llvm::Type::getInt64Ty(context.builder.context), 1);
+
+                    index = context.ir->CreateSub(index, one);
+                }
+
+                return ops::modifiers::makeIndexRaw(context, value, index);
+            }
+
+            case utils::ArrayKind::FixedSize: {
+                auto index = llvm::ConstantInt::get(llvm::Type::getInt64Ty(context.builder.context), array->size - 1);
+
+                return ops::modifiers::makeIndexRaw(context, value, index);
+            }
+
+            case utils::ArrayKind::Unbounded:
+                return std::nullopt; // let UFCS maybe take action
+
+            case utils::ArrayKind::Iterable:
+                throw;
+
+            case utils::ArrayKind::VariableSize: {
+                auto arrayStructType = context.builder.makeVariableArrayType(*array->value);
+
+                llvm::Value *index = nullptr;
+
+                if (context.ir) {
+                    auto i64 = llvm::Type::getInt64Ty(context.builder.context);
+                    auto sizePtr = context.ir->CreateStructGEP(arrayStructType, ops::ref(context, value), 0);
+                    auto size = context.ir->CreateLoad(i64, sizePtr);
+
+                    auto one = llvm::ConstantInt::get(llvm::Type::getInt64Ty(context.builder.context), 1);
+
+                    index = context.ir->CreateSub(size, one);
+                }
+
+                return ops::modifiers::makeIndexRaw(context, value, index);
+            }
+
+            default:
+                throw;
+            }
+        }
+    }
+
+    namespace misc {
+        Maybe<builder::Result> byteSize(const Context &context, const Parameters &parameters) {
+            auto input = ops::matching::flatten(parameters);
+
+            if (!named(input[0].first, "value"))
+                return std::nullopt;
+
+            auto &value = input[0].second;
+
+            auto llvmType = context.builder.makeTypename(value.type);
+            auto byteSize = context.builder.target.layout->getTypeAllocSize(llvmType);
+
+            return ops::nouns::makeNumber(context, static_cast<uint64_t>(byteSize));
+        }
     }
 
     std::vector<BuiltinFunction> matching(const std::string &name) {

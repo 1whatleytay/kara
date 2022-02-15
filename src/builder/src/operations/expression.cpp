@@ -85,6 +85,54 @@ namespace kara::builder::ops::modifiers {
         }
     }
 
+    builder::Result makeIndexRaw(const Context &context, const builder::Result &sub, llvm::Value *index) {
+        const utils::ArrayTypename *arrayType = std::get_if<utils::ArrayTypename>(&sub.type);
+
+        if (!arrayType)
+            throw;
+
+        auto indexArray = [&]() -> llvm::Value * {
+            if (!context.ir)
+                return nullptr;
+
+            auto baseType = context.builder.makeTypename(sub.type);
+
+            switch (arrayType->kind) {
+            case utils::ArrayKind::FixedSize: {
+                auto zero = llvm::ConstantInt::get(llvm::Type::getInt64Ty(context.builder.context), 0);
+
+                return context.ir->CreateGEP(baseType, ops::ref(context, sub), { zero, index });
+            }
+
+            case utils::ArrayKind::Unbounded:
+            case utils::ArrayKind::UnboundedSized: // TODO: no good for stack
+                // allocated arrays
+                return context.ir->CreateGEP(baseType, ops::ref(context, sub), index);
+
+            case utils::ArrayKind::VariableSize: {
+                auto dataPtr = context.ir->CreateStructGEP(baseType, ops::ref(context, sub), 2); // data is at 2
+
+                auto elementPointer = context.builder.makeTypename(*arrayType->value);
+                auto pointerToElementPointer = llvm::PointerType::get(elementPointer, 0);
+
+                return context.ir->CreateGEP(
+                    elementPointer, context.ir->CreateLoad(pointerToElementPointer, dataPtr), index);
+            }
+
+            default:
+                throw;
+            }
+        };
+
+        return builder::Result {
+            (sub.flags & (builder::Result::FlagMutable | builder::Result::FlagTemporary))
+                | builder::Result::FlagReference,
+            indexArray(),
+            *arrayType->value,
+            context.accumulator,
+        };
+    }
+
     builder::Wrapped makeIndex(const Context &context, const builder::Wrapped &value, const parser::Index *node) {
         builder::Result sub = ops::makeRealType(context, ops::makeInfer(context, value));
 
@@ -110,46 +158,7 @@ namespace kara::builder::ops::modifiers {
 
         index = indexConverted.value();
 
-        auto indexArray = [&]() -> llvm::Value * {
-            if (!context.ir)
-                return nullptr;
-
-            auto baseType = context.builder.makeTypename(sub.type);
-
-            switch (arrayType->kind) {
-            case utils::ArrayKind::FixedSize: {
-                auto zero = llvm::ConstantInt::get(llvm::Type::getInt64Ty(context.builder.context), 0);
-
-                return context.ir->CreateGEP(baseType, ops::ref(context, sub), { zero, ops::get(context, index) });
-            }
-
-            case utils::ArrayKind::Unbounded:
-            case utils::ArrayKind::UnboundedSized: // TODO: no good for stack
-                // allocated arrays
-                return context.ir->CreateGEP(baseType, ops::ref(context, sub), ops::get(context, index));
-
-            case utils::ArrayKind::VariableSize: {
-                auto dataPtr = context.ir->CreateStructGEP(baseType, ops::ref(context, sub), 2); // data is at 2
-
-                auto elementPointer = context.builder.makeTypename(*arrayType->value);
-                auto pointerToElementPointer = llvm::PointerType::get(elementPointer, 0);
-
-                return context.ir->CreateGEP(
-                    elementPointer, context.ir->CreateLoad(pointerToElementPointer, dataPtr), ops::get(context, index));
-            }
-
-            default:
-                throw;
-            }
-        };
-
-        return builder::Result {
-            (sub.flags & (builder::Result::FlagMutable | builder::Result::FlagTemporary))
-                | builder::Result::FlagReference,
-            indexArray(),
-            *arrayType->value,
-            context.accumulator,
-        };
+        return makeIndexRaw(context, sub, ops::get(context, index));
     }
 
     builder::Wrapped makeTernary(const Context &context, const builder::Result &value, const parser::Ternary *node) {

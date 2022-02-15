@@ -127,6 +127,8 @@ namespace kara::builder::ops {
     }
 
     namespace modifiers {
+        builder::Result makeIndexRaw(const Context &context, const builder::Result &sub, llvm::Value *index);
+
         builder::Wrapped makeCall(const Context &context, const builder::Wrapped &value, const parser::Call *node);
         builder::Wrapped makeDot(const Context &context, const builder::Wrapped &value, const parser::Dot *node);
         builder::Wrapped makeIndex(const Context &context, const builder::Wrapped &value, const parser::Index *node);
