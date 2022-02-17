@@ -19,6 +19,7 @@ namespace kara::utils {
         Negative,
         Reference,
         Fetch,
+        Move,
     };
 
     enum class BinaryOperation {

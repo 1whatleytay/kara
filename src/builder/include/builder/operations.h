@@ -104,6 +104,8 @@ namespace kara::builder::ops {
         builder::Result makeNegative(const Context &context, const builder::Result &value);
         builder::Result makeReference(const Context &context, const builder::Wrapped &value);
         builder::Result makeDereference(const Context &context, const builder::Wrapped &value);
+
+        builder::Result makeMove(const Context &context, const builder::Wrapped &value);
     }
 
     namespace binary {

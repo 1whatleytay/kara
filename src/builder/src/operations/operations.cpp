@@ -214,6 +214,22 @@ namespace kara::builder::ops {
 
             return die(result, "Cannot dereference value of non reference.");
         }
+
+        builder::Result makeMove(const Context &context, const builder::Wrapped &value) {
+            auto infer = ops::makeInfer(context, value);
+
+            if (infer.isSet(builder::Result::FlagTemporary))
+                return infer;
+
+            auto result = handlers::resolve(
+                std::array {
+                    handlers::makeMoveWithUnique,
+                    handlers::makeMoveWithVariableArray,
+                },
+                context, infer);
+
+            return die(result, "Cannot move value of type {}.", toString(infer.type));
+        }
     }
 
     namespace binary {

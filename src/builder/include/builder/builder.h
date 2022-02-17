@@ -73,7 +73,7 @@ namespace kara::builder {
         enum Flags : uint32_t {
             FlagTemporary = 1u << 0u,
             FlagMutable = 1u << 1u,
-            FlagReference = 1u << 2u,
+            FlagReference = 1u << 2u, // !temporary & reference = variable?
             FlagExplicit = 1u << 3u,
         };
 

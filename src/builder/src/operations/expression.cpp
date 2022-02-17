@@ -349,6 +349,9 @@ namespace kara::builder::ops::expression {
         case utils::UnaryOperation::Fetch:
             return ops::blame(node, ops::unary::makeDereference, context, wrapped);
 
+        case utils::UnaryOperation::Move:
+            return ops::blame(node, ops::unary::makeMove, context, wrapped);
+
         default:
             throw;
         }

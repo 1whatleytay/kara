@@ -126,12 +126,30 @@ namespace kara::parser {
 
     Unary::Unary(Node *parent)
         : Node(parent, Kind::Unary) {
-        op = select<utils::UnaryOperation>({
-            { "!", utils::UnaryOperation::Not },
-            { "-", utils::UnaryOperation::Negative },
-            { "&", utils::UnaryOperation::Reference },
-            { "@", utils::UnaryOperation::Fetch },
-        });
+        auto temp = maybe<utils::UnaryOperation>(
+            {
+                { "!", utils::UnaryOperation::Not },
+                { "-", utils::UnaryOperation::Negative },
+                { "&", utils::UnaryOperation::Reference },
+                { "@", utils::UnaryOperation::Fetch },
+            }, false);
+
+        if (temp) {
+            op = *temp;
+            return;
+        }
+
+        temp = maybe<utils::UnaryOperation>(
+            {
+                { "move", utils::UnaryOperation::Move },
+            }, true);
+
+        if (temp) {
+            op = *temp;
+            return;
+        }
+
+        error("Expected unary operation.");
     }
 
     Operator::Operator(Node *parent)

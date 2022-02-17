@@ -100,6 +100,8 @@ namespace kara::builder::ops::handlers {
     Maybe<builder::Result> makeReferenceWithFunction(const Context &context, const builder::Wrapped &value);
     Maybe<builder::Result> makeDereferenceWithReference(const Context &context, const builder::Result &value);
     Maybe<builder::Result> makeDereferenceWithOptional(const Context &context, const builder::Result &value);
+    Maybe<builder::Result> makeMoveWithUnique(const Context &context, const builder::Result &value);
+    Maybe<builder::Result> makeMoveWithVariableArray(const Context &context, const builder::Result &value);
 
     Maybe<builder::Result> makeAddNumber(
         const Context &context, const builder::Result &left, const builder::Result &right);

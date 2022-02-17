@@ -145,12 +145,30 @@ namespace kara::builder::ops {
 
     // remove from statement scope or call move operator
     builder::Result makePass(const Context &context, const Result &result) {
+        auto array = std::get_if<utils::ArrayTypename>(&result.type);
         auto reference = std::get_if<utils::ReferenceTypename>(&result.type);
 
+        auto isTemporary = result.isSet(builder::Result::FlagTemporary);
         auto isRegularReference = reference && reference->kind == utils::ReferenceKind::Regular;
 
-        if (context.accumulator && !isRegularReference) {
-            context.accumulator->avoidDestroy.insert(result.uid);
+        if (isTemporary) {
+            if (context.accumulator && !isRegularReference) {
+                context.accumulator->avoidDestroy.insert(result.uid);
+            }
+        } else {
+            if (reference && !isRegularReference) { // unique or shared and not temporary
+                throw std::runtime_error(fmt::format(
+                    "Passing non-temporary of type {} is prohibited. May require a move or copy.",
+                    toString(result.type)));
+            }
+
+            if (array && array->kind == utils::ArrayKind::VariableSize) {
+                throw std::runtime_error(fmt::format(
+                    "Passing non-temporary of type {} is prohibited. May require a move or copy.",
+                    toString(result.type)));
+            }
+
+            // TODO: copy?
         }
 
         return result;

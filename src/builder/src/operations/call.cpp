@@ -240,10 +240,7 @@ namespace kara::builder::ops::matching {
         if (picks.empty()) {
             auto copy = input;
 
-            // please...
-            for (auto &parameter : copy.parameters)
-                parameter = ops::makePass(context, parameter);
-
+            // builtins can handle raw form, no make convert yet
             for (const auto &builtin : builtins) {
                 auto r = builtin(context, copy);
 
@@ -251,6 +248,9 @@ namespace kara::builder::ops::matching {
                 if (r)
                     return *r;
             }
+
+            for (auto &parameter : copy.parameters)
+                parameter = ops::makePass(context, parameter); // TODO: this will be a problem later with make convert
 
             std::vector<std::string> errors;
 

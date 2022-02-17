@@ -896,6 +896,84 @@ namespace kara::builder::ops::handlers {
         };
     }
 
+    Maybe<builder::Result> makeMoveWithUnique(const Context &context, const builder::Result &value) {
+        // not temporary
+
+        // going to forget about make real, assume type is raw like variable
+
+        // must be reference + mutable
+        if (!value.isSet(builder::Result::FlagReference) || !value.isSet(builder::Result::FlagMutable))
+            return std::nullopt;
+
+        auto ref = std::get_if<utils::ReferenceTypename>(&value.type);
+
+        if (!ref || ref->kind != utils::ReferenceKind::Unique)
+            return std::nullopt;
+
+        auto elementType = context.builder.makeTypename(*ref->value);
+        auto pointerType = llvm::PointerType::get(elementType, 0);
+        auto nullValue = llvm::ConstantPointerNull::get(pointerType);
+
+        llvm::Value *movedValue = nullptr;
+
+        if (context.ir) {
+            movedValue = context.ir->CreateLoad(pointerType, value.value);
+            context.ir->CreateStore(nullValue, value.value);
+        }
+
+        return builder::Result {
+            builder::Result::FlagTemporary,
+            movedValue,
+            value.type,
+            context.accumulator,
+        };
+    }
+
+    Maybe<builder::Result> makeMoveWithVariableArray(const Context &context, const builder::Result &value) {
+        // not temporary
+
+        // going to forget about make real, assume type is raw like variable
+
+        // must be reference + mutable
+        if (!value.isSet(builder::Result::FlagReference) || !value.isSet(builder::Result::FlagMutable))
+            return std::nullopt;
+
+        auto array = std::get_if<utils::ArrayTypename>(&value.type);
+
+        if (!array || array->kind != utils::ArrayKind::VariableSize)
+            return std::nullopt;
+
+        auto arrayStructType = context.builder.makeVariableArrayType(*array->value);
+
+        llvm::Value *movedValue = nullptr;
+
+        if (context.ir) {
+            movedValue = context.ir->CreateLoad(arrayStructType, value.value);
+
+            auto i64 = context.ir->getInt64Ty();
+            auto zero = llvm::ConstantInt::get(i64, 0);
+
+            auto sizePtr = context.ir->CreateStructGEP(arrayStructType, value.value, 0);
+            auto capacityPtr = context.ir->CreateStructGEP(arrayStructType, value.value, 1);
+            auto dataPtr = context.ir->CreateStructGEP(arrayStructType, value.value, 2);
+
+            auto elementType = context.builder.makeTypename(*array->value);
+            auto pointerType = llvm::PointerType::get(elementType, 0);
+            auto nullValue = llvm::ConstantPointerNull::get(pointerType);
+
+            context.ir->CreateStore(zero, sizePtr);
+            context.ir->CreateStore(zero, capacityPtr);
+            context.ir->CreateStore(nullValue, dataPtr);
+        }
+
+        return builder::Result {
+            builder::Result::FlagTemporary,
+            movedValue,
+            value.type,
+            context.accumulator,
+        };
+    }
+
     Maybe<builder::Result> makeAddNumber(
         const Context &context, const builder::Result &left, const builder::Result &right) {
         return handlerNumberToNumberBase(context, left, right, [](auto &ir, auto a, auto b, auto &prim) {
