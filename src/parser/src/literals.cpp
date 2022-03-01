@@ -125,6 +125,7 @@ namespace kara::parser {
             Tab,
             DollarSign,
             Null,
+            Carriage,
             SingleQuote,
             DoubleQuote,
             Backslash,
@@ -139,6 +140,7 @@ namespace kara::parser {
 
         hermes::SelectMap<SpecialChars> specialCharsMap = {
             { "n", SpecialChars::NewLine },
+            { "r", SpecialChars::Carriage },
             { "t", SpecialChars::Tab },
             { "$", SpecialChars::DollarSign },
             { "0", SpecialChars::Null },
@@ -180,6 +182,9 @@ namespace kara::parser {
                     break;
                 case SpecialChars::Null:
                     stream << '\0';
+                    break;
+                case SpecialChars::Carriage:
+                    stream << '\r';
                     break;
                 case SpecialChars::SingleQuote:
                     stream << '\'';

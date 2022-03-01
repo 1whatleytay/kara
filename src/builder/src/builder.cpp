@@ -5,6 +5,7 @@
 #include <builder/manager.h>
 #include <builder/platform.h>
 
+#include <cstdlib>
 #include <parser/expression.h>
 #include <parser/function.h>
 #include <parser/type.h>
@@ -73,6 +74,11 @@ namespace kara::builder {
     }
 
     llvm::Function *Builder::getMalloc() {
+        auto existing = module->getFunction("malloc");
+
+        if (existing)
+            return existing;
+
         if (!mallocCache) {
             auto type = llvm::FunctionType::get(
                 llvm::Type::getInt8PtrTy(context), { llvm::Type::getInt64Ty(context) }, false);
@@ -85,6 +91,11 @@ namespace kara::builder {
     }
 
     llvm::Function *Builder::getFree() {
+        auto existing = module->getFunction("free");
+
+        if (existing)
+            return existing;
+
         if (!freeCache) {
             auto type
                 = llvm::FunctionType::get(llvm::Type::getVoidTy(context), { llvm::Type::getInt8PtrTy(context) }, false);
@@ -97,6 +108,12 @@ namespace kara::builder {
     }
 
     llvm::Function *Builder::getRealloc() {
+        // needs naming handled by builder
+        auto existing = module->getFunction("realloc");
+
+        if (existing)
+            return existing;
+
         if (!reallocCache) {
             auto type = llvm::FunctionType::get(llvm::Type::getInt8PtrTy(context),
                 { llvm::Type::getInt8PtrTy(context), llvm::Type::getInt64Ty(context) }, false);

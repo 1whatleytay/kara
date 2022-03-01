@@ -1,3 +1,4 @@
+#include "fmt/core.h"
 #include <builder/operations.h>
 
 #include <builder/handlers.h>
@@ -5,6 +6,7 @@
 #include <fmt/format.h>
 
 #include <cassert>
+#include <variant>
 
 namespace kara::builder::ops {
     namespace nouns {
@@ -220,6 +222,11 @@ namespace kara::builder::ops {
 
             if (infer.isSet(builder::Result::FlagTemporary))
                 return infer;
+
+            if (!infer.isSet(builder::Result::FlagReference)
+                || !infer.isSet(builder::Result::FlagMutable)) {
+                throw std::runtime_error("Move requires that the parameter is a mutable variable.");
+            }
 
             auto result = handlers::resolve(
                 std::array {

@@ -460,8 +460,13 @@ namespace kara::cli {
             arguments.insert(arguments.end(), linkOpts.begin(), linkOpts.end());
 
             auto linkerResult = invokeLinker(linkerType, arguments);
-            if (!linkerResult.empty())
+            if (!linkerResult.empty()) {
+                fmt::print("Module IR:\n");
+                result->module->print(llvm::outs(), nullptr);
+                fmt::print("\n");
+
                 throw std::runtime_error(linkerResult);
+            }
         }
 
         log(LogSource::targetDone, "Built target {}", name);
