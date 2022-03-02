@@ -180,8 +180,13 @@ namespace kara::cli {
             };
 
             emitter << YAML::Key << nameFromKind(*kind) << YAML::Value << path;
-            emitter << YAML::Key << "targets" << YAML::Value << targets;
-            emitter << YAML::Key << "build-arguments" << YAML::Value << buildArguments;
+
+            if (!targets.empty())
+                emitter << YAML::Key << "targets" << YAML::Value << targets;
+
+            if (!buildArguments.empty())
+                emitter << YAML::Key << "build-arguments" << YAML::Value << buildArguments;
+
             options.serializeInline(emitter);
 
             emitter << YAML::EndMap;
@@ -369,23 +374,6 @@ namespace kara::cli {
         }
 
         options = TargetOptions(node);
-
-        //        if (auto value = node["packages"]) {
-        //            for (const auto &pair : value) {
-        //                auto path = pair.first.as<std::string>();
-        //                auto toImport = pair.second.as<std::vector<std::string>>();
-        //
-        //                packages[path] = toImport;
-        //            }
-        //        }
-
-        // you have to ask pm to do this now
-        //        for (const auto &part : import) {
-        //            auto path = fs::path(part);
-        //            auto newPath = path.is_absolute() ? path : this->root.parent_path() / path;
-        //
-        //            configs.push_back(TargetConfig::loadFromThrows(newPath.string()));
-        //        }
     }
 
     std::optional<TargetConfig> TargetConfig::loadFrom(const std::string &path) {
