@@ -12,6 +12,7 @@
 #include <cassert>
 
 namespace kara::builder {
+    // creating global variable
     Variable::Variable(const parser::Variable *node, builder::Builder &builder)
         : node(node) {
         if (node->isMutable && !builder.options.mutableGlobals)
@@ -70,6 +71,7 @@ namespace kara::builder {
             node->isExternal ? L::ExternalLinkage : L::WeakAnyLinkage, defaultValue, node->name);
     }
 
+    // creating local variable
     Variable::Variable(const parser::Variable *node, const ops::Context &context)
         : node(node) {
         assert(context.function);
@@ -84,7 +86,7 @@ namespace kara::builder {
             if (node->hasFixedType) {
                 auto fixedType = context.function->builder.resolveTypename(node->fixedType());
 
-                std::optional<builder::Result> resultConverted = ops::makeConvert(context, result, fixedType);
+                auto resultConverted = ops::makeConvert(context, result, fixedType);
 
                 if (!resultConverted) {
                     throw VerifyError(node->value(), "Cannot convert from type {} to variable fixed type {}.",
@@ -112,6 +114,7 @@ namespace kara::builder {
         }
     }
 
+    // create argument
     Variable::Variable(const parser::Variable *node, const ops::Context &context, llvm::Value *argument)
         : node(node) {
         assert(context.function);
@@ -124,6 +127,7 @@ namespace kara::builder {
         type = context.builder.resolveTypename(node->fixedType());
 
         // THIS IS BAD, its probably going to generate in scope, function needs to create IRBuilder for entry?
+        // future taylor here: probably okay because im passing in entryContext :)
         if (context.ir) {
             value = ops::makeAlloca(context, type, fmt::format("{}_value", node->name));
             context.function->entry.CreateStore(argument, value);

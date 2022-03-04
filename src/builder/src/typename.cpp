@@ -51,8 +51,26 @@ namespace kara::builder {
         case parser::Kind::ReferenceTypename: {
             auto e = node->as<parser::ReferenceTypename>();
 
-            return utils::ReferenceTypename { std::make_shared<utils::Typename>(resolveTypename(e->body())),
-                e->isMutable, e->kind };
+            assert(!e->isShared);
+
+            if (e->isCPointer) {
+                assert(e->kind == utils::ReferenceKind::Regular);
+
+                return utils::ReferenceTypename {
+                    std::make_shared<utils::Typename>(utils::ArrayTypename {
+                        utils::ArrayKind::Unbounded,
+                        std::make_shared<utils::Typename>(resolveTypename(e->body()))
+                    }),
+                    e->isMutable.value_or(true),
+                    e->kind,
+                };
+            } else {
+                return utils::ReferenceTypename {
+                    std::make_shared<utils::Typename>(resolveTypename(e->body())),
+                    e->isMutable.value_or(e->kind != utils::ReferenceKind::Regular),
+                    e->kind,
+                };
+            }
         }
 
         case parser::Kind::ArrayTypename: {

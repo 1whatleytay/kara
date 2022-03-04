@@ -156,6 +156,7 @@ namespace kara::builder::ops::handlers {
     bool makeInitializeNumber(const Context &context, llvm::Value *ptr, const utils::Typename &type);
     bool makeInitializeReference(const Context &context, llvm::Value *ptr, const utils::Typename &type);
     bool makeInitializeVariableArray(const Context &context, llvm::Value *ptr, const utils::Typename &type);
+    bool makeInitializeStruct(const Context &context, llvm::Value *ptr, const utils::Typename &type);
     bool makeInitializeIgnore(const Context &context, llvm::Value *ptr, const utils::Typename &type);
 
     bool makeDestroyReference(const Context &context, llvm::Value *ptr, const utils::Typename &type); // block it

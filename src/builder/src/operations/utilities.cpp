@@ -372,6 +372,7 @@ namespace kara::builder::ops {
                 handlers::makeInitializeNumber,
                 handlers::makeInitializeReference,
                 handlers::makeInitializeVariableArray,
+                handlers::makeInitializeStruct,
                 handlers::makeInitializeIgnore,
             },
             context, value, type);

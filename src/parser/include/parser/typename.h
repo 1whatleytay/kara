@@ -5,6 +5,7 @@
 #include <utils/typename.h>
 
 #include <variant>
+#include <optional>
 
 namespace kara::parser {
     struct Type;
@@ -25,7 +26,10 @@ namespace kara::parser {
 
     struct ReferenceTypename : public hermes::Node {
         utils::ReferenceKind kind = utils::ReferenceKind::Regular;
-        bool isMutable = false;
+
+        bool isCPointer = false;
+        bool isShared = false;
+        std::optional<bool> isMutable;
 
         [[nodiscard]] const Node *body() const;
 

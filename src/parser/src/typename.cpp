@@ -7,6 +7,8 @@
 
 #include <fmt/format.h>
 
+#include <unordered_set>
+
 namespace kara::parser {
     NamedTypename::NamedTypename(Node *parent, bool external)
         : Node(parent, Kind::NamedTypename) {
@@ -51,23 +53,99 @@ namespace kara::parser {
 
     const hermes::Node *ReferenceTypename::body() const { return children.front().get(); }
 
+    // One Time Descriptor, No Type -> Don't Add to Tree
+    struct ReferenceTypenameAttribute : public hermes::Node {
+        enum class AttributeKind {
+            Shared,
+            Ptr,
+            Let,
+            Var,
+        };
+
+        static const char *name(AttributeKind kind) {
+            switch (kind) {
+                case AttributeKind::Shared: return "shared";
+                case AttributeKind::Ptr: return "ptr";
+                case AttributeKind::Let: return "let";
+                case AttributeKind::Var: return "var";
+                default: throw;
+            }
+        }
+
+        AttributeKind kind = AttributeKind::Let;
+
+        explicit ReferenceTypenameAttribute(Node *parent) : Node(parent) {
+            kind = select<AttributeKind>({
+                { "shared", AttributeKind::Shared },
+                { "ptr", AttributeKind::Ptr },
+                { "let", AttributeKind::Let },
+                { "var", AttributeKind::Var },
+            }, true);
+        }
+    };
+
     ReferenceTypename::ReferenceTypename(Node *parent, bool external)
         : Node(parent, Kind::ReferenceTypename) {
         if (external)
             return;
 
         kind = select<utils::ReferenceKind>(
-            { { "&", utils::ReferenceKind::Regular }, { "*", utils::ReferenceKind::Unique } }, false);
+            {
+                { "&", utils::ReferenceKind::Regular },
+                { "*", utils::ReferenceKind::Unique },
+            }, false);
         match();
 
-        if (next("shared", true)) {
-            if (kind != utils::ReferenceKind::Unique)
-                error("Shared pointer requested but base type is not unique.");
+//        if (next("shared", true)) {
+//            if (kind != utils::ReferenceKind::Unique)
+//                error("Shared pointer requested but base type is not unique.");
+//
+//            kind = utils::ReferenceKind::Shared;
+//        }
+//
+//        isMutable = decide({ { "let", false }, { "var", true } }, kind != utils::ReferenceKind::Regular, true);
 
-            kind = utils::ReferenceKind::Shared;
+        auto attribute = pick<ReferenceTypenameAttribute>(true);
+
+        std::unordered_set<ReferenceTypenameAttribute::AttributeKind> attributes;
+
+        while (attribute) {
+            if (attributes.find(attribute->kind) != attributes.end()) {
+                error(fmt::format("Attribute {} was found twice for reference.",
+                    ReferenceTypenameAttribute::name(attribute->kind)));
+            }
+
+            switch (attribute->kind) {
+                case ReferenceTypenameAttribute::AttributeKind::Shared:
+                    if (kind != utils::ReferenceKind::Unique)
+                        error("Shared pointer requested but base type is not unique (*).");
+
+                    kind = utils::ReferenceKind::Shared;
+                    break;
+
+                case ReferenceTypenameAttribute::AttributeKind::Ptr:
+                    if (kind != utils::ReferenceKind::Regular)
+                        error("C pointer requested but base type is not regular (&).");
+
+                    isCPointer = true;
+                    break;
+
+                case ReferenceTypenameAttribute::AttributeKind::Let:
+                    isMutable = false;
+                    break;
+
+                case ReferenceTypenameAttribute::AttributeKind::Var:
+                    isMutable = true;
+                    break;
+
+                default:
+                    throw;
+            }
+
+            attributes.insert(attribute->kind);
+
+            attribute = pick<ReferenceTypenameAttribute>(true);
         }
-
-        isMutable = decide({ { "let", false }, { "var", true } }, kind != utils::ReferenceKind::Regular, true);
 
         pushTypename(this);
     }

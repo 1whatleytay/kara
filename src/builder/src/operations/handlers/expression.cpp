@@ -1,5 +1,6 @@
 #include <builder/handlers.h>
 
+#include <builder/target.h>
 #include <builder/builtins.h>
 
 #include <parser/function.h>
@@ -215,6 +216,25 @@ namespace kara::builder::ops::handlers {
         auto empty = llvm::ConstantStruct::ConstantStruct::get(llvmStructType, { zero, zero, null });
 
         context.ir->CreateStore(empty, ptr);
+
+        return true;
+    }
+
+    bool makeInitializeStruct(const Context &context, llvm::Value *ptr, const utils::Typename &type) {
+        auto named = std::get_if<utils::NamedTypename>(&type);
+
+        if (!named)
+            return false;
+
+        auto llvmType = context.builder.makeTypename(type);
+        auto size = context.builder.target.layout->getTypeAllocSize(llvmType);
+
+        if (context.ir) {
+            auto i8 = context.ir->getInt8Ty();
+            auto zero = llvm::ConstantInt::get(i8, 0);
+
+            context.ir->CreateMemSet(ptr, zero, size, llvm::MaybeAlign());
+        }
 
         return true;
     }

@@ -311,8 +311,10 @@ namespace kara::builder::ops::handlers::builtins {
                 return std::nullopt;
 
             auto converted = ops::makeConvert(context, input[1].second, *array->value);
-            if (!converted)
-                die("Size parameter must be converted to ulong.");
+            if (!converted) {
+                die("`add` builtin's value parameter could not be converted to array element type {}.",
+                    toString(*array->value));
+            }
 
             auto &toInsert = *converted;
 
@@ -440,7 +442,7 @@ namespace kara::builder::ops::handlers::builtins {
             if (!(input.size() == 1 && named(input[0].first, "array")))
                 return std::nullopt;
 
-            auto &value = input[0].second;
+            auto value = ops::makePass(context, input[0].second);
 
             assert(value.isSet(builder::Result::FlagTemporary)); // sanity check
 
