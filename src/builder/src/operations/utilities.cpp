@@ -156,19 +156,12 @@ namespace kara::builder::ops {
                 context.accumulator->avoidDestroy.insert(result.uid);
             }
         } else {
-            if (reference && !isRegularReference) { // unique or shared and not temporary
+            if ((reference && !isRegularReference)
+                || (array && array->kind == utils::ArrayKind::VariableSize)) { // unique or shared and not temporary
                 throw std::runtime_error(fmt::format(
                     "Passing non-temporary of type {} is prohibited. May require a move or copy.",
                     toString(result.type)));
             }
-
-            if (array && array->kind == utils::ArrayKind::VariableSize) {
-                throw std::runtime_error(fmt::format(
-                    "Passing non-temporary of type {} is prohibited. May require a move or copy.",
-                    toString(result.type)));
-            }
-
-            // TODO: copy?
         }
 
         return result;

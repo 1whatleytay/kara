@@ -47,6 +47,8 @@ namespace kara::parser {
                 { "ulong", utils::PrimitiveType::ULong },
                 { "float", utils::PrimitiveType::Float },
                 { "double", utils::PrimitiveType::Double },
+
+                { "char", utils::PrimitiveType::Byte }, // alias
             },
             true);
     }

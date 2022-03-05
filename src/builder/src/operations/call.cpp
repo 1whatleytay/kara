@@ -153,7 +153,11 @@ namespace kara::builder::ops::matching {
         assert(llvmFunction->isFunctionTy());
 
         auto llvmFunctionType = reinterpret_cast<llvm::FunctionType *>(llvmFunction);
-        llvm::FunctionCallee callee(llvmFunctionType, function);
+        llvm::FunctionCallee callee(nullptr, nullptr);
+
+        if (context.ir) {
+            callee = llvm::FunctionCallee(llvmFunctionType, function);
+        }
 
         auto expectedReturn = context.builder.makeTypename(*type.returnType);
 

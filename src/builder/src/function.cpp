@@ -120,7 +120,7 @@ namespace kara::builder {
 
             llvm::FunctionType *valueType = llvm::FunctionType::get(voidType, { paramType }, false);
             function = llvm::Function::Create(
-                valueType, llvm::GlobalVariable::ExternalLinkage, 0, name, builder.module.get());
+                valueType, llvm::GlobalVariable::LinkOnceODRLinkage, 0, name, builder.module.get());
 
             body = responsible ? e : nullptr;
 
@@ -201,7 +201,11 @@ namespace kara::builder {
                         toString(*type.returnType), toString(result.type));
                 }
 
-                bodyBuilder.CreateStore(ops::get(bodyContext, *resultConverted), returnValue);
+                // some people might want to do => nothing
+                // returnTypename != from(utils::PrimitiveType::Nothing)
+                if (returnValue) {
+                    bodyBuilder.CreateStore(ops::get(bodyContext, *resultConverted), returnValue);
+                }
 
                 entry.CreateBr(bodyBlock);
                 bodyBuilder.CreateBr(exitBlock);

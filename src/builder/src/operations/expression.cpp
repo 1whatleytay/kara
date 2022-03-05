@@ -23,36 +23,52 @@ namespace kara::builder::ops::modifiers {
     builder::Wrapped makeCall(const Context &context, const builder::Wrapped &value, const parser::Call *node) {
         // well not especially... f()()
         auto unresolved = std::get_if<builder::Unresolved>(&value);
-        if (!unresolved)
-            throw VerifyError(node, "Call must be done on unresolved names.");
         // see ^^ we enforce it anyway, problem will have to be solved by future me
+        // from future me: *FUTURE ME IS SUFFERING
 
         ops::matching::MatchInput input;
 
         input.names = node->namesStripped();
         auto parameters = node->parameters();
 
-        // Add x in x.y(z, w) to parameter list
-        if (unresolved->implicit)
-            input.parameters.push_back(*unresolved->implicit);
+        if (unresolved) {
+            // Add x in x.y(z, w) to parameter list
+            if (unresolved->implicit)
+                input.parameters.push_back(*unresolved->implicit);
+        }
 
         // Add z, w in x.y(z, w) to parameter list
         for (auto parameter : parameters)
             input.parameters.push_back(ops::expression::make(context, parameter));
 
-        auto resolve = [&]() {
-            // makeCallOnValue
-            auto v = handlers::resolve(
-                std::array {
-                    handlers::makeCallOnNew,
-                    handlers::makeCallOnFunctionOrType,
-                },
-                context, *unresolved, input);
+        if (unresolved) {
+            auto resolve = [&]() {
+                // makeCallOnValue
+                auto v = handlers::resolve(
+                    std::array {
+                        handlers::makeCallOnNew,
+                        handlers::makeCallOnFunctionOrType,
+                    },
+                    context, *unresolved, input);
 
-            return *v;
-        };
+                return *v;
+            };
 
-        return ops::blame(node, resolve);
+            return ops::blame(node, resolve);
+        } else {
+            // we probably have a function type
+            auto &result = std::get<builder::Result>(value); // probably better done as visitor
+
+            auto function = std::get_if<utils::FunctionTypename>(&result.type);
+            if (!function)
+                throw VerifyError(node, "Call must be done on a function typename.");
+
+            assert(function->kind == utils::FunctionKind::Pointer);
+
+            auto returnedResult = ops::matching::call(context, *function, ops::get(context, result), input);
+
+            return ops::matching::unwrap(returnedResult, node);
+        }
     }
 
     builder::Wrapped makeDot(const Context &context, const builder::Wrapped &value, const parser::Dot *node) {
