@@ -97,6 +97,8 @@ namespace kara::builder {
         }
     }
 
+#pragma clang diagnostic push
+#pragma ide diagnostic ignored "misc-no-recursion"
     std::optional<std::vector<llvm::Type *>> flattenLLVMType(llvm::Type *type) {
         // make sure array isnt something giant, check llvm type size before calling
 
@@ -141,6 +143,7 @@ namespace kara::builder {
 
         return result;
     }
+#pragma clang diagnostic pop
 
     std::optional<std::vector<llvm::Type *>> combineSysVLLVMTypes(
         const builder::Target &target, const std::vector<llvm::Type *> &types) {
@@ -307,8 +310,9 @@ namespace kara::builder {
         // first process return type
         // alloca
         llvm::Value *sretPointer = nullptr;
+        std::optional<std::vector<llvm::Type *>> sysVReturnTypes;
         if (!returnType->isVoidTy()) {
-            auto sysVReturnTypes = getSysVLLVMTypes(context.builder.target, returnType);
+            sysVReturnTypes = getSysVLLVMTypes(context.builder.target, returnType);
 
             if (!sysVReturnTypes) {
                 // we have to worry about sret
@@ -397,10 +401,29 @@ namespace kara::builder {
             }
         }
 
-        if (sretPointer) {
+        if (sretPointer) { // sysVReturnTypes is not defined then
             return context.ir->CreateLoad(returnType, sretPointer);
-        } else {
-            return result;
+        } else if (!sysVReturnTypes || sysVReturnTypes->size() <= 1) { // this deref should be okay
+            return result; // seems a bit too straight forward
+        } else { // sysVReturnTypes && !sysVReturnTypes->empty()
+            // start unpacking boys!
+            auto sysVStruct = llvm::StructType::get(context.builder.context, *sysVReturnTypes);
+            auto data = context.function->entry.CreateAlloca(returnType);
+            auto valueData = context.function->entry.CreateAlloca(sysVStruct);
+            context.ir->CreateStore(result, valueData);
+
+            auto i8PtrType = llvm::Type::getInt8PtrTy(context.builder.context);
+            auto i8Data = context.ir->CreatePointerCast(data, i8PtrType);
+            auto i8ValueData = context.ir->CreatePointerCast(valueData, i8PtrType);
+
+            auto valueSize = context.builder.target.layout->getTypeStoreSize(returnType);
+            auto sysVSize = context.builder.target.layout->getTypeStoreSize(sysVStruct);
+
+            assert(sysVSize >= valueSize);
+
+            context.ir->CreateMemCpy(i8Data, llvm::MaybeAlign(), i8ValueData, llvm::MaybeAlign(), valueSize);
+
+            return context.ir->CreateLoad(returnType, data);
         }
     }
 
