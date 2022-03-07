@@ -319,8 +319,8 @@ namespace kara::builder::ops::matching {
 
         auto [pick, match] = *picks.front();
 
-        for (auto &parameter : match.map)
-            parameter = ops::makePass(context, parameter);
+//        for (auto &parameter : match.map)
+//            parameter = ops::makePass(context, parameter);
 
         switch (pick->is<parser::Kind>()) {
         case parser::Kind::Function: {
@@ -337,7 +337,10 @@ namespace kara::builder::ops::matching {
 
                 auto type = context.builder.resolveTypename(pickVariables[a]->fixedType());
 
-                passParameters[a] = ops::get(context, ops::makeConvert(context, match.map[a], type).value());
+                auto convertedValue = ops::makeConvert(context, match.map[a], type).value();
+                auto passedValue = ops::makePass(context, convertedValue);
+
+                passParameters[a] = ops::get(context, passedValue);
             }
 
             if (e->isCVarArgs) {
@@ -383,7 +386,10 @@ namespace kara::builder::ops::matching {
                     assert(field->hasFixedType);
 
                     auto fieldType = context.builder.resolveTypename(field->fixedType());
-                    auto llvmValue = ops::get(context, ops::makeConvert(context, m, fieldType).value());
+                    auto convertedValue = ops::makeConvert(context, m, fieldType).value();
+                    auto passedValue = ops::makePass(context, convertedValue);
+
+                    auto llvmValue = ops::get(context, passedValue);
                     auto llvmPtr = context.ir->CreateStructGEP(builderType->type, value, builderType->indices[field]);
 
                     context.ir->CreateStore(llvmValue, llvmPtr);
