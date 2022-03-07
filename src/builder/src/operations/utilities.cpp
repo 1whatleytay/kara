@@ -320,6 +320,7 @@ namespace kara::builder::ops {
                 handlers::makeConvertForcedFuncPtrToFuncPtr,
                 handlers::makeConvertUniqueOrMutableToRef,
                 handlers::makeConvertUniqueToVariableArray,
+                handlers::makeConvertExprArrayToUnboundedRef,
                 handlers::makeConvertRefToAnyRef,
                 handlers::makeConvertRefToUnboundedRef,
                 handlers::makeConvertFixedRefToUnboundedRef,

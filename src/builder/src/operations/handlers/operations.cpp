@@ -527,6 +527,34 @@ namespace kara::builder::ops::handlers {
         };
     }
 
+    Maybe<builder::Result> makeConvertExprArrayToUnboundedRef(
+        const Context &context, const builder::Result &result, const utils::Typename &type, bool force) {
+        auto lhs = std::get_if<utils::ReferenceTypename>(&result.type);
+        auto rhs = std::get_if<utils::ReferenceTypename>(&type);
+
+        if (!lhs || !rhs
+            || lhs->kind == utils::ReferenceKind::Shared || rhs->kind == utils::ReferenceKind::Shared
+            || (rhs->isMutable && !lhs->isMutable))
+            return std::nullopt;
+
+        auto lhsArray = std::get_if<utils::ArrayTypename>(lhs->value.get());
+        auto rhsArray = std::get_if<utils::ArrayTypename>(rhs->value.get());
+
+        if (!lhsArray || !rhsArray
+            || lhsArray->kind != utils::ArrayKind::UnboundedSized || rhsArray->kind != utils::ArrayKind::Unbounded)
+            return std::nullopt;
+
+        // ok, i think they're basically the same thing lol soo
+
+        // allow directly
+        return builder::Result {
+            result.flags,
+            result.value,
+            type,
+            context.accumulator,
+        };
+    }
+
     Maybe<builder::Result> makeConvertRefToAnyRef(
         const Context &context, const builder::Result &result, const utils::Typename &type, bool) {
         auto typeRef = asRefTo(type, from(utils::PrimitiveType::Any));
