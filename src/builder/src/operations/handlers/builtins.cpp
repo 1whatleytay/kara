@@ -15,7 +15,7 @@ namespace kara::builder::ops::handlers::builtins {
             const ops::Context &context,
             ops::matching::MatchInputFlattened &input,
             size_t index = 0, const char *name = "array") {
-            if (!named(input[index].first, "array"))
+            if (!named(input[index].first, name))
                 return std::nullopt;
 
             auto &value = input[0].second;
@@ -606,6 +606,80 @@ namespace kara::builder::ops::handlers::builtins {
             default:
                 throw;
             }
+        }
+    }
+
+    namespace unique {
+        // not going to bother with real types cuz im not really concerned with ref to unique or something
+        Maybe<builder::Result> get(const Context &context, const Parameters &parameters) {
+            auto input = ops::matching::flatten(parameters);
+
+            if (!named(input[0].first, "pointer"))
+                return std::nullopt;
+
+            auto &value = input[0].second;
+
+            auto reference = std::get_if<utils::ReferenceTypename>(&value.type);
+
+            if (!reference || reference->kind != utils::ReferenceKind::Unique)
+                return std::nullopt;
+
+            return builder::Result {
+                builder::Result::FlagTemporary,
+                ops::get(context, value),
+                utils::ReferenceTypename {
+                    reference->value,
+                    reference->isMutable,
+                    utils::ReferenceKind::Regular,
+                },
+                context.accumulator,
+            };
+        }
+
+        Maybe<builder::Result> release(const Context &context, const Parameters &parameters) {
+            auto input = ops::matching::flatten(parameters);
+
+            if (!named(input[0].first, "pointer"))
+                return std::nullopt;
+
+            auto &value = input[0].second;
+
+            auto reference = std::get_if<utils::ReferenceTypename>(&value.type);
+
+            if (!reference || reference->kind != utils::ReferenceKind::Unique)
+                return std::nullopt;
+
+            auto base = ops::get(context, value);
+
+            // only in charge of statements
+            if (context.accumulator) {
+                context.accumulator->avoidDestroy.insert(value.uid);
+            }
+
+            if (value.isSet(builder::Result::FlagReference)) {
+                // set to null
+
+                auto llvmType = context.builder.makeTypename(*reference->value);
+                auto pointerType = llvm::PointerType::get(llvmType, 0);
+                auto nullValue = llvm::ConstantPointerNull::get(pointerType);
+
+                if (context.ir) {
+                    context.ir->CreateStore(nullValue, value.value);
+                }
+            } else if (!value.isSet(builder::Result::FlagTemporary)) {
+                return std::nullopt;
+            }
+
+            return builder::Result {
+                builder::Result::FlagTemporary,
+                base,
+                utils::ReferenceTypename {
+                    reference->value,
+                    reference->isMutable,
+                    utils::ReferenceKind::Regular,
+                },
+                context.accumulator,
+            };
         }
     }
 

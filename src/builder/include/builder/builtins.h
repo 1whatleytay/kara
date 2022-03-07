@@ -68,6 +68,16 @@ namespace kara::builder::ops::handlers::builtins {
         };
     }
 
+    namespace unique {
+        Maybe<builder::Result> get(const Context &context, const Parameters &parameters);
+        Maybe<builder::Result> release(const Context &context, const Parameters &parameters);
+
+        constexpr std::array functions = {
+            std::make_pair("get", get),
+            std::make_pair("release", release),
+        };
+    }
+
     namespace misc {
         Maybe<builder::Result> byteSize(const Context &context, const Parameters &parameters);
 
@@ -77,7 +87,7 @@ namespace kara::builder::ops::handlers::builtins {
     }
 
     // sorry, no flattening...
-    constexpr auto functions = utility::concat(arrays::functions, misc::functions);
+    constexpr auto functions = utility::concat(arrays::functions, misc::functions, unique::functions);
 
     std::vector<BuiltinFunction> matching(const std::string &name);
 }
