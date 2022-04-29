@@ -11,6 +11,10 @@
 
 #include <fmt/format.h>
 
+#include <filesystem>
+
+namespace fs = std::filesystem;
+
 namespace kara::cli {
     void CLIExposeOptions::execute() {
         try {

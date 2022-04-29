@@ -13,18 +13,24 @@
 #include <cassert>
 #include <fstream>
 #include <iostream>
+#include <filesystem>
+
+namespace fs = std::filesystem;
 
 namespace kara::cli {
-    PackageBuildResult PackageManager::build(const fs::path &config, const std::string &name,
+    PackageBuildResult PackageManager::build(const std::string &config, const std::string &name,
         const std::string &suggestTarget, const std::vector<std::string> &arguments) {
-        if (config.filename() == "CMakeLists.txt") {
+        fs::path configPath(config);
+        fs::path packagesDirectoryPath(packagesDirectory);
+
+        if (configPath.filename() == "CMakeLists.txt") {
             log(LogSource::package, "Building CMake Project {}", config);
 
-            auto packageBuild = packagesDirectory / "cmake" / name / "build"; // conflict :O
+            auto packageBuild = packagesDirectoryPath / "cmake" / name / "build"; // conflict :O
             if (!fs::is_directory(packageBuild))
                 fs::create_directories(packageBuild);
 
-            auto package = config.parent_path();
+            auto package = configPath.parent_path();
 
             std::vector<std::string> cmakeArguments = {
                 root,
@@ -219,7 +225,7 @@ namespace kara::cli {
 
             auto libraryOutput = library.serialize();
             auto libraryOutputFilename = fmt::format("{}.yaml", name);
-            auto libraryOutputPath = packagesDirectory / libraryOutputFilename;
+            auto libraryOutputPath = packagesDirectoryPath / libraryOutputFilename;
 
             {
                 std::ofstream stream(libraryOutputPath);
@@ -239,7 +245,7 @@ namespace kara::cli {
             //            name);
 
             return PackageBuildResult { { libraryOutputPath }, { target } };
-        } else if (config.extension() == ".yaml") {
+        } else if (configPath.extension() == ".yaml") {
             log(LogSource::package, "Detected Kara Project File {}", config);
 
             throw;
@@ -273,7 +279,7 @@ namespace kara::cli {
         if (name.empty())
             throw std::runtime_error("No name found for package.");
 
-        auto package = packagesDirectory / name;
+        auto package = fs::path(packagesDirectory) / name;
 
         if (!fs::is_directory(package)) {
             fs::create_directories(package);
@@ -329,13 +335,13 @@ namespace kara::cli {
 
         std::vector<std::string> output(it->second.size());
         std::transform(it->second.begin(), it->second.end(), output.begin(),
-            [this](const auto &r) { return (packagesDirectory / r).string(); });
+            [this](const auto &r) { return (fs::path(packagesDirectory) / r).string(); });
 
         return output;
     }
 
     std::ofstream PackageManager::lockFileWriteStream() const {
-        std::ofstream stream(packagesDirectory / "package-lock.yaml");
+        std::ofstream stream(fs::path(packagesDirectory) / "package-lock.yaml");
         if (!stream.is_open())
             throw std::runtime_error("Failed to open lock file.");
 
@@ -350,7 +356,9 @@ namespace kara::cli {
                                         "\n"
                                         "cmake_minimum_required(VERSION 3.17)\n";
 
-        auto packageLocation = packagesDirectory / "cmake" / "package_loader";
+        fs::path packagesDirectoryPath(packagesDirectory);
+
+        auto packageLocation = packagesDirectoryPath / "cmake" / "package_loader";
 
         auto packageBuild = packageLocation / "build"; // conflict :O
         if (!fs::is_directory(packageBuild))
@@ -429,7 +437,7 @@ namespace kara::cli {
 
         auto libraryOutput = library.serialize();
         auto libraryOutputFilename = fmt::format("{}.yaml", name);
-        auto libraryOutputPath = packagesDirectory / libraryOutputFilename;
+        auto libraryOutputPath = packagesDirectoryPath / libraryOutputFilename;
 
         {
             std::ofstream stream(libraryOutputPath);
@@ -444,14 +452,14 @@ namespace kara::cli {
         return PackageBuildResult { { libraryOutputPath }, { name } };
     }
 
-    PackageManager::PackageManager(Platform &platform, fs::path packagesDirectory, std::string root)
+    PackageManager::PackageManager(Platform &platform, std::string packagesDirectory, std::string root)
         : platform(platform)
         , packagesDirectory(std::move(packagesDirectory))
         , root(std::move(root)) {
         if (!fs::exists(this->packagesDirectory))
             fs::create_directories(this->packagesDirectory);
 
-        auto lockFilePath = this->packagesDirectory / "package-lock.yaml";
+        auto lockFilePath = fs::path(this->packagesDirectory) / "package-lock.yaml";
 
         if (fs::exists(lockFilePath))
             lockFile = PackageLockFile(YAML::LoadFile(lockFilePath.string()));

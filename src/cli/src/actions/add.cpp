@@ -7,6 +7,9 @@
 #include <yaml-cpp/yaml.h>
 
 #include <fstream>
+#include <filesystem>
+
+namespace fs = std::filesystem;
 
 namespace kara::cli {
     void CLIAddOptions::execute() {

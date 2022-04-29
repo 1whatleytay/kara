@@ -7,9 +7,8 @@
 #include <utils/expression.h>
 #include <utils/typename.h>
 
-#include <llvm/IR/IRBuilder.h>
-#include <llvm/IR/LLVMContext.h>
-#include <llvm/IR/Module.h>
+// pch
+#include <builder/pch.h>
 
 #include <set>
 #include <queue>

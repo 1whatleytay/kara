@@ -74,7 +74,7 @@ namespace kara::cli {
     };
 
     struct TargetConfig {
-        fs::path root;
+        std::string root;
 
         std::string name;
 
@@ -103,6 +103,6 @@ namespace kara::cli {
         static TargetConfig loadFromThrows(const std::string &path);
 
         TargetConfig() = default;
-        explicit TargetConfig(fs::path root, const YAML::Node &node);
+        explicit TargetConfig(std::string root, const YAML::Node &node);
     };
 }

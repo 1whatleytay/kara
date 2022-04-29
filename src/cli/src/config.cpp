@@ -7,6 +7,9 @@
 #include <uriparser/Uri.h>
 
 #include <fstream>
+#include <filesystem>
+
+namespace fs = std::filesystem;
 
 namespace kara::cli {
     namespace {
@@ -228,10 +231,12 @@ namespace kara::cli {
         if (!name.empty())
             return name;
 
-        if (root.has_stem())
-            return root.stem();
+        fs::path rootPath(root);
 
-        throw std::runtime_error(fmt::format("Could not resolve target name for {}.", root.string()));
+        if (rootPath.has_stem())
+            return rootPath.stem();
+
+        throw std::runtime_error(fmt::format("Could not resolve target name for {}.", root));
     }
 
     // assumption: resolves exactly the targets that it depends on
@@ -337,7 +342,7 @@ namespace kara::cli {
         return emitterBase.c_str();
     }
 
-    TargetConfig::TargetConfig(fs::path root, const YAML::Node &node)
+    TargetConfig::TargetConfig(std::string root, const YAML::Node &node)
         : root(std::move(root)) {
         if (auto value = node["type"]) {
             std::unordered_map<std::string, TargetType> targetMap = {

@@ -16,6 +16,9 @@
 #include <cassert>
 #include <fstream>
 #include <sstream>
+#include <filesystem>
+
+namespace fs = std::filesystem;
 
 namespace kara::cli {
     // could just be root as first param
@@ -23,12 +26,12 @@ namespace kara::cli {
     const TargetConfig *TargetCache::resolveImport(const TargetConfig &parent, const TargetImport &package) const {
         switch (package.detectedKind()) {
         case TargetImportKind::ProjectFile: {
-            auto pathToConfig = parent.root.parent_path() / package.path; // absolute
+            auto pathToConfig = fs::path(parent.root).parent_path() / package.path; // absolute
 
             auto it = configsByPath.find(pathToConfig.string());
             if (it == configsByPath.end()) {
                 throw std::runtime_error(
-                    fmt::format("Failed to resolve import in {} for {}.", parent.root.string(), package.path));
+                    fmt::format("Failed to resolve import in {} for {}.", parent.root, package.path));
             }
 
             return it->second;
@@ -42,7 +45,7 @@ namespace kara::cli {
 
             if (it == configsByUrl.end()) {
                 throw std::runtime_error(
-                    fmt::format("Failed to resolve import in {} for {}.", parent.root.string(), package.path));
+                    fmt::format("Failed to resolve import in {} for {}.", parent.root, package.path));
             }
 
             return it->second;
@@ -53,7 +56,7 @@ namespace kara::cli {
 
             if (it == configsByCMake.end()) {
                 throw std::runtime_error(
-                    fmt::format("Failed to resolve import in {} for {}.", parent.root.string(), package.path));
+                    fmt::format("Failed to resolve import in {} for {}.", parent.root, package.path));
             }
 
             return it->second;
@@ -73,7 +76,7 @@ namespace kara::cli {
             if (it != configsByName.end()) {
                 throw std::runtime_error(
                     fmt::format("Name conflict between config files, name `{}` is taken by {} and {}.", name,
-                        it->second->root.string(), config.root.string()));
+                        it->second->root, config.root));
             }
 
             configsByName[name] = &config;
@@ -97,7 +100,7 @@ namespace kara::cli {
             case TargetImportKind::ProjectFile: {
                 // path
 
-                auto pathToConfig = config.root.parent_path() / package.path; // absolute
+                auto pathToConfig = fs::path(config.root).parent_path() / package.path; // absolute
 
                 if (configsByPath.find(pathToConfig.string()) != configsByPath.end())
                     continue;
@@ -202,13 +205,13 @@ namespace kara::cli {
         return "";
     }
 
-    fs::path ProjectManager::createTargetDirectory(const std::string &target) {
+    std::string ProjectManager::createTargetDirectory(const std::string &target) {
         fs::path directory = fs::path(mainTarget.outputDirectory) / target;
 
         if (!fs::is_directory(directory))
             fs::create_directories(directory);
 
-        return directory;
+        return directory.string();
     }
 
     void managerCallback(const fs::path &path, const std::string &type) {
@@ -258,13 +261,14 @@ namespace kara::cli {
         result->dynamicLibraries = targetConfig->options.dynamicLibraries;
 
         if (!targetConfig->options.includes.empty()) {
-            std::vector<fs::path> paths;
-            paths.reserve(targetConfig->options.includes.size());
-            std::transform(targetConfig->options.includes.begin(), targetConfig->options.includes.end(),
-                std::back_inserter(paths), [](const auto &r) { return fs::path(r); });
+//            std::vector<std::string> paths;
+//            paths.reserve(targetConfig->options.includes.size());
+//            std::transform(targetConfig->options.includes.begin(), targetConfig->options.includes.end(),
+//                std::back_inserter(paths), [](const auto &r) { return fs::path(r); });
 
             result->includes.push_back(builder::Library {
-                std::move(paths),
+//                std::move(paths),
+                targetConfig->options.includes,
                 targetConfig->options.includeArguments,
             });
         }
@@ -338,7 +342,7 @@ namespace kara::cli {
         auto &options = targetInfo.defaultOptions;
 
         auto directory = createTargetDirectory(name);
-        auto outputFile = directory / fmt::format("{}.o", name);
+        auto outputFile = fs::path(directory) / fmt::format("{}.o", name);
 
         log(LogSource::target, "Building {}", outputFile.string());
 
@@ -361,7 +365,7 @@ namespace kara::cli {
 
                 if (logHeader(source)) {
                     fmt::print("Building file ");
-                    fmt::print(fmt::emphasis::italic, "{}\n", managerFile.path.string());
+                    fmt::print(fmt::emphasis::italic, "{}\n", managerFile.path);
                 }
 
                 modules.push_back(std::move(builder.module));
@@ -416,7 +420,7 @@ namespace kara::cli {
         }
 
         if (targetConfig->type == TargetType::Executable) {
-            auto linkFile = directory / name;
+            auto linkFile = fs::path(directory) / name;
 
             if (logHeader(LogSource::target)) {
                 fmt::print("Linking ");

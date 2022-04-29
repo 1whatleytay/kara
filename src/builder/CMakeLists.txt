@@ -33,3 +33,4 @@ add_library(builder STATIC
 
 target_include_directories(builder PUBLIC include)
 target_link_libraries(builder PUBLIC parser options llvm interfaces)
+target_precompile_headers(builder PUBLIC include/builder/pch.h)

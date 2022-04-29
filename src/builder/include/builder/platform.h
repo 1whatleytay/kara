@@ -1,13 +1,14 @@
 #pragma once
 
-#include <llvm/IR/IRBuilder.h>
-#include <llvm/IR/LLVMContext.h>
-#include <llvm/IR/Module.h>
-
 #include <tuple>
 #include <string>
 #include <vector>
 #include <memory>
+
+namespace llvm {
+    struct Type;
+    struct Value;
+}
 
 namespace kara::builder {
     struct Target;

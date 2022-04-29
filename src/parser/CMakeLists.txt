@@ -1,5 +1,5 @@
 add_library(parser STATIC
-    include/parser/kinds.h
+#    include/parser/kinds.h
     include/parser/search.h
     include/parser/root.h
     include/parser/function.h
@@ -31,3 +31,4 @@ add_library(parser STATIC
 
 target_include_directories(parser PUBLIC include)
 target_link_libraries(parser PUBLIC utils fmt hermes)
+target_precompile_headers(parser PUBLIC include/parser/kinds.h)

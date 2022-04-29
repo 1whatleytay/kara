@@ -4,6 +4,10 @@
 #include <cli/config.h>
 #include <cli/manager.h>
 
+#include <filesystem>
+
+namespace fs = std::filesystem;
+
 namespace kara::cli {
     void CLIBuildOptions::execute() {
         auto config = TargetConfig::loadFrom(projectFile);

@@ -262,8 +262,31 @@ namespace kara::builder::ops::handlers {
 
         auto pointer = context.ir->CreatePointerCast(value, dataType);
 
-        ops::makeDestroy(context, value, *reference->value);
+        assert(context.ir);
 
+        auto blockCurrent = context.ir->GetInsertBlock();
+
+        // optionals will handle this eventually
+        auto blockResume = llvm::BasicBlock::Create(
+            context.builder.context, "res", blockCurrent->getParent(), blockCurrent->getNextNode());
+        auto blockTrue = llvm::BasicBlock::Create(
+            context.builder.context, "tru", blockCurrent->getParent(), blockCurrent->getNextNode());
+
+        auto notNull = context.ir->CreateIsNotNull(pointer);
+
+        context.ir->CreateCondBr(notNull, blockTrue, blockResume);
+
+        llvm::IRBuilder<> trueBuilder(blockTrue);
+        auto trueContext = context.move(&trueBuilder);
+
+        ops::makeDestroy(trueContext, value, *reference->value);
+
+        trueBuilder.CreateBr(blockResume);
+
+        // this is not passing up!!
+        context.ir->SetInsertPoint(blockResume);
+
+        // but free it anyway idk
         context.ir->CreateCall(freeFunc, { pointer });
 
         return true;
@@ -311,8 +334,14 @@ namespace kara::builder::ops::handlers {
 
         if (destroyFunction) {
             // attempt to avoid this construction forces me to create it here
-            auto parameter = builder::Result { builder::Result::FlagTemporary | builder::Result::FlagReference, ptr,
-                type, nullptr };
+            auto parameter = builder::Result {
+                builder::Result::FlagTemporary | builder::Result::FlagReference | builder::Result::FlagMutable,
+                ptr,
+                type,
+                nullptr,
+            };
+
+            // assuming its mutable oops
 
             auto result = ops::matching::call(context, { destroyFunction }, { /* dwbi builtins */ },
                 ops::matching::MatchInput { { parameter }, { /* no names */ } });

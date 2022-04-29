@@ -6,6 +6,9 @@
 #include <sys/wait.h>
 
 #include <array>
+#include <filesystem>
+
+namespace fs = std::filesystem;
 
 namespace kara::cli {
     // unix/posix, first is status code, second is stdout socket

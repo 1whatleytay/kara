@@ -24,7 +24,7 @@ namespace kara::cli {
         std::string root;
         Platform &platform;
 
-        fs::path packagesDirectory;
+        std::string packagesDirectory;
 
         PackageLockFile lockFile;
 
@@ -32,7 +32,7 @@ namespace kara::cli {
 
         // Returns list of .yaml config files, equivalent to import: in TargetConfig
 
-        PackageBuildResult build(const fs::path &root, const std::string &name, const std::string &suggestTarget = "",
+        PackageBuildResult build(const std::string &root, const std::string &name, const std::string &suggestTarget = "",
             const std::vector<std::string> &arguments = {});
 
         // reinstall
@@ -44,6 +44,6 @@ namespace kara::cli {
 
         PackageBuildResult buildCMakePackage(const std::string &name);
 
-        explicit PackageManager(Platform &platform, fs::path packagesDirectory, std::string root);
+        explicit PackageManager(Platform &platform, std::string packagesDirectory, std::string root);
     };
 }

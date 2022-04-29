@@ -1,6 +1,5 @@
 #include <builder/manager.h>
 
-#include <builder/builder.h>
 #include <builder/error.h>
 
 #include <parser/import.h>
@@ -9,12 +8,14 @@
 #include <interfaces/interfaces.h>
 
 #include <llvm/Support/Host.h>
-#include <llvm/Support/TargetSelect.h>
 #include <llvm/Target/TargetOptions.h>
 
 #include <cassert>
 #include <fstream>
 #include <sstream>
+#include <filesystem>
+
+namespace fs = std::filesystem;
 
 namespace kara::builder {
     namespace files {
@@ -64,7 +65,7 @@ namespace kara::builder {
         }
     }
 
-    SourceFile::SourceFile(fs::path path, std::string type, const Library *library)
+    SourceFile::SourceFile(std::string path, std::string type, const Library *library)
         : path(std::move(path))
         , type(std::move(type)) {
         if (this->type.empty() || this->type == "kara") {
@@ -96,7 +97,7 @@ namespace kara::builder {
         }
     }
 
-    const SourceFile &SourceDatabase::get(const fs::path &absolute, const std::string &type, const Library *library) {
+    const SourceFile &SourceDatabase::get(const std::string &absolute, const std::string &type, const Library *library) {
         auto iterator = nodes.find(absolute);
         if (iterator != nodes.end())
             return *iterator->second;
@@ -135,8 +136,10 @@ namespace kara::builder {
         return result;
     }
 
-    const SourceFile &SourceManager::get(const fs::path &path, const fs::path &root, const std::string &type) {
-        fs::path fullPath = path.is_absolute() ? path : root / path;
+    const SourceFile &SourceManager::get(const std::string &path, const std::string &root, const std::string &type) {
+        fs::path fsPath(path);
+
+        fs::path fullPath = fsPath.is_absolute() ? fsPath : fs::path(root) / fsPath;
         std::string absoluteName = fs::absolute(fullPath).string();
 
         const Library *doc = nullptr;
@@ -144,7 +147,7 @@ namespace kara::builder {
         if (!fs::exists(fullPath)) {
             bool matches = false;
 
-            if (path.is_relative()) {
+            if (fsPath.is_relative()) {
                 for (const auto &library : libraries) {
                     std::optional<std::string> subPath = library.match(path);
 
@@ -159,7 +162,7 @@ namespace kara::builder {
             }
 
             if (!matches)
-                throw std::runtime_error(fmt::format("Cannot find file under path {}.", path.string()));
+                throw std::runtime_error(fmt::format("Cannot find file under path {}.", path));
         }
 
         return database.get(fullPath, type, doc);

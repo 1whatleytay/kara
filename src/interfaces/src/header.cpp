@@ -15,6 +15,8 @@
 
 #include <fmt/printf.h>
 
+#include <chrono>
+
 using namespace clang;
 
 namespace kara::interfaces::header {
@@ -83,7 +85,7 @@ namespace kara::interfaces::header {
 
         std::string z = wrapper.getAsString();
 
-        auto die = [&wrapper]() {
+        auto die = []() {
             //            fmt::print("Cannot translate type {}.\n", wrapper.getAsString());
 
             return nullptr;

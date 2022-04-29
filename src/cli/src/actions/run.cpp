@@ -7,6 +7,10 @@
 #include <unistd.h>
 #include <sys/wait.h>
 
+#include <filesystem>
+
+namespace fs = std::filesystem;
+
 namespace kara::cli {
     void CLIRunOptions::execute() {
         auto config = TargetConfig::loadFrom(projectFile);
@@ -35,7 +39,7 @@ namespace kara::cli {
         manager.makeTarget(targetConfig, root, linkerType);
 
         auto directory = manager.createTargetDirectory(targetToBuild);
-        auto executable = directory / targetToBuild; // ?
+        auto executable = fs::path(directory) / targetToBuild; // ?
 
         log(LogSource::target, "Running {}", targetToBuild);
 

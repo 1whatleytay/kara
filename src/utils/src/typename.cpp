@@ -2,6 +2,8 @@
 
 #include <fmt/format.h>
 
+#include <array>
+
 namespace kara::utils {
     bool PrimitiveTypename::operator==(const PrimitiveTypename &other) const { return type == other.type; }
 

@@ -11,6 +11,9 @@
 
 #include <sstream>
 #include <unordered_set>
+#include <filesystem>
+
+namespace fs = std::filesystem;
 
 namespace kara::cli {
     namespace {

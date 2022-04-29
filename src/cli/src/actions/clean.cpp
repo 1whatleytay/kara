@@ -3,11 +3,9 @@
 #include <cli/log.h>
 #include <cli/config.h>
 
-#include <llvm/Support/Host.h>
-#include <llvm/Support/TargetSelect.h>
-#include <llvm/Support/VirtualFileSystem.h>
+#include <filesystem>
 
-#include <clang/Driver/Driver.h>
+namespace fs = std::filesystem;
 
 namespace kara::cli {
     void CLICleanOptions::execute() {

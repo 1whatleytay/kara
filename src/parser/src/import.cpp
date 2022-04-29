@@ -18,7 +18,7 @@ namespace kara::parser {
         }
 
         push<String>();
-
+            
         assert(children.back()->as<String>()->inserts.empty());
     }
 }

@@ -64,7 +64,7 @@ namespace kara::cli {
         std::unordered_map<const TargetConfig *, std::unique_ptr<TargetInfo>> targetInfos;
         std::unordered_map<const TargetConfig *, std::unique_ptr<TargetResult>> updatedTargets;
 
-        fs::path createTargetDirectory(const std::string &target);
+        std::string createTargetDirectory(const std::string &target);
 
         const TargetConfig *getTarget(const std::string &name);
 

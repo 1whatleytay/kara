@@ -7,6 +7,10 @@
 
 #include <fstream>
 
+#include <filesystem>
+
+namespace fs = std::filesystem;
+
 namespace kara::cli {
     void CLICreateOptions::execute() {
         fs::path path(name);

@@ -11,6 +11,10 @@
 #include <cassert>
 #include <fstream>
 
+#include <filesystem>
+
+namespace fs = std::filesystem;
+
 namespace kara::cli {
     bool cbpTargetNameIsSimilar(std::string targetName, std::string projectName) {
         auto toLower = [](std::string &r) {

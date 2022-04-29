@@ -14,6 +14,9 @@
 #include <llvm/Support/Host.h>
 
 #include <cassert>
+#include <filesystem>
+
+namespace fs = std::filesystem;
 
 namespace kara::builder {
     builder::Cache *Cache::create() {
@@ -212,7 +215,7 @@ namespace kara::builder {
         else
             platform = Platform::byTriple(target.triple);
 
-        module = std::make_unique<llvm::Module>(file.path.filename().string(), context);
+        module = std::make_unique<llvm::Module>(fs::path(file.path).filename().string(), context);
 
         module->setDataLayout(*target.layout);
         module->setTargetTriple(target.triple);

@@ -4,6 +4,10 @@
 
 #include <yaml-cpp/yaml.h>
 
+#include <filesystem>
+
+namespace fs = std::filesystem;
+
 namespace kara::cli {
     std::string PackageLockFile::createPath(const std::string &parent) {
         fs::path parentPath(parent);
