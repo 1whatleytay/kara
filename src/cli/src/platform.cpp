@@ -183,10 +183,11 @@ namespace kara::cli {
     std::vector<std::string> MacOSPlatform::defaultLinkerArguments() {
         llvm::Triple tripleInfo(this->triple);
 
-        uint32_t majorVersion = 0, minorVersion = 0, microVersion = 0;
-        tripleInfo.getMacOSXVersion(majorVersion, minorVersion, microVersion);
+        llvm::VersionTuple version;
+        tripleInfo.getMacOSXVersion(version);
 
-        auto versionText = fmt::format("{}.{}.{}", majorVersion, minorVersion, microVersion);
+        auto versionText = fmt::format("{}.{}.{}",
+            version.getMajor(), version.getMinor().getValueOr(0), version.getSubminor().getValueOr(0));
 
         std::string sysroot;
 

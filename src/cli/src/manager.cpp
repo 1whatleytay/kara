@@ -180,7 +180,8 @@ namespace kara::cli {
     }
 
     std::string invokeLinker(const std::string &linker, const std::vector<std::string> &arguments) {
-        using LinkFunction = bool (*)(llvm::ArrayRef<const char *>, bool, llvm::raw_ostream &, llvm::raw_ostream &);
+        using LinkFunction = bool (*)(llvm::ArrayRef<const char *>,
+            llvm::raw_ostream &, llvm::raw_ostream &, bool, bool);
 
         std::vector<const char *> cstrings(arguments.size());
         std::transform(arguments.begin(), arguments.end(), cstrings.begin(), [](const auto &e) { return e.c_str(); });
@@ -188,7 +189,6 @@ namespace kara::cli {
         std::unordered_map<std::string, LinkFunction> functions = {
             { "elf", lld::elf::link },
             { "macho", lld::macho::link },
-            { "macho-old", lld::mach_o::link },
             { "wasm", lld::wasm::link },
             { "coff", lld::coff::link },
             { "mingw", lld::mingw::link },
@@ -198,7 +198,7 @@ namespace kara::cli {
         if (function == functions.end())
             return fmt::format("Invalid linker name {}.", linker);
 
-        auto value = function->second(cstrings, false, llvm::outs(), llvm::errs());
+        auto value = function->second(cstrings, llvm::outs(), llvm::errs(), false, false);
         if (!value)
             return "Linker failed.";
 

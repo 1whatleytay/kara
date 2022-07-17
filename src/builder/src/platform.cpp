@@ -59,7 +59,7 @@ namespace kara::builder {
         result.parameters.reserve(package.parameters.size());
 
         for (const auto &[name, type] : package.parameters) {
-            result.parameters.emplace_back(name, type, llvm::AttrBuilder());
+            result.parameters.emplace_back(name, type, llvm::AttrBuilder(*target.context));
         }
 
         return result;
@@ -266,9 +266,11 @@ namespace kara::builder {
 
                 // mark sret
 
+                llvm::AttrBuilder builder(*target.context);
+                builder.addStructRetAttr(package.returnType);
+
                 result.returnType = llvm::Type::getVoidTy(*target.context);
-                result.parameters.emplace_back(
-                    "returnVal", pointerType, llvm::AttrBuilder().addStructRetAttr(package.returnType));
+                result.parameters.emplace_back("returnVal", pointerType, std::move(builder));
             }
         }
 
@@ -277,20 +279,21 @@ namespace kara::builder {
 
             if (types) {
                 if (types->size() == 1 && types->front()->getTypeID() == type->getTypeID()) {
-                    result.parameters.emplace_back(name, type, llvm::AttrBuilder());
+                    result.parameters.emplace_back(name, type, llvm::AttrBuilder(*target.context));
                 } else {
                     for (size_t a = 0; a < types->size(); a++) {
                         result.parameters.emplace_back(
-                            fmt::format("{}_{}", name, a), (*types)[a], llvm::AttrBuilder());
+                            fmt::format("{}_{}", name, a), (*types)[a], llvm::AttrBuilder(*target.context));
                     }
                 }
             } else {
                 auto pointerType = llvm::PointerType::get(type, 0);
 
                 // mark byval
+                llvm::AttrBuilder builder(*target.context);
+                builder.addByValAttr(type);
 
-                result.parameters.emplace_back(
-                    name, pointerType, llvm::AttrBuilder().addByValAttr(type));
+                result.parameters.emplace_back(name, pointerType, std::move(builder));
             }
         }
 
@@ -307,6 +310,8 @@ namespace kara::builder {
         std::vector<std::pair<llvm::Value *, llvm::AttrBuilder>> formattedValues;
         formattedValues.reserve(values.size()); // at least
 
+        const Target &target = context.builder.target;
+
         // first process return type
         // alloca
         llvm::Value *sretPointer = nullptr;
@@ -316,10 +321,11 @@ namespace kara::builder {
 
             if (!sysVReturnTypes) {
                 // we have to worry about sret
+                llvm::AttrBuilder builder(*target.context);
+                builder.addStructRetAttr(returnType);
 
                 sretPointer = context.function->entry.CreateAlloca(returnType);
-                formattedValues.emplace_back(
-                    sretPointer, llvm::AttrBuilder().addStructRetAttr(returnType)); // lol
+                formattedValues.emplace_back(sretPointer, std::move(builder)); // lol
             }
         }
 
@@ -330,7 +336,7 @@ namespace kara::builder {
             if (sysVTypes) {
                 if (sysVTypes->size() == 1 && sysVTypes->front()->getTypeID() == baseType->getTypeID()) {
                     // no struct shenanigans
-                    formattedValues.emplace_back(value, llvm::AttrBuilder());
+                    formattedValues.emplace_back(value, llvm::AttrBuilder(*target.context));
                 } else {
                     // struct shenanigans
 
@@ -365,7 +371,7 @@ namespace kara::builder {
                         auto pointer = context.ir->CreateStructGEP(sysVStruct, data, a);
                         auto pointerValue = context.ir->CreateLoad(sysVSubType, pointer);
 
-                        formattedValues.emplace_back(pointerValue, llvm::AttrBuilder());
+                        formattedValues.emplace_back(pointerValue, llvm::AttrBuilder(*target.context));
                     }
                 }
             } else {
@@ -380,8 +386,10 @@ namespace kara::builder {
                 auto data = context.function->entry.CreateAlloca(baseType);
                 context.ir->CreateStore(value, data);
 
-                formattedValues.emplace_back(
-                    data, llvm::AttrBuilder().addByValAttr(baseType)); // ?
+                llvm::AttrBuilder builder(*target.context);
+                builder.addByValAttr(baseType);
+
+                formattedValues.emplace_back(data, std::move(builder)); // ?
             }
         }
 

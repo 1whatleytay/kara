@@ -49,5 +49,5 @@ target_include_directories(clang-global INTERFACE ${CLANG_INCLUDE_DIRS})
 
 add_library(lld-global INTERFACE)
 target_link_libraries(lld-global INTERFACE
-    lldMachO lldYAML lldReaderWriter lldCOFF lldELF lldMachO2 lldMinGW lldWasm lldDriver lldCore lldCommon)
+    lldMachO lldCOFF lldELF lldMinGW lldWasm lldCommon)
 target_include_directories(lld-global INTERFACE ${LLD_INCLUDE_DIRS})

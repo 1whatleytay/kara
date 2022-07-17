@@ -1,7 +1,7 @@
 #pragma once
 
 #include <llvm/IR/LLVMContext.h>
-#include <llvm/Support/TargetRegistry.h>
+#include <llvm/MC/TargetRegistry.h>
 #include <llvm/Target/TargetMachine.h>
 
 #include <string>
